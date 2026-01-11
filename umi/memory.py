@@ -22,6 +22,7 @@ Example:
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -80,6 +81,7 @@ class Memory:
             self.faults = FaultConfig()
 
         # Initialize LLM provider
+        self._llm: LLMProvider
         if self.seed is not None:
             # Simulation mode: use SimLLMProvider
             self._llm = SimLLMProvider(seed=self.seed, faults=self.faults)
@@ -204,13 +206,13 @@ class Memory:
                 if track_evolution:
                     evolution = await self._evolution.find_related_and_detect(stored)
                     if evolution:
-                        # Store evolution info in metadata
-                        stored.metadata["evolution"] = {
+                        # Store evolution info in metadata (JSON serialized)
+                        stored.metadata["evolution"] = json.dumps({
                             "type": evolution.evolution_type,
                             "related_id": evolution.source_id,
                             "reason": evolution.reason,
                             "confidence": evolution.confidence,
-                        }
+                        })
 
                 entities.append(stored)
 

@@ -25,7 +25,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from random import Random
-from typing import TypeVar
+from typing import TypeVar, cast
 
 from umi.faults import FaultConfig, FaultStats
 
@@ -176,7 +176,7 @@ class SimLLMProvider:
 
         # Parse as JSON
         try:
-            return json.loads(response_str)
+            return cast(T, json.loads(response_str))
         except json.JSONDecodeError as e:
             raise SimMalformedResponseError(f"Failed to parse response: {e}") from e
 

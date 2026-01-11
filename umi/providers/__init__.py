@@ -11,7 +11,7 @@ from umi.providers.sim import SimLLMProvider
 
 
 # Lazy imports for optional dependencies
-def __getattr__(name: str):
+def __getattr__(name: str) -> type:
     if name == "AnthropicProvider":
         from umi.providers.anthropic import AnthropicProvider
 

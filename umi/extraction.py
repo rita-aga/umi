@@ -337,7 +337,7 @@ class EntityExtractor:
 
     def _parse_entities(
         self,
-        data: dict,
+        data: dict[str, object],
         original_text: str,
     ) -> list[ExtractedEntity]:
         """Parse entities from response data.
@@ -393,7 +393,7 @@ class EntityExtractor:
 
         return entities
 
-    def _parse_relations(self, data: dict) -> list[ExtractedRelation]:
+    def _parse_relations(self, data: dict[str, object]) -> list[ExtractedRelation]:
         """Parse relations from response data.
 
         Args:

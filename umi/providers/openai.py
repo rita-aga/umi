@@ -11,7 +11,7 @@ Example:
 from __future__ import annotations
 
 import json
-from typing import TypeVar
+from typing import TypeVar, cast
 
 try:
     import openai
@@ -109,6 +109,6 @@ class OpenAIProvider:
 
         # Parse JSON
         try:
-            return json.loads(text)
+            return cast(T, json.loads(text))
         except json.JSONDecodeError as e:
             raise ValueError(f"Response is not valid JSON: {e}") from e
