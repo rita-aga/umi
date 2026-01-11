@@ -75,3 +75,29 @@ results = await memory.recall("Who works at Acme?")
 
 - Rust: 232 tests
 - Python: 145 tests
+
+## Origin & Inspiration
+
+Umi was extracted from **RikaiOS** (Personal Context Operating System) to be a standalone, reusable memory library.
+
+### Inspiration Sources
+- **memU** - Dual retrieval architecture (fast vector + LLM semantic search)
+- **Mem0** - Entity extraction and evolution tracking
+- **Supermemory** - Temporal metadata (when something was said vs when it happened)
+- **TigerBeetle's TigerStyle** - Assertion-based programming, explicit limits
+
+### Why Standalone?
+Memory is the most reusable component of a context system. By making it standalone:
+- Any AI agent framework can use it (not just RikaiOS)
+- Clearer boundaries and responsibilities
+- Easier to test, maintain, and contribute to
+- Can evolve independently of RikaiOS
+
+## Architecture Decisions
+
+Key decisions documented in the codebase:
+- **ADR-007**: SimLLMProvider design (deterministic simulation)
+- **ADR-008**: Memory class architecture (remember/recall API)
+- **ADR-009**: Dual retrieval strategy (RRF merging)
+- **ADR-010**: Entity extraction (confidence scoring, fallbacks)
+- **ADR-011**: Evolution tracking (update/extend/contradict/derive)

@@ -136,3 +136,40 @@ umi/
 - Use conventional commits: `feat:`, `fix:`, `docs:`, `chore:`
 - Run both Python and Rust tests before pushing
 - Update ADRs for architectural changes
+- Always commit and push after completing work
+
+## Planning & Progress
+
+**Before starting work**, check these directories:
+
+- `.vision/umi-vision.md` - Core principles and constraints
+- `.progress/` - Active plans and roadmaps
+
+Current active plan: `.progress/001_20260111_163000_umi-standalone-roadmap.md`
+
+## Roadmap (Next Steps)
+
+### Phase 1: PyPI Publication
+- Package name: `umi-memory` (or similar)
+- GitHub Actions workflow for auto-publishing
+- Create v0.1.0 release
+
+### Phase 2: Real Storage Backends
+- PostgreSQL with asyncpg
+- Qdrant for vector search
+- Unified Storage protocol
+
+### Phase 3: Wire PyO3 Bindings
+- Expose Rust memory tiers to Python
+- Optional high-performance backend
+- Benchmark Rust vs Python
+
+See `.progress/001_*.md` for full details.
+
+## Origin
+
+Umi was extracted from RikaiOS to be a standalone library. Inspired by:
+- **memU** - Dual retrieval (fast + LLM semantic)
+- **Mem0** - Entity extraction and evolution tracking
+- **Supermemory** - Temporal metadata
+- **TigerStyle** - Assertion-based programming
