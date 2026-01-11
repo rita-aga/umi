@@ -1,25 +1,23 @@
-# Umi - Memory System That Never Forgets
+# Umi
 
-A simulation-first memory library with provable correctness for AI applications.
+Memory for AI agents - entity extraction, dual retrieval, and evolution tracking.
 
-## Key Features
+## What It Does
 
-- **Simulation-First**: Every component has a deterministic simulation mode for reliable testing
-- **TigerStyle**: Preconditions and postconditions throughout for correctness
-- **LLM Integration**: Smart entity extraction, dual retrieval, and evolution tracking
-- **Fault Injection**: Test edge cases with configurable fault injection
+- **Entity Extraction**: Pulls structured entities (people, orgs, topics) from text using an LLM
+- **Dual Retrieval**: Fast substring search + LLM-powered query expansion for better recall
+- **Evolution Tracking**: Detects when new information updates, extends, or contradicts existing memories
+- **Temporal Metadata**: Tracks both when something was said and when the event occurred
 
 ## Installation
 
 ```bash
-pip install umi
-```
+# From source (not yet on PyPI)
+pip install git+https://github.com/rita-aga/umi.git
 
-With LLM provider support:
-```bash
-pip install "umi[anthropic]"  # For Anthropic Claude
-pip install "umi[openai]"     # For OpenAI
-pip install "umi[all]"        # All providers
+# With LLM provider support
+pip install "umi[anthropic] @ git+https://github.com/rita-aga/umi.git"
+pip install "umi[openai] @ git+https://github.com/rita-aga/umi.git"
 ```
 
 ## Quick Start
@@ -128,44 +126,10 @@ if evolution:
     print(f"Evolution: {evolution.evolution_type} - {evolution.reason}")
 ```
 
-## Fault Injection
+## Current Limitations
 
-Test edge cases with configurable faults.
-
-```python
-from umi import Memory, FaultConfig
-
-# 50% chance of LLM timeout
-faults = FaultConfig(llm_timeout=0.5)
-memory = Memory(seed=42, faults=faults)
-
-# Test graceful degradation
-entities = await memory.remember("Test")  # May timeout
-```
-
-Available faults:
-- `llm_timeout`: Simulate LLM timeouts
-- `llm_error`: Simulate LLM API errors
-- `llm_malformed`: Simulate malformed LLM responses
-- `storage_read_error`: Simulate storage read failures
-- `storage_write_error`: Simulate storage write failures
-
-## Determinism
-
-Same seed always produces identical results:
-
-```python
-# Run 1
-memory1 = Memory(seed=42)
-entities1 = await memory1.remember("Alice knows Bob")
-
-# Run 2 (same seed)
-memory2 = Memory(seed=42)
-entities2 = await memory2.remember("Alice knows Bob")
-
-# Identical results
-assert entities1[0].name == entities2[0].name
-```
+- **Storage is in-memory only** - no persistence yet (Postgres/vector DB backends planned)
+- **SimStorage for testing** - use `seed=42` for deterministic behavior without LLM calls
 
 ## Entity Types
 
@@ -189,7 +153,7 @@ assert entities1[0].name == entities2[0].name
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  User API: Memory                                            │
+│  Memory API                                                  │
 │  - remember(text) -> List[Entity]                           │
 │  - recall(query) -> List[Entity]                            │
 └─────────────────────────────────────────────────────────────┘
@@ -197,23 +161,21 @@ assert entities1[0].name == entities2[0].name
         ┌─────────────────────┼─────────────────────┐
         ▼                     ▼                     ▼
 ┌───────────────┐     ┌───────────────┐     ┌───────────────┐
-│ EntityExtractor│     │ DualRetriever │     │EvolutionTracker│
-│ (extraction)   │     │ (search)      │     │ (relationships)│
+│EntityExtractor│     │ DualRetriever │     │EvolutionTracker│
 └───────────────┘     └───────────────┘     └───────────────┘
         │                     │                     │
         └─────────────────────┼─────────────────────┘
                               ▼
         ┌─────────────────────────────────────────────┐
-        │  LLMProvider Protocol                        │
-        │  ┌─────────────┐  ┌─────────────┐           │
-        │  │SimLLMProvider│  │ Anthropic/  │           │
-        │  │(simulation)  │  │ OpenAI      │           │
-        │  └─────────────┘  └─────────────┘           │
+        │  LLMProvider                                 │
+        │  - SimLLMProvider (testing, no API calls)   │
+        │  - AnthropicProvider                        │
+        │  - OpenAIProvider                           │
         └─────────────────────────────────────────────┘
                               │
                               ▼
         ┌─────────────────────────────────────────────┐
-        │  SimStorage (in-memory, deterministic)      │
+        │  SimStorage (in-memory only for now)        │
         └─────────────────────────────────────────────┘
 ```
 
