@@ -207,12 +207,14 @@ class Memory:
                     evolution = await self._evolution.find_related_and_detect(stored)
                     if evolution:
                         # Store evolution info in metadata (JSON serialized)
-                        stored.metadata["evolution"] = json.dumps({
-                            "type": evolution.evolution_type,
-                            "related_id": evolution.source_id,
-                            "reason": evolution.reason,
-                            "confidence": evolution.confidence,
-                        })
+                        stored.metadata["evolution"] = json.dumps(
+                            {
+                                "type": evolution.evolution_type,
+                                "related_id": evolution.source_id,
+                                "reason": evolution.reason,
+                                "confidence": evolution.confidence,
+                            }
+                        )
 
                 entities.append(stored)
 

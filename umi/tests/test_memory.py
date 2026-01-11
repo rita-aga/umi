@@ -473,7 +473,7 @@ class TestMemoryFaultInjection:
 
         # First LLM call succeeds, but storage fails
         # Need to set LLM timeout to 0 so LLM succeeds
-        memory._llm.faults = FaultConfig()  # No LLM faults
+        memory._llm.faults = FaultConfig()  # type: ignore[attr-defined]  # SimLLMProvider
 
         with pytest.raises(RuntimeError, match="write error"):
             await memory.remember("Text", extract_entities=False)
