@@ -370,10 +370,80 @@ This gives the benefits of both worlds while maintaining a clean architectural b
 
 ---
 
+## Part 8: Trajectories - The Missing Primitive
+
+Based on analysis of the position paper "Trajectories as a Foundation for Continual Learning Agents" and training frameworks (Agent Lightning, Fireworks RFT, Unsloth ART).
+
+### The Insight
+
+> "Agents that cannot learn from their own experience are fundamentally limited."
+
+Trajectories are structured decision traces that enable:
+
+| Capability | Description | Training Required? |
+|------------|-------------|-------------------|
+| **Display** | Render conversation history | No |
+| **Context Learning** | Retrieve similar examples | No |
+| **Simulation** | Predict counterfactuals | No |
+| **RL Training** | Fine-tune on rewards | Yes |
+
+### The Continual Learning Funnel
+
+```
+Execution → Context Learning → Simulation → RL Training
+   │              │                │              │
+   │         No training      No training    Requires GPU
+   │         +15-25% gain     "What if?"     Compounding
+   │                                         improvement
+   └── All stages use the same trajectory format ──┘
+```
+
+### Training Framework Integration
+
+| Framework | Provider | Integration |
+|-----------|----------|-------------|
+| [Agent Lightning](https://github.com/microsoft/agent-lightning) | Microsoft | Best for decoupled Rust agent + Python training |
+| [Fireworks RFT](https://fireworks.ai/blog/fireworks-rft) | Fireworks | Managed service, export rollouts |
+| [Unsloth ART](https://github.com/OpenPipe/ART) | OpenPipe | Open source, RULER auto-rewards |
+
+### Architecture with Trajectories
+
+```
+┌────────────────────────────────────────┐
+│      Rust Runtime (Letta-rs + Umi)     │
+│                                        │
+│  Agent Loop → Trajectory Collector     │
+│       │              │                 │
+│       ▼              ▼                 │
+│  Umi Memory ← Trajectory Store         │
+│       │              │                 │
+│  Context     Simulation    Export      │
+│  Learning    Engine        │           │
+└──────────────────────────────┼─────────┘
+                               ▼
+┌──────────────────────────────────────────┐
+│    Python Training (Agent Lightning)     │
+│    LightningRL → GRPO → Improved Model   │
+└──────────────────────────────────────────┘
+```
+
+### Key Insight: Optimization Statistics
+
+Trajectories don't just improve agents—they improve the entire stack:
+
+- **AGENTS.md** - Evolve instructions based on what worked
+- **Skills** - Discover gaps, deprecate underused tools
+- **MCP** - Behavioral tool recommendations from history
+
+See `docs/trajectories-continual-learning.md` for full analysis.
+
+---
+
 ## Related Documents
 
 - `docs/letta-rust-feasibility.md` - Detailed Letta analysis
 - `docs/isotopes-rust-replication.md` - aidnn replication analysis
+- `docs/trajectories-continual-learning.md` - Trajectory primitive and training frameworks
 - `.vision/umi-vision.md` - Umi core principles
 - `.progress/001_*_umi-standalone-roadmap.md` - Implementation roadmap
 
@@ -382,4 +452,7 @@ This gives the benefits of both worlds while maintaining a clean architectural b
 - [Letta GitHub](https://github.com/letta-ai/letta)
 - [Isotopes AI](https://isotopes.ai/)
 - [Microsoft Agent Lightning](https://github.com/microsoft/agent-lightning)
+- [Fireworks RFT](https://fireworks.ai/blog/fireworks-rft)
+- [Unsloth RL Guide](https://unsloth.ai/docs/get-started/reinforcement-learning-rl-guide)
+- [OpenPipe ART](https://github.com/OpenPipe/ART)
 - [MemGPT Paper](https://arxiv.org/abs/2310.08560)
