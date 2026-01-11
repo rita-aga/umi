@@ -14,9 +14,9 @@ Example:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from random import Random
-from typing import Literal, Optional
+from typing import Literal
 
 # Fault type literals for type safety
 LLMFaultType = Literal["timeout", "error", "malformed", "rate_limit"]
@@ -147,7 +147,7 @@ class FaultConfig:
         return None
 
     @classmethod
-    def chaos(cls, probability: float = 0.1) -> "FaultConfig":
+    def chaos(cls, probability: float = 0.1) -> FaultConfig:
         """Create a chaos testing configuration with uniform fault probability.
 
         Args:
@@ -170,7 +170,7 @@ class FaultConfig:
         )
 
     @classmethod
-    def none(cls) -> "FaultConfig":
+    def none(cls) -> FaultConfig:
         """Create a configuration with no faults (default).
 
         Returns:

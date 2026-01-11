@@ -15,15 +15,12 @@ Example:
 
 from __future__ import annotations
 
-import hashlib
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from random import Random
-from typing import Optional
 
 from umi.faults import FaultConfig
-
 
 # =============================================================================
 # Constants (TigerStyle: explicit limits)
@@ -66,8 +63,8 @@ class Entity:
     metadata: dict[str, str] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    document_time: Optional[datetime] = None
-    event_time: Optional[datetime] = None
+    document_time: datetime | None = None
+    event_time: datetime | None = None
     importance: float = 0.5
 
     def __post_init__(self) -> None:
@@ -83,9 +80,7 @@ class Entity:
         assert len(self.content) <= ENTITY_CONTENT_BYTES_MAX, (
             f"content exceeds {ENTITY_CONTENT_BYTES_MAX} bytes"
         )
-        assert 0.0 <= self.importance <= 1.0, (
-            f"importance must be 0-1: {self.importance}"
-        )
+        assert 0.0 <= self.importance <= 1.0, f"importance must be 0-1: {self.importance}"
 
     def has_temporal_metadata(self) -> bool:
         """Check if entity has temporal metadata."""
@@ -192,9 +187,7 @@ class SimStorage:
         """
         # TigerStyle: Preconditions
         assert query, "query must not be empty"
-        assert len(query) <= SEARCH_QUERY_BYTES_MAX, (
-            f"query exceeds {SEARCH_QUERY_BYTES_MAX} bytes"
-        )
+        assert len(query) <= SEARCH_QUERY_BYTES_MAX, f"query exceeds {SEARCH_QUERY_BYTES_MAX} bytes"
         assert 0 < limit <= SEARCH_RESULTS_COUNT_MAX, (
             f"limit must be 1-{SEARCH_RESULTS_COUNT_MAX}: {limit}"
         )

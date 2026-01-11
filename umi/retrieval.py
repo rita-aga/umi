@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from random import Random
 from typing import TYPE_CHECKING
@@ -42,7 +42,9 @@ RRF_K = 60  # Standard RRF constant
 # Deep search trigger words
 QUESTION_WORDS = frozenset(["who", "what", "when", "where", "why", "how"])
 RELATIONSHIP_TERMS = frozenset(["related", "about", "regarding", "involving", "connected"])
-TEMPORAL_TERMS = frozenset(["yesterday", "today", "last", "recent", "before", "after", "week", "month", "year"])
+TEMPORAL_TERMS = frozenset(
+    ["yesterday", "today", "last", "recent", "before", "after", "week", "month", "year"]
+)
 ABSTRACT_TERMS = frozenset(["similar", "like", "connections", "associated", "linked"])
 
 # Query rewrite prompt template
@@ -83,8 +85,8 @@ class DualRetriever:
         >>> results = await retriever.search("Alice", deep_search=False)
     """
 
-    storage: "SimStorage"
-    llm: "LLMProvider"
+    storage: SimStorage
+    llm: LLMProvider
     seed: int | None = None
 
     def __post_init__(self) -> None:
@@ -101,7 +103,7 @@ class DualRetriever:
         limit: int = 10,
         deep_search: bool = True,
         time_range: tuple[datetime, datetime] | None = None,
-    ) -> list["Entity"]:
+    ) -> list[Entity]:
         """Search with dual retrieval strategy.
 
         Fast path: Direct substring search on storage.
@@ -146,9 +148,9 @@ class DualRetriever:
         if time_range is not None:
             start_time, end_time = time_range
             results = [
-                e for e in results
-                if e.event_time is not None
-                and start_time <= e.event_time <= end_time
+                e
+                for e in results
+                if e.event_time is not None and start_time <= e.event_time <= end_time
             ]
 
         # 6. Sort by importance and limit
@@ -199,11 +201,7 @@ class DualRetriever:
                 return True
 
         # Check for relationship phrases (may span words)
-        for term in RELATIONSHIP_TERMS:
-            if term in query_lower:
-                return True
-
-        return False
+        return any(term in query_lower for term in RELATIONSHIP_TERMS)
 
     async def rewrite_query(self, query: str) -> list[str]:
         """Use LLM to expand query into search variations.
@@ -232,10 +230,9 @@ class DualRetriever:
                 return [query]
 
             # Filter to strings only, limit count
-            valid_variations = [
-                v for v in variations
-                if isinstance(v, str) and v.strip()
-            ][:QUERY_REWRITE_MAX]
+            valid_variations = [v for v in variations if isinstance(v, str) and v.strip()][
+                :QUERY_REWRITE_MAX
+            ]
 
             # Always include original query
             if query not in valid_variations:
@@ -249,9 +246,9 @@ class DualRetriever:
 
     def merge_rrf(
         self,
-        *result_lists: list["Entity"],
+        *result_lists: list[Entity],
         k: int = RRF_K,
-    ) -> list["Entity"]:
+    ) -> list[Entity]:
         """Merge results using Reciprocal Rank Fusion.
 
         RRF score: sum(1 / (k + rank)) for each list the document appears in.
@@ -272,7 +269,7 @@ class DualRetriever:
 
         # Calculate RRF scores
         scores: dict[str, float] = defaultdict(float)
-        entities: dict[str, "Entity"] = {}
+        entities: dict[str, Entity] = {}
 
         for result_list in result_lists:
             for rank, entity in enumerate(result_list):
@@ -289,7 +286,7 @@ class DualRetriever:
 
         return results
 
-    async def _fast_search(self, query: str, limit: int) -> list["Entity"]:
+    async def _fast_search(self, query: str, limit: int) -> list[Entity]:
         """Execute fast substring search.
 
         Args:
@@ -301,7 +298,7 @@ class DualRetriever:
         """
         return await self.storage.search(query, limit=limit)
 
-    async def _deep_search(self, query: str, limit: int) -> list["Entity"]:
+    async def _deep_search(self, query: str, limit: int) -> list[Entity]:
         """Execute deep search with query rewriting.
 
         Args:
@@ -315,7 +312,7 @@ class DualRetriever:
         variations = await self.rewrite_query(query)
 
         # Search each variation
-        all_results: list["Entity"] = []
+        all_results: list[Entity] = []
         seen_ids: set[str] = set()
 
         for variation in variations:

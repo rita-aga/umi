@@ -3,13 +3,13 @@
 TigerStyle: Simulation-first testing, determinism verification.
 """
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from umi.faults import FaultConfig
 from umi.memory import Memory
 from umi.storage import Entity, SimStorage
-
 
 # =============================================================================
 # Entity Tests
@@ -316,7 +316,7 @@ class TestMemoryRecall:
 
         results = await memory.recall("Acme")
 
-        names = {e.name for e in results}
+        {e.name for e in results}
         # Should find entities related to Acme
         assert len(results) >= 1
 

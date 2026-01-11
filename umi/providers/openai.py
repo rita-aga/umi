@@ -11,15 +11,13 @@ Example:
 from __future__ import annotations
 
 import json
-import os
 from typing import TypeVar
 
 try:
     import openai
 except ImportError as e:
     raise ImportError(
-        "OpenAIProvider requires the 'openai' package. "
-        "Install with: pip install umi[openai]"
+        "OpenAIProvider requires the 'openai' package. Install with: pip install umi[openai]"
     ) from e
 
 T = TypeVar("T")

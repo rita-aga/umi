@@ -253,47 +253,58 @@ class SimLLMProvider:
         for name in COMMON_NAMES:
             if name.upper() in prompt_upper:
                 entity_type = self._rng.choice(["person", "person", "person", "topic"])
-                entities.append({
-                    "name": name,
-                    "type": entity_type,
-                    "content": f"Extracted from: {prompt[:50]}...",
-                    "confidence": round(0.7 + self._rng.random() * 0.3, 2),
-                })
+                entities.append(
+                    {
+                        "name": name,
+                        "type": entity_type,
+                        "content": f"Extracted from: {prompt[:50]}...",
+                        "confidence": round(0.7 + self._rng.random() * 0.3, 2),
+                    }
+                )
 
         for org in COMMON_ORGS:
             if org.upper() in prompt_upper:
-                entities.append({
-                    "name": org,
-                    "type": "org",
-                    "content": f"Organization mentioned",
-                    "confidence": round(0.7 + self._rng.random() * 0.3, 2),
-                })
+                entities.append(
+                    {
+                        "name": org,
+                        "type": "org",
+                        "content": "Organization mentioned",
+                        "confidence": round(0.7 + self._rng.random() * 0.3, 2),
+                    }
+                )
 
         # If no entities found, create a generic note
         if not entities:
             prompt_hash = self._prompt_hash(prompt)
-            entities.append({
-                "name": f"Note_{prompt_hash}",
-                "type": "note",
-                "content": prompt[:100],
-                "confidence": 0.5,
-            })
+            entities.append(
+                {
+                    "name": f"Note_{prompt_hash}",
+                    "type": "note",
+                    "content": prompt[:100],
+                    "confidence": 0.5,
+                }
+            )
 
         # Generate some relations if we have multiple entities
         if len(entities) >= 2:
             source = entities[0]["name"]
             target = entities[1]["name"]
             rel_type = self._rng.choice(RELATION_TYPES)
-            relations.append({
-                "source": source,
-                "target": target,
-                "type": rel_type,
-            })
+            relations.append(
+                {
+                    "source": source,
+                    "target": target,
+                    "type": rel_type,
+                }
+            )
 
-        return json.dumps({
-            "entities": entities,
-            "relations": relations,
-        }, indent=2)
+        return json.dumps(
+            {
+                "entities": entities,
+                "relations": relations,
+            },
+            indent=2,
+        )
 
     def _sim_query_rewrite(self, prompt: str) -> str:
         """Generate simulated query rewrite response.
@@ -315,7 +326,7 @@ class SimLLMProvider:
 
         # Add a more specific variation
         prompt_hash = self._prompt_hash(original_query)
-        hash_int = int(prompt_hash, 16)
+        int(prompt_hash, 16)
 
         variations.append(f"{original_query} specifically")
         variations.append(f"related to {original_query}")
@@ -330,7 +341,7 @@ class SimLLMProvider:
         """
         # Use prompt hash to deterministically pick evolution type
         prompt_hash = self._prompt_hash(prompt)
-        hash_int = int(prompt_hash, 16)
+        int(prompt_hash, 16)
 
         # Weight towards "none" and "extend" as most common
         weights = [0.2, 0.3, 0.15, 0.1, 0.25]  # update, extend, derive, contradict, none
@@ -345,12 +356,14 @@ class SimLLMProvider:
                 break
 
         if evolution_type == "none":
-            return json.dumps({
-                "type": "none",
-                "reason": "No significant relationship detected",
-                "related_id": None,
-                "confidence": 0.3,
-            })
+            return json.dumps(
+                {
+                    "type": "none",
+                    "reason": "No significant relationship detected",
+                    "related_id": None,
+                    "confidence": 0.3,
+                }
+            )
 
         # For non-none types, generate a plausible response
         reasons = {
@@ -360,12 +373,14 @@ class SimLLMProvider:
             "contradict": "Conflicting information detected",
         }
 
-        return json.dumps({
-            "type": evolution_type,
-            "reason": reasons.get(evolution_type, "Related information"),
-            "related_id": f"entity-{prompt_hash}",
-            "confidence": round(0.6 + self._rng.random() * 0.4, 2),
-        })
+        return json.dumps(
+            {
+                "type": evolution_type,
+                "reason": reasons.get(evolution_type, "Related information"),
+                "related_id": f"entity-{prompt_hash}",
+                "confidence": round(0.6 + self._rng.random() * 0.4, 2),
+            }
+        )
 
     def _sim_categorization(self, prompt: str) -> str:
         """Generate simulated categorization response.
@@ -401,7 +416,7 @@ class SimLLMProvider:
         self._rng = Random(self.seed)
         self.stats = FaultStats()
 
-    def fork(self, new_seed: int | None = None) -> "SimLLMProvider":
+    def fork(self, new_seed: int | None = None) -> SimLLMProvider:
         """Create a new provider with derived seed.
 
         Args:

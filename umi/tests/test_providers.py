@@ -3,19 +3,19 @@
 TigerStyle: Simulation-first testing, determinism verification.
 """
 
+import contextlib
 import json
-import pytest
 from random import Random
+
+import pytest
 
 from umi.faults import FaultConfig, FaultStats
 from umi.providers.base import LLMProvider, validate_provider
 from umi.providers.sim import (
     SimLLMProvider,
-    SimMalformedResponseError,
     SimRateLimitError,
     SimTimeoutError,
 )
-
 
 # =============================================================================
 # LLMProvider Protocol Tests
@@ -105,8 +105,8 @@ class TestSimLLMProviderDeterminism:
 
         prompt = "Test prompt"
 
-        response1 = await provider1.complete(prompt)
-        response2 = await provider2.complete(prompt)
+        await provider1.complete(prompt)
+        await provider2.complete(prompt)
 
         # Different seeds mean different internal state
         assert provider1.seed != provider2.seed
@@ -293,10 +293,8 @@ class TestFaultInjection:
         assert provider.stats is not None
         assert provider.stats.timeouts == 0
 
-        try:
+        with contextlib.suppress(SimTimeoutError):
             await provider.complete("test")
-        except SimTimeoutError:
-            pass
 
         assert provider.stats.timeouts == 1
 

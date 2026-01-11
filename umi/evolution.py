@@ -38,12 +38,14 @@ CONFIDENCE_DEFAULT = 0.5
 CONFIDENCE_THRESHOLD_DEFAULT = 0.3  # Minimum confidence to return result
 
 # Valid evolution types
-EVOLUTION_TYPES = frozenset([
-    "update",      # New info replaces old (e.g., job change)
-    "extend",      # New info adds to old (e.g., additional detail)
-    "derive",      # New info concluded from old (e.g., inference)
-    "contradict",  # New info conflicts with old (e.g., disagreement)
-])
+EVOLUTION_TYPES = frozenset(
+    [
+        "update",  # New info replaces old (e.g., job change)
+        "extend",  # New info adds to old (e.g., additional detail)
+        "derive",  # New info concluded from old (e.g., inference)
+        "contradict",  # New info conflicts with old (e.g., disagreement)
+    ]
+)
 
 # Detection prompt template
 DETECTION_PROMPT = """Compare new information with existing memories and determine the relationship.
@@ -132,8 +134,8 @@ class EvolutionTracker:
         ... )
     """
 
-    llm: "LLMProvider"
-    storage: "SimStorage"
+    llm: LLMProvider
+    storage: SimStorage
     seed: int | None = None
 
     def __post_init__(self) -> None:
@@ -145,8 +147,8 @@ class EvolutionTracker:
 
     async def detect(
         self,
-        new_entity: "Entity",
-        existing_entities: list["Entity"],
+        new_entity: Entity,
+        existing_entities: list[Entity],
         *,
         min_confidence: float = CONFIDENCE_THRESHOLD_DEFAULT,
     ) -> EvolutionRelation | None:
@@ -206,7 +208,7 @@ class EvolutionTracker:
 
     async def find_related_and_detect(
         self,
-        new_entity: "Entity",
+        new_entity: Entity,
         *,
         search_limit: int = 5,
         min_confidence: float = CONFIDENCE_THRESHOLD_DEFAULT,
@@ -242,8 +244,8 @@ class EvolutionTracker:
 
     def _build_prompt(
         self,
-        new_entity: "Entity",
-        existing_entities: list["Entity"],
+        new_entity: Entity,
+        existing_entities: list[Entity],
     ) -> str:
         """Build detection prompt.
 

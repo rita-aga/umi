@@ -6,18 +6,17 @@ TigerStyle: Simulation-first testing, determinism verification.
 import pytest
 
 from umi.extraction import (
+    CONFIDENCE_MAX,
+    CONFIDENCE_MIN,
+    ENTITY_TYPES,
+    RELATION_TYPES,
     EntityExtractor,
     ExtractedEntity,
     ExtractedRelation,
     ExtractionResult,
-    ENTITY_TYPES,
-    RELATION_TYPES,
-    CONFIDENCE_MIN,
-    CONFIDENCE_MAX,
 )
 from umi.faults import FaultConfig
 from umi.providers.sim import SimLLMProvider
-
 
 # =============================================================================
 # Fixtures

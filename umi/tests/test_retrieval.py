@@ -3,20 +3,17 @@
 TigerStyle: Simulation-first testing, determinism verification.
 """
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from umi.faults import FaultConfig
 from umi.providers.sim import SimLLMProvider
 from umi.retrieval import (
-    DualRetriever,
     QUESTION_WORDS,
-    RELATIONSHIP_TERMS,
-    TEMPORAL_TERMS,
-    RRF_K,
+    DualRetriever,
 )
 from umi.storage import Entity, SimStorage
-
 
 # =============================================================================
 # Fixtures
@@ -251,9 +248,7 @@ class TestSearch:
     """Tests for search() method."""
 
     @pytest.mark.asyncio
-    async def test_basic_search(
-        self, llm: SimLLMProvider, populated_storage: SimStorage
-    ) -> None:
+    async def test_basic_search(self, llm: SimLLMProvider, populated_storage: SimStorage) -> None:
         """Should find entities by text."""
         retriever = DualRetriever(storage=populated_storage, llm=llm, seed=42)
 
@@ -271,16 +266,14 @@ class TestSearch:
         retriever = DualRetriever(storage=populated_storage, llm=llm, seed=42)
 
         # Simple query that might benefit from rewriting
-        fast_results = await retriever.search("Acme", deep_search=False)
-        deep_results = await retriever.search("Who works at Acme?", deep_search=True)
+        await retriever.search("Acme", deep_search=False)
+        await retriever.search("Who works at Acme?", deep_search=True)
 
         # Deep search triggered by question word
         assert retriever.needs_deep_search("Who works at Acme?")
 
     @pytest.mark.asyncio
-    async def test_respects_limit(
-        self, llm: SimLLMProvider, populated_storage: SimStorage
-    ) -> None:
+    async def test_respects_limit(self, llm: SimLLMProvider, populated_storage: SimStorage) -> None:
         """Should respect result limit."""
         retriever = DualRetriever(storage=populated_storage, llm=llm, seed=42)
 
@@ -352,7 +345,7 @@ class TestDeterminism:
         retriever2 = DualRetriever(storage=storage2, llm=llm2, seed=42)
 
         # Store same entities
-        entity = Entity(name="Alice", content="Works at Acme")
+        Entity(name="Alice", content="Works at Acme")
         await storage1.store(Entity(name="Alice", content="Works at Acme"))
         await storage2.store(Entity(name="Alice", content="Works at Acme"))
 

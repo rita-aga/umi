@@ -6,16 +6,15 @@ TigerStyle: Simulation-first testing, determinism verification.
 import pytest
 
 from umi.evolution import (
-    EvolutionTracker,
-    EvolutionRelation,
-    EVOLUTION_TYPES,
-    CONFIDENCE_MIN,
     CONFIDENCE_MAX,
+    CONFIDENCE_MIN,
+    EVOLUTION_TYPES,
+    EvolutionRelation,
+    EvolutionTracker,
 )
 from umi.faults import FaultConfig
 from umi.providers.sim import SimLLMProvider
 from umi.storage import Entity, SimStorage
-
 
 # =============================================================================
 # Fixtures

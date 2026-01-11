@@ -22,18 +22,16 @@ Example:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional
+from dataclasses import dataclass
+from datetime import datetime
 
-from umi.evolution import EvolutionRelation, EvolutionTracker
+from umi.evolution import EvolutionTracker
 from umi.extraction import EntityExtractor
 from umi.faults import FaultConfig
 from umi.providers.base import LLMProvider
 from umi.providers.sim import SimLLMProvider
 from umi.retrieval import DualRetriever
 from umi.storage import Entity, SimStorage
-
 
 # =============================================================================
 # Constants (TigerStyle: explicit limits)
@@ -128,9 +126,11 @@ class Memory:
             return SimLLMProvider(seed=42, faults=self.faults)
         elif name == "anthropic":
             from umi.providers.anthropic import AnthropicProvider
+
             return AnthropicProvider()
         elif name == "openai":
             from umi.providers.openai import OpenAIProvider
+
             return OpenAIProvider()
         else:
             raise ValueError(f"Unknown provider: {name}. Use 'sim', 'anthropic', or 'openai'")

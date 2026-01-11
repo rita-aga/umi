@@ -17,7 +17,7 @@ Example:
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from random import Random
 from typing import TYPE_CHECKING
 
@@ -37,26 +37,30 @@ CONFIDENCE_MAX = 1.0
 CONFIDENCE_DEFAULT = 0.5
 
 # Valid entity types
-ENTITY_TYPES = frozenset([
-    "person",      # People mentioned
-    "org",         # Organizations, companies
-    "project",     # Projects, initiatives
-    "topic",       # Topics, concepts
-    "preference",  # User preferences
-    "task",        # Tasks, action items
-    "event",       # Events, meetings
-    "note",        # Fallback for unstructured
-])
+ENTITY_TYPES = frozenset(
+    [
+        "person",  # People mentioned
+        "org",  # Organizations, companies
+        "project",  # Projects, initiatives
+        "topic",  # Topics, concepts
+        "preference",  # User preferences
+        "task",  # Tasks, action items
+        "event",  # Events, meetings
+        "note",  # Fallback for unstructured
+    ]
+)
 
 # Valid relation types
-RELATION_TYPES = frozenset([
-    "works_at",    # Person works at Org
-    "knows",       # Person knows Person
-    "manages",     # Person manages Project
-    "relates_to",  # Generic relation
-    "prefers",     # User prefers something
-    "part_of",     # Entity is part of another
-])
+RELATION_TYPES = frozenset(
+    [
+        "works_at",  # Person works at Org
+        "knows",  # Person knows Person
+        "manages",  # Person manages Project
+        "relates_to",  # Generic relation
+        "prefers",  # User prefers something
+        "part_of",  # Entity is part of another
+    ]
+)
 
 # Extraction prompt template
 EXTRACTION_PROMPT = """Extract entities and relationships from this text.
@@ -186,7 +190,7 @@ class EntityExtractor:
         ... )
     """
 
-    llm: "LLMProvider"
+    llm: LLMProvider
     seed: int | None = None
 
     def __post_init__(self) -> None:
