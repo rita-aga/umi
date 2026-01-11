@@ -1,0 +1,8 @@
+# Clippy configuration for umi
+# See: https://doc.rust-lang.org/clippy/configuration.html
+
+# Allow longer cognitive complexity for DST test functions
+cognitive-complexity-threshold = 30
+
+# MSRV for compatibility
+msrv = "1.75.0"

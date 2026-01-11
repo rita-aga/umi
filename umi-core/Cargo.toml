@@ -1,0 +1,30 @@
+[package]
+name = "umi-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Core memory system with DST (Deterministic Simulation Testing)"
+
+[dependencies]
+tokio = { workspace = true }
+async-trait = { workspace = true }
+bytes = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+tracing = { workspace = true }
+
+# Optional database support
+sqlx = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[features]
+default = []
+postgres = ["dep:sqlx"]

@@ -2,25 +2,25 @@
 
 ## What Umi Is
 
-A memory library for AI agents that handles:
-1. Extracting structured entities from conversation text
-2. Retrieving relevant memories with smart query expansion
-3. Tracking when information changes or contradicts previous memories
+A memory library for AI agents with two layers:
+
+1. **Rust core**: Memory tiers, storage backends, deterministic simulation
+2. **Python layer**: LLM integration, entity extraction, smart retrieval
 
 ## Core Principles
 
 ### Simulation-First
 
-Every component has a simulation mode (`seed=N`) that:
+Every component has a simulation mode that:
 - Makes zero external API calls
-- Produces deterministic results
+- Produces deterministic results (same seed = same output)
 - Enables reliable, reproducible testing
 
-This is non-negotiable. No new component ships without a simulation implementation.
+This applies to both Rust (`SimConfig`) and Python (`seed=N`).
 
 ### Graceful Degradation
 
-LLM calls fail. The library should:
+LLM calls fail. The Python layer should:
 - Return sensible fallbacks (empty lists, None)
 - Never crash due to LLM timeouts or errors
 - Work in degraded mode rather than not at all
@@ -34,10 +34,19 @@ await memory.remember("Alice works at Acme")
 results = await memory.recall("Who works at Acme?")
 ```
 
-That's it. The complexity lives inside.
-
 ## What's Built
 
+### Rust (`umi-core/`)
+- [x] DST framework (SimConfig, DeterministicRng, SimClock)
+- [x] CoreMemory (32KB, bounded)
+- [x] WorkingMemory (1MB, TTL-based eviction)
+- [x] ArchivalMemory (unlimited, uses storage backend)
+- [x] SimStorageBackend for testing
+- [x] SimVectorBackend for vector search simulation
+- [x] Entity with temporal metadata
+- [x] EvolutionRelation types
+
+### Python (`umi/`)
 - [x] Entity extraction from text
 - [x] Dual retrieval (fast + LLM-expanded search)
 - [x] Evolution tracking (update/extend/contradict detection)
@@ -48,14 +57,21 @@ That's it. The complexity lives inside.
 
 ## What's Not Built Yet
 
+- [ ] PyO3 bindings connecting Python to Rust
 - [ ] Persistent storage (Postgres backend)
 - [ ] Vector search (Qdrant/pgvector backend)
 - [ ] PyPI package publishing
-- [ ] Rust core integration (umi-core via PyO3)
+- [ ] Crates.io publishing
 
 ## Constraints
 
-- Python 3.10+ only
+- Rust: stable toolchain, no nightly features
+- Python: 3.10+ only
 - No required dependencies (LLM providers are optional extras)
 - Must work without any API keys (simulation mode)
 - Tests must pass without network access
+
+## Test Counts
+
+- Rust: 232 tests
+- Python: 145 tests

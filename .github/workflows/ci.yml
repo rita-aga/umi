@@ -1,13 +1,21 @@
-# Umi CI Workflow
+# Python CI Workflow
 # Runs lint, type check, and tests on push and PRs
 
-name: CI
+name: Python CI
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'umi/**'
+      - 'pyproject.toml'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'umi/**'
+      - 'pyproject.toml'
+      - '.github/workflows/ci.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

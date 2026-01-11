@@ -1,0 +1,17 @@
+[package]
+name = "umi-py"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Python bindings for Umi memory system"
+
+[lib]
+name = "umi"
+crate-type = ["cdylib"]
+
+[dependencies]
+umi-core = { path = "../umi-core" }
+pyo3 = { workspace = true }
+pyo3-asyncio = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }

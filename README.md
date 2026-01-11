@@ -9,10 +9,49 @@ Memory for AI agents - entity extraction, dual retrieval, and evolution tracking
 - **Evolution Tracking**: Detects when new information updates, extends, or contradicts existing memories
 - **Temporal Metadata**: Tracks both when something was said and when the event occurred
 
+## Architecture
+
+Umi has two layers:
+
+- **Rust core** (`umi-core/`): Memory tiers, storage backends, deterministic simulation testing (DST)
+- **Python layer** (`umi/`): LLM integration, entity extraction, smart retrieval
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Python: pip install umi                                     │
+│                                                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │EntityExtract│  │DualRetriever│  │EvolutionTrack│         │
+│  └─────────────┘  └─────────────┘  └─────────────┘         │
+│         │               │                │                  │
+│         └───────────────┼────────────────┘                  │
+│                         ▼                                   │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  LLMProvider (SimLLMProvider | Anthropic | OpenAI)  │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                          │ PyO3 (future)
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Rust: umi-core                                              │
+│                                                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │ CoreMemory  │  │WorkingMemory│  │ArchivalMem  │         │
+│  │   (32KB)    │  │   (1MB)     │  │ (unlimited) │         │
+│  └─────────────┘  └─────────────┘  └─────────────┘         │
+│         │               │                │                  │
+│         └───────────────┼────────────────┘                  │
+│                         ▼                                   │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  StorageBackend (SimBackend | Postgres | Vector)    │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ## Installation
 
 ```bash
-# From source (not yet on PyPI)
+# Python layer (from source, not yet on PyPI)
 pip install git+https://github.com/rita-aga/umi.git
 
 # With LLM provider support
@@ -20,7 +59,7 @@ pip install "umi[anthropic] @ git+https://github.com/rita-aga/umi.git"
 pip install "umi[openai] @ git+https://github.com/rita-aga/umi.git"
 ```
 
-## Quick Start
+## Quick Start (Python)
 
 ```python
 from umi import Memory
@@ -50,152 +89,78 @@ memory = Memory(provider="anthropic")
 memory = Memory(provider="openai")
 ```
 
-## Core Components
+## Rust Core
 
-### Memory
+The Rust layer provides:
 
-Main interface for remember/recall operations.
+- **Memory Tiers**: CoreMemory (32KB), WorkingMemory (1MB TTL), ArchivalMemory (unlimited)
+- **DST (Deterministic Simulation Testing)**: Same seed = same results, every time
+- **Storage Backends**: SimBackend for testing, Postgres/Vector backends (planned)
 
-```python
-memory = Memory(seed=42)  # Simulation mode
+```rust
+use umi_core::{CoreMemory, SimConfig};
 
-# Store with metadata
-entities = await memory.remember(
-    "Alice works at Acme Corp",
-    importance=0.8,
-    document_time=datetime.now(),
-    event_time=datetime(2024, 1, 15),
-)
+// Create with deterministic seed
+let config = SimConfig::with_seed(42);
+let memory = CoreMemory::new(32 * 1024, config);
 
-# Search with options
-results = await memory.recall(
-    "Who works at Acme?",
-    limit=10,
-    deep_search=True,  # Use LLM for query expansion
-)
+// Store and retrieve
+memory.write(b"important context")?;
+let data = memory.read_all()?;
 ```
 
-### EntityExtractor
-
-Extract structured entities from text.
-
-```python
-from umi import EntityExtractor, SimLLMProvider
-
-llm = SimLLMProvider(seed=42)
-extractor = EntityExtractor(llm=llm, seed=42)
-
-result = await extractor.extract("Alice, CEO of Acme, met Bob")
-for entity in result.entities:
-    print(f"{entity.name} ({entity.entity_type}): {entity.confidence}")
-```
-
-### DualRetriever
-
-Smart search with query expansion.
-
-```python
-from umi import DualRetriever, SimLLMProvider, SimStorage
-
-retriever = DualRetriever(
-    storage=SimStorage(seed=42),
-    llm=SimLLMProvider(seed=42),
-    seed=42,
-)
-
-# Deep search rewrites query into variations
-results = await retriever.search("Who works at Acme?", deep_search=True)
-```
-
-### EvolutionTracker
-
-Track how memories evolve over time.
-
-```python
-from umi import EvolutionTracker, SimLLMProvider, SimStorage
-
-tracker = EvolutionTracker(
-    llm=SimLLMProvider(seed=42),
-    storage=SimStorage(seed=42),
-    seed=42,
-)
-
-# Detect if new entity updates/extends/contradicts existing
-evolution = await tracker.find_related_and_detect(new_entity)
-if evolution:
-    print(f"Evolution: {evolution.evolution_type} - {evolution.reason}")
+Run Rust tests:
+```bash
+cargo test
 ```
 
 ## Current Limitations
 
-- **Storage is in-memory only** - no persistence yet (Postgres/vector DB backends planned)
-- **SimStorage for testing** - use `seed=42` for deterministic behavior without LLM calls
+- **Python storage is in-memory only** - SimStorage doesn't persist
+- **PyO3 bindings not wired up yet** - Python and Rust layers are separate for now
+- **No real database backends** - Postgres/Qdrant planned
 
-## Entity Types
-
-- `person`: People mentioned
-- `org`: Organizations, companies
-- `project`: Projects, initiatives
-- `topic`: Topics, concepts
-- `preference`: User preferences
-- `task`: Tasks, action items
-- `event`: Events, meetings
-- `note`: Fallback for unstructured content
-
-## Evolution Types
-
-- `update`: New info replaces old (e.g., job change)
-- `extend`: New info adds to old (e.g., more details)
-- `derive`: New info concluded from old (e.g., inference)
-- `contradict`: New info conflicts with old
-
-## Architecture
+## Project Structure
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Memory API                                                  │
-│  - remember(text) -> List[Entity]                           │
-│  - recall(query) -> List[Entity]                            │
-└─────────────────────────────────────────────────────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        ▼                     ▼                     ▼
-┌───────────────┐     ┌───────────────┐     ┌───────────────┐
-│EntityExtractor│     │ DualRetriever │     │EvolutionTracker│
-└───────────────┘     └───────────────┘     └───────────────┘
-        │                     │                     │
-        └─────────────────────┼─────────────────────┘
-                              ▼
-        ┌─────────────────────────────────────────────┐
-        │  LLMProvider                                 │
-        │  - SimLLMProvider (testing, no API calls)   │
-        │  - AnthropicProvider                        │
-        │  - OpenAIProvider                           │
-        └─────────────────────────────────────────────┘
-                              │
-                              ▼
-        ┌─────────────────────────────────────────────┐
-        │  SimStorage (in-memory only for now)        │
-        └─────────────────────────────────────────────┘
+umi/
+├── umi/                    # Python package
+│   ├── memory.py           # Main Memory class
+│   ├── extraction.py       # EntityExtractor
+│   ├── retrieval.py        # DualRetriever
+│   ├── evolution.py        # EvolutionTracker
+│   ├── providers/          # LLM providers
+│   │   ├── sim.py          # SimLLMProvider (testing)
+│   │   ├── anthropic.py
+│   │   └── openai.py
+│   └── tests/              # Python tests (145 passing)
+│
+├── umi-core/               # Rust core library
+│   └── src/
+│       ├── dst/            # Deterministic simulation
+│       ├── memory/         # Memory tiers
+│       └── storage/        # Storage backends
+│
+├── umi-py/                 # PyO3 bindings (future)
+│
+├── Cargo.toml              # Rust workspace
+├── pyproject.toml          # Python package
+└── docs/adr/               # Architecture decisions
 ```
 
 ## Development
 
 ```bash
-# Install dev dependencies
+# Python
 pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Run specific test file
-pytest umi/tests/test_memory.py
-
-# Linting
+pytest                      # 145 tests
 ruff check .
-
-# Type checking
 mypy umi/
+
+# Rust
+cargo test                  # 232 tests
+cargo clippy
+cargo fmt --check
 ```
 
 ## License

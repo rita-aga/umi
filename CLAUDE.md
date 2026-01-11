@@ -4,55 +4,84 @@ Instructions for Claude Code when working in the Umi repository.
 
 ## What Umi Is
 
-Umi is a memory library for AI agents. It provides:
-- **Entity extraction** from text using LLMs
-- **Dual retrieval** (fast search + LLM query expansion)
-- **Evolution tracking** (detecting updates/contradictions in memories)
+Umi is a memory library for AI agents with two layers:
+
+**Rust core** (`umi-core/`):
+- Memory tiers (CoreMemory, WorkingMemory, ArchivalMemory)
+- Storage backends with simulation support
+- DST (Deterministic Simulation Testing)
+
+**Python layer** (`umi/`):
+- Entity extraction from text
+- Dual retrieval (fast + LLM query expansion)
+- Evolution tracking (detecting updates/contradictions)
 
 ## Development Philosophy
 
 ### Simulation-First (Mandatory)
 
-Every component MUST have a simulation implementation that:
-1. Takes a `seed` parameter for deterministic behavior
-2. Makes no external API calls
-3. Produces identical results for identical inputs
+Every component MUST have a simulation implementation:
 
-```python
-# Good - simulation mode
-memory = Memory(seed=42)  # Deterministic, no LLM calls
-
-# Production mode (requires API keys)
-memory = Memory(provider="anthropic")
+**Rust**: Use `SimConfig::with_seed(N)` for deterministic behavior
+```rust
+let config = SimConfig::with_seed(42);
+let memory = CoreMemory::new(32 * 1024, config);
 ```
 
-**Why?** Reliable tests. Same seed = same results = reproducible bugs.
+**Python**: Use `seed=N` parameter
+```python
+memory = Memory(seed=42)  # Deterministic, no LLM calls
+```
+
+**Why?** Same seed = same results = reproducible tests and bugs.
 
 ### TigerStyle Assertions
 
-Every public function should have:
-- **Preconditions**: Assert inputs are valid at function start
-- **Postconditions**: Assert outputs are valid before return
+**Rust**: Use `debug_assert!` for invariants
+```rust
+fn store(&mut self, data: &[u8]) -> Result<()> {
+    debug_assert!(!data.is_empty(), "data must not be empty");
+    debug_assert!(data.len() <= self.capacity, "data exceeds capacity");
+    // ...
+}
+```
 
+**Python**: Use `assert` for pre/postconditions
 ```python
 async def remember(self, text: str) -> list[Entity]:
-    # Preconditions
     assert text, "text must not be empty"
     assert len(text) <= 100_000, "text too large"
-
-    # ... implementation ...
-
-    # Postconditions
+    # ...
     assert isinstance(result, list), "must return list"
     return result
 ```
 
-### Graceful Degradation
+### Graceful Degradation (Python)
 
 LLM calls can fail. Components should:
 - Catch `TimeoutError` and `RuntimeError`
 - Return fallback values (empty list, None) instead of crashing
-- Log failures but don't propagate them to callers
+
+## Build & Test Commands
+
+### Python
+
+```bash
+pip install -e ".[dev]"
+pytest                      # 145 tests
+ruff check .
+ruff format --check .
+mypy umi/
+```
+
+### Rust
+
+```bash
+cargo test                  # 232 tests
+cargo clippy --all-features
+cargo fmt --check
+cargo build --release
+```
 
 ## Architecture Decision Records (ADRs)
 
@@ -63,71 +92,47 @@ Document significant design decisions in `docs/adr/`:
 
 Create new ADRs for architectural changes. Format: `NNN-short-name.md`
 
-## Build & Test Commands
-
-```bash
-# Install with dev dependencies
-pip install -e ".[dev]"
-# or with uv
-uv pip install -e ".[dev]"
-
-# Run all tests
-pytest
-
-# Run specific test file
-pytest umi/tests/test_memory.py
-
-# Run with verbose output
-pytest -v
-
-# Linting
-ruff check .
-ruff check --fix .
-
-# Type checking
-mypy umi/
-```
-
-## Code Style
-
-- Python 3.10+
-- Async/await throughout
-- Ruff for linting (line-length 100)
-- Type hints on all public functions
-- Docstrings with examples for public APIs
-
 ## Directory Structure
 
 ```
 umi/
-├── __init__.py          # Public API exports
-├── memory.py            # Main Memory class
-├── extraction.py        # EntityExtractor
-├── retrieval.py         # DualRetriever
-├── evolution.py         # EvolutionTracker
-├── storage.py           # SimStorage (Entity dataclass)
-├── faults.py            # FaultConfig for testing
-├── providers/
-│   ├── base.py          # LLMProvider protocol
-│   ├── sim.py           # SimLLMProvider (testing)
-│   ├── anthropic.py     # Anthropic Claude
-│   └── openai.py        # OpenAI
-└── tests/
-    ├── test_memory.py
-    ├── test_extraction.py
-    ├── test_retrieval.py
-    ├── test_evolution.py
-    └── test_providers.py
+├── umi/                    # Python package
+│   ├── __init__.py
+│   ├── memory.py           # Main Memory class
+│   ├── extraction.py       # EntityExtractor
+│   ├── retrieval.py        # DualRetriever
+│   ├── evolution.py        # EvolutionTracker
+│   ├── storage.py          # SimStorage, Entity
+│   ├── faults.py           # FaultConfig
+│   ├── providers/
+│   │   ├── base.py         # LLMProvider protocol
+│   │   ├── sim.py          # SimLLMProvider
+│   │   ├── anthropic.py
+│   │   └── openai.py
+│   └── tests/
+│
+├── umi-core/               # Rust core
+│   └── src/
+│       ├── lib.rs
+│       ├── dst/            # Deterministic simulation
+│       ├── memory/         # Memory tiers
+│       └── storage/        # Storage backends
+│
+├── umi-py/                 # PyO3 bindings (not wired up yet)
+│
+├── Cargo.toml              # Rust workspace
+├── pyproject.toml          # Python package
+└── docs/adr/               # Architecture decisions
 ```
 
 ## Current Limitations
 
-- **Storage is in-memory only** - SimStorage doesn't persist
-- **No vector search** - substring matching only
+- **Python storage is in-memory only** - SimStorage doesn't persist
+- **PyO3 bindings not wired up** - Python and Rust layers are separate
 - **No real database backends** - Postgres/Qdrant planned
 
 ## Git Workflow
 
 - Use conventional commits: `feat:`, `fix:`, `docs:`, `chore:`
-- Run tests before pushing
+- Run both Python and Rust tests before pushing
 - Update ADRs for architectural changes
