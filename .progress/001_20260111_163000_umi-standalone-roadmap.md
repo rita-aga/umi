@@ -125,6 +125,57 @@ Memory (Python)
 
 ---
 
+## Alternative Path: Full Rust Umi
+
+Based on feasibility analysis (see `docs/findings-summary.md`), a full Rust implementation is viable and may be preferred for agent-native ecosystems.
+
+### Why Full Rust?
+
+| Factor | Benefit |
+|--------|---------|
+| Single language | No PyO3 complexity |
+| DST native | Deterministic testing built-in |
+| Deployment | Single binary, no Python runtime |
+| Agent development | Compiler feedback accelerates coding agents |
+
+### Full Rust Roadmap
+
+```
+Phase R1: Port Python Layer to Rust
+├── EntityExtractor (LLM prompts + JSON parsing)
+├── DualRetriever (string matching + HTTP)
+├── EvolutionTracker (comparison + scoring)
+├── LLM provider traits (Anthropic, OpenAI)
+└── SimLLMProvider (use existing DST)
+
+Phase R2: Storage Backends in Rust
+├── PostgreSQL (sqlx)
+├── Qdrant (qdrant-client)
+└── Unified StorageBackend trait
+
+Phase R3: Publish to crates.io
+├── umi-core crate
+├── umi-memory crate (full API)
+└── Documentation
+```
+
+### When to Choose Full Rust
+
+- Primary consumers are Rust agents (e.g., Letta-rs)
+- Edge/embedded deployment needed
+- DST is critical requirement
+- Want single-language codebase
+
+### When to Keep Hybrid
+
+- Primary consumers are Python frameworks
+- Need Python ML library integration
+- Rapid prototyping priority
+
+See `docs/letta-rust-feasibility.md` and `docs/isotopes-rust-replication.md` for integration analysis with Letta and aidnn-style systems.
+
+---
+
 ## Implementation Order
 
 ```
