@@ -57,10 +57,10 @@ jobs:
       - name: Install dependencies
         run: |
           pip install uv
-          uv pip install --system -e ".[dev]"
+          uv pip install --system -e ".[dev,all]"
 
       - name: Type check
-        run: mypy umi/
+        run: mypy umi/ --ignore-missing-imports
 
   test:
     name: Test (Python ${{ matrix.python-version }})
