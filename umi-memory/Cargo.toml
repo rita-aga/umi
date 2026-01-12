@@ -67,3 +67,7 @@ harness = false
 [[bench]]
 name = "pipelines"
 harness = false
+
+[[bench]]
+name = "vector_backends"
+harness = false

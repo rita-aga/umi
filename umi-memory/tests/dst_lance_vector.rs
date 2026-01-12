@@ -13,7 +13,7 @@ use std::sync::Arc;
 use tempfile::TempDir;
 
 use umi_memory::constants::EMBEDDING_DIMENSIONS_COUNT;
-use umi_memory::storage::{SimVectorBackend, LanceVectorBackend, VectorBackend};
+use umi_memory::storage::{LanceVectorBackend, SimVectorBackend, VectorBackend};
 
 // =============================================================================
 // Test Helpers
@@ -176,8 +176,14 @@ async fn dst_lance_behavior_matches_sim_store_and_count() {
     lance.store("entity2", &emb2).await.unwrap();
 
     assert_eq!(sim.count().await.unwrap(), lance.count().await.unwrap());
-    assert_eq!(sim.exists("entity1").await.unwrap(), lance.exists("entity1").await.unwrap());
-    assert_eq!(sim.exists("entity2").await.unwrap(), lance.exists("entity2").await.unwrap());
+    assert_eq!(
+        sim.exists("entity1").await.unwrap(),
+        lance.exists("entity1").await.unwrap()
+    );
+    assert_eq!(
+        sim.exists("entity2").await.unwrap(),
+        lance.exists("entity2").await.unwrap()
+    );
 }
 
 #[tokio::test]

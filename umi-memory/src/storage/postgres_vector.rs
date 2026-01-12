@@ -58,7 +58,8 @@ pub struct PostgresVectorBackend {
 
 impl std::fmt::Debug for PostgresVectorBackend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PostgresVectorBackend").finish_non_exhaustive()
+        f.debug_struct("PostgresVectorBackend")
+            .finish_non_exhaustive()
     }
 }
 
@@ -91,7 +92,9 @@ impl PostgresVectorBackend {
         sqlx::query("CREATE EXTENSION IF NOT EXISTS vector")
             .execute(&self.pool)
             .await
-            .map_err(|e| StorageError::WriteFailed(format!("Failed to create vector extension: {}", e)))?;
+            .map_err(|e| {
+                StorageError::WriteFailed(format!("Failed to create vector extension: {}", e))
+            })?;
 
         // Create embeddings table
         let create_table_sql = format!(
@@ -144,10 +147,14 @@ impl VectorBackend for PostgresVectorBackend {
         );
 
         // Convert embedding to pgvector format (array string)
-        let embedding_str = format!("[{}]", embedding.iter()
-            .map(|f| f.to_string())
-            .collect::<Vec<_>>()
-            .join(","));
+        let embedding_str = format!(
+            "[{}]",
+            embedding
+                .iter()
+                .map(|f| f.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
 
         // Upsert: INSERT ... ON CONFLICT DO UPDATE
         let sql = format!(
@@ -186,10 +193,14 @@ impl VectorBackend for PostgresVectorBackend {
         assert!(limit > 0, "limit must be positive");
 
         // Convert embedding to pgvector format
-        let embedding_str = format!("[{}]", embedding.iter()
-            .map(|f| f.to_string())
-            .collect::<Vec<_>>()
-            .join(","));
+        let embedding_str = format!(
+            "[{}]",
+            embedding
+                .iter()
+                .map(|f| f.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
 
         // Use pgvector cosine distance operator (<=>)
         // Score = 1 - cosine_distance (to match SimVectorBackend: higher = more similar)
@@ -305,10 +316,7 @@ fn parse_pgvector_string(s: &str) -> Result<Vec<f32>, String> {
     }
 
     let inner = &s[1..s.len() - 1];
-    let values: Result<Vec<f32>, _> = inner
-        .split(',')
-        .map(|v| v.trim().parse::<f32>())
-        .collect();
+    let values: Result<Vec<f32>, _> = inner.split(',').map(|v| v.trim().parse::<f32>()).collect();
 
     values.map_err(|e| format!("Failed to parse pgvector values: {}", e))
 }

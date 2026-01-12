@@ -16,7 +16,7 @@ use std::sync::Arc;
 use tempfile::TempDir;
 
 use umi_memory::constants::EMBEDDING_DIMENSIONS_COUNT;
-use umi_memory::storage::{SimVectorBackend, PostgresVectorBackend, VectorBackend};
+use umi_memory::storage::{PostgresVectorBackend, SimVectorBackend, VectorBackend};
 
 // =============================================================================
 // Test Helpers
@@ -180,8 +180,14 @@ async fn dst_postgres_behavior_matches_sim_store_and_count() {
     assert_eq!(sim.count().await.unwrap(), 2);
     assert_eq!(postgres.count().await.unwrap(), 2);
 
-    assert_eq!(sim.exists("entity_sim1").await.unwrap(), postgres.exists("entity_pg1").await.unwrap());
-    assert_eq!(sim.exists("entity_sim2").await.unwrap(), postgres.exists("entity_pg2").await.unwrap());
+    assert_eq!(
+        sim.exists("entity_sim1").await.unwrap(),
+        postgres.exists("entity_pg1").await.unwrap()
+    );
+    assert_eq!(
+        sim.exists("entity_sim2").await.unwrap(),
+        postgres.exists("entity_pg2").await.unwrap()
+    );
 
     // Cleanup
     postgres.delete("entity_pg1").await.unwrap();
@@ -281,7 +287,10 @@ async fn dst_postgres_concurrent_reads() {
 
     // Setup: Store some data
     let emb1 = generate_embedding(42, 1);
-    postgres.store("entity_concurrent_read", &emb1).await.unwrap();
+    postgres
+        .store("entity_concurrent_read", &emb1)
+        .await
+        .unwrap();
 
     let postgres = Arc::new(postgres);
     let mut handles = vec![];
@@ -291,7 +300,10 @@ async fn dst_postgres_concurrent_reads() {
         let postgres_clone = Arc::clone(&postgres);
 
         let handle = tokio::spawn(async move {
-            let exists = postgres_clone.exists("entity_concurrent_read").await.unwrap();
+            let exists = postgres_clone
+                .exists("entity_concurrent_read")
+                .await
+                .unwrap();
             let emb = postgres_clone.get("entity_concurrent_read").await.unwrap();
 
             (exists, emb)

@@ -12,7 +12,10 @@
 
 use std::sync::Arc;
 
-use arrow_array::{Array, ArrayRef, FixedSizeListArray, Float32Array, RecordBatch, RecordBatchIterator, StringArray};
+use arrow_array::{
+    Array, ArrayRef, FixedSizeListArray, Float32Array, RecordBatch, RecordBatchIterator,
+    StringArray,
+};
 use arrow_schema::{DataType, Field, Schema};
 use async_trait::async_trait;
 use futures::TryStreamExt;
@@ -135,7 +138,7 @@ impl LanceVectorBackend {
                     Arc::new(Field::new("item", DataType::Float32, true)),
                     EMBEDDING_DIMENSIONS_COUNT as i32,
                 ),
-                true,  // Make nullable to avoid Lance statistics collector issues
+                true, // Make nullable to avoid Lance statistics collector issues
             ),
         ]))
     }
@@ -182,9 +185,7 @@ impl LanceVectorBackend {
             .downcast_ref::<StringArray>()
             .ok_or_else(|| StorageError::DeserializationError("id column".to_string()))?;
 
-        let id = id_col
-            .value(row)
-            .to_string();
+        let id = id_col.value(row).to_string();
 
         // Extract distance/score
         // LanceDB returns _distance column in search results
@@ -192,7 +193,9 @@ impl LanceVectorBackend {
             let distances = distance_col
                 .as_any()
                 .downcast_ref::<Float32Array>()
-                .ok_or_else(|| StorageError::DeserializationError("_distance column".to_string()))?;
+                .ok_or_else(|| {
+                    StorageError::DeserializationError("_distance column".to_string())
+                })?;
 
             // Convert distance to similarity score (1 - distance for cosine)
             1.0 - distances.value(row)
