@@ -52,6 +52,7 @@
 
 pub mod constants;
 pub mod dst;
+pub mod extraction;
 pub mod llm;
 pub mod memory;
 pub mod storage;
@@ -99,3 +100,11 @@ pub use llm::AnthropicProvider;
 
 #[cfg(feature = "openai")]
 pub use llm::OpenAIProvider;
+
+// Extraction exports
+pub use extraction::{
+    EntityExtractor, ExtractedEntity, ExtractedRelation, ExtractionError, ExtractionOptions,
+    ExtractionResult,
+};
+// Note: extraction::EntityType and extraction::RelationType not re-exported
+// to avoid conflict with storage::EntityType. Use explicit paths if needed.

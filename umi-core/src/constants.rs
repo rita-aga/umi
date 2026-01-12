@@ -173,6 +173,34 @@ pub const NETWORK_JITTER_MS_DEFAULT: u64 = 5;
 pub const NETWORK_PENDING_MESSAGES_COUNT_MAX: usize = 10_000;
 
 // =============================================================================
+// Entity Extraction Limits
+// =============================================================================
+
+/// Maximum size of text to extract from
+pub const EXTRACTION_TEXT_BYTES_MAX: usize = 100_000; // 100KB
+
+/// Maximum number of entities per extraction
+pub const EXTRACTION_ENTITIES_COUNT_MAX: usize = 50;
+
+/// Maximum number of relations per extraction
+pub const EXTRACTION_RELATIONS_COUNT_MAX: usize = 100;
+
+/// Minimum confidence for extracted entities/relations
+pub const EXTRACTION_CONFIDENCE_MIN: f64 = 0.0;
+
+/// Maximum confidence for extracted entities/relations
+pub const EXTRACTION_CONFIDENCE_MAX: f64 = 1.0;
+
+/// Default confidence when not specified
+pub const EXTRACTION_CONFIDENCE_DEFAULT: f64 = 0.5;
+
+/// Maximum length of entity name
+pub const EXTRACTION_ENTITY_NAME_BYTES_MAX: usize = 256;
+
+/// Maximum length of entity content
+pub const EXTRACTION_ENTITY_CONTENT_BYTES_MAX: usize = 1000;
+
+// =============================================================================
 // Time Constants
 // =============================================================================
 

@@ -141,12 +141,27 @@ Based on feasibility analysis (see `docs/findings-summary.md`), a full Rust impl
 ### Full Rust Roadmap
 
 ```
-Phase R1: Port Python Layer to Rust
-├── EntityExtractor (LLM prompts + JSON parsing)
-├── DualRetriever (string matching + HTTP)
-├── EvolutionTracker (comparison + scoring)
-├── LLM provider traits (Anthropic, OpenAI)
-└── SimLLMProvider (use existing DST)
+Phase R0: SimLLM Foundation ✅ COMPLETE
+├── SimLLM with deterministic responses
+├── Entity extraction routing
+├── Query rewrite routing
+├── Evolution detection routing
+└── Fault injection support
+
+Phase R1: Port Python Layer to Rust (IN PROGRESS)
+├── [✅] LLM Provider Trait (ADR-013)
+│   ├── LLMProvider trait (generic, async)
+│   ├── SimLLMProvider (wraps SimLLM)
+│   ├── AnthropicProvider (feature-gated)
+│   └── OpenAIProvider (feature-gated)
+├── [✅] EntityExtractor (ADR-014)
+│   ├── EntityExtractor<P: LLMProvider>
+│   ├── ExtractionResult, ExtractedEntity, ExtractedRelation
+│   ├── Graceful degradation (fallback on LLM failure)
+│   └── Type-safe EntityType and RelationType enums
+├── [ ] DualRetriever (string matching + HTTP)
+├── [ ] EvolutionTracker (comparison + scoring)
+└── [ ] Memory class (orchestrates all components)
 
 Phase R2: Storage Backends in Rust
 ├── PostgreSQL (sqlx)
@@ -158,6 +173,14 @@ Phase R3: Publish to crates.io
 ├── umi-memory crate (full API)
 └── Documentation
 ```
+
+### Progress Log
+
+| Date | Phase | Work Done | Tests |
+|------|-------|-----------|-------|
+| 2026-01-11 | R0 | SimLLM with DST | 232 → 263 |
+| 2026-01-11 | R1 | LLM Provider Trait | 263 → 263 |
+| 2026-01-11 | R1 | EntityExtractor | 263 → 301 |
 
 ### When to Choose Full Rust
 
