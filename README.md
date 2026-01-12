@@ -19,30 +19,34 @@ Umi provides infrastructure for building AI agents that:
 
 ### Python
 
+**Status**: 🔶 Experimental - Basic functionality works, but incomplete. See [PYTHON.md](PYTHON.md) for full details.
+
 ```bash
 # Install from source (not yet on PyPI)
-pip install git+https://github.com/rita-aga/umi.git
-
-# With LLM provider support
-pip install "umi[anthropic] @ git+https://github.com/rita-aga/umi.git"
-pip install "umi[openai] @ git+https://github.com/rita-aga/umi.git"
+cd umi-py
+pip install maturin
+maturin develop  # Build and install locally
 ```
 
 ```python
 from umi import Memory
 
 # Simulation mode (deterministic, no API calls)
-memory = Memory(seed=42)
+memory = Memory.sim(42)
 
 # Remember information
-entities = await memory.remember("I met Alice at Acme Corp")
-print(f"Stored {len(entities)} entities")
+memory.remember("Alice is a software engineer at Acme Corp")
 
 # Recall memories
-results = await memory.recall("Who do I know at Acme?")
+results = memory.recall("Who works at Acme?")
 for entity in results:
-    print(f"  - {entity.name}: {entity.content}")
+    print(f"Found: {entity.name} - {entity.content}")
 ```
+
+**What works**: Basic `Memory.sim()`, `remember()`, `recall()`
+**What's missing**: Options classes, real LLM providers, type stubs, async support
+
+See [PYTHON.md](PYTHON.md) for roadmap and contributing guide.
 
 ### Rust
 
