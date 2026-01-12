@@ -34,6 +34,10 @@
 //! }
 //! ```
 
+mod builder;
+
+pub use builder::MemoryBuilder;
+
 use crate::constants::{
     MEMORY_IMPORTANCE_DEFAULT, MEMORY_IMPORTANCE_MAX, MEMORY_IMPORTANCE_MIN,
     MEMORY_RECALL_LIMIT_DEFAULT, MEMORY_RECALL_LIMIT_MAX, MEMORY_TEXT_BYTES_MAX,
@@ -43,7 +47,7 @@ use crate::evolution::{DetectionOptions, EvolutionTracker};
 use crate::extraction::{EntityExtractor, ExtractionOptions};
 use crate::llm::LLMProvider;
 use crate::retrieval::{DualRetriever, SearchOptions};
-use crate::storage::{Entity, EntityType, EvolutionRelation, StorageBackend};
+use crate::storage::{Entity, EntityType, EvolutionRelation, StorageBackend, VectorBackend};
 use thiserror::Error;
 
 // =============================================================================
@@ -380,6 +384,22 @@ impl<
             embedder,
             vector,
         }
+    }
+
+    /// Create a MemoryBuilder for constructing Memory with builder pattern.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// let memory = Memory::builder()
+    ///     .with_llm(llm)
+    ///     .with_embedder(embedder)
+    ///     .with_vector(vector)
+    ///     .with_storage(storage)
+    ///     .build();
+    /// ```
+    #[must_use]
+    pub fn builder() -> MemoryBuilder<L, E, V, S> {
+        MemoryBuilder::new()
     }
 
     /// Store information in memory.
@@ -1007,6 +1027,49 @@ mod tests {
         );
         assert_eq!(convert_entity_type(&ExtType::Preference), EntityType::Note);
         assert_eq!(convert_entity_type(&ExtType::Event), EntityType::Note);
+    }
+}
+
+// =============================================================================
+// Sim Constructor
+// =============================================================================
+
+impl Memory<
+    crate::llm::SimLLMProvider,
+    crate::embedding::SimEmbeddingProvider,
+    crate::storage::SimStorageBackend,
+    crate::storage::SimVectorBackend,
+> {
+    /// Create a deterministic simulation Memory for testing.
+    ///
+    /// All components (LLM, embedder, vector, storage) use the same seed
+    /// for reproducible behavior.
+    ///
+    /// TigerStyle: Convenient constructor for tests.
+    ///
+    /// # Arguments
+    /// - `seed` - Random seed for deterministic behavior
+    ///
+    /// # Example
+    /// ```rust
+    /// use umi_memory::umi::Memory;
+    ///
+    /// let memory = Memory::sim(42);
+    /// // All operations will be deterministic with same seed
+    /// ```
+    #[must_use]
+    pub fn sim(seed: u64) -> Self {
+        use crate::dst::SimConfig;
+        use crate::embedding::SimEmbeddingProvider;
+        use crate::llm::SimLLMProvider;
+        use crate::storage::{SimStorageBackend, SimVectorBackend};
+
+        let llm = SimLLMProvider::with_seed(seed);
+        let embedder = SimEmbeddingProvider::with_seed(seed);
+        let vector = SimVectorBackend::new(seed);
+        let storage = SimStorageBackend::new(SimConfig::with_seed(seed));
+
+        Self::new(llm, embedder, vector, storage)
     }
 }
 
