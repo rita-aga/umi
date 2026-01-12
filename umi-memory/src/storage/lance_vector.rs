@@ -103,24 +103,26 @@ impl LanceVectorBackend {
         Ok(tables.iter().any(|t| t == &self.table_name))
     }
 
-    /// Get the table, creating it if it doesn't exist.
-    async fn get_or_create_table(&self) -> StorageResult<Arc<dyn vectordb::Table>> {
-        if !self.table_exists().await? {
-            // Create empty table with schema
-            let schema = self.create_schema();
-            let empty_batch = self.create_empty_batch(&schema)?;
-            let batches = RecordBatchIterator::new(vec![Ok(empty_batch)], schema.clone());
-
-            self.db
-                .create_table(&self.table_name, Box::new(batches), None)
-                .await
-                .map_err(|e| StorageError::WriteFailed(e.to_string()))?;
-        }
-
+    /// Get the table (does not create if missing - use create_table_with_data instead).
+    async fn get_table(&self) -> StorageResult<Arc<dyn vectordb::Table>> {
         self.db
             .open_table(&self.table_name)
             .await
             .map_err(|e| StorageError::ConnectionFailed(e.to_string()))
+    }
+
+    /// Create table with first data batch (avoids empty batch statistics issues).
+    async fn create_table_with_data(&self, id: &str, embedding: &[f32]) -> StorageResult<()> {
+        let schema = self.create_schema();
+        let batch = self.create_batch_from_embedding(id, embedding, &schema)?;
+        let batches = RecordBatchIterator::new(vec![Ok(batch)], schema.clone());
+
+        self.db
+            .create_table(&self.table_name, Box::new(batches), None)
+            .await
+            .map_err(|e| StorageError::WriteFailed(e.to_string()))?;
+
+        Ok(())
     }
 
     /// Create the Arrow schema for the embeddings table.
@@ -133,28 +135,9 @@ impl LanceVectorBackend {
                     Arc::new(Field::new("item", DataType::Float32, true)),
                     EMBEDDING_DIMENSIONS_COUNT as i32,
                 ),
-                false,
+                true,  // Make nullable to avoid Lance statistics collector issues
             ),
         ]))
-    }
-
-    /// Create an empty record batch for table initialization.
-    fn create_empty_batch(&self, schema: &Arc<Schema>) -> StorageResult<RecordBatch> {
-        let id = StringArray::from(Vec::<String>::new());
-        let embedding_field = Arc::new(Field::new("item", DataType::Float32, true));
-        let embedding_values: ArrayRef = Arc::new(Float32Array::from(Vec::<f32>::new()));
-        let embedding = FixedSizeListArray::new(
-            embedding_field,
-            EMBEDDING_DIMENSIONS_COUNT as i32,
-            embedding_values,
-            None,
-        );
-
-        RecordBatch::try_new(
-            schema.clone(),
-            vec![Arc::new(id), Arc::new(embedding)],
-        )
-        .map_err(|e| StorageError::SerializationError(e.to_string()))
     }
 
     /// Create a record batch from a single embedding.
@@ -235,7 +218,13 @@ impl VectorBackend for LanceVectorBackend {
             embedding.len()
         );
 
-        let table = self.get_or_create_table().await?;
+        // Lazy table creation: create with first data to avoid empty batch issues
+        if !self.table_exists().await? {
+            self.create_table_with_data(id, embedding).await?;
+            return Ok(());
+        }
+
+        let table = self.get_table().await?;
         let schema = self.create_schema();
         let batch = self.create_batch_from_embedding(id, embedding, &schema)?;
 
@@ -269,7 +258,7 @@ impl VectorBackend for LanceVectorBackend {
             return Ok(Vec::new());
         }
 
-        let table = self.get_or_create_table().await?;
+        let table = self.get_table().await?;
 
         // Use LanceDB's native vector search
         let results: Vec<RecordBatch> = table
@@ -307,7 +296,7 @@ impl VectorBackend for LanceVectorBackend {
             return Ok(());
         }
 
-        let table = self.get_or_create_table().await?;
+        let table = self.get_table().await?;
 
         // Delete by filter
         let filter = format!("id = '{}'", id);
@@ -328,7 +317,7 @@ impl VectorBackend for LanceVectorBackend {
             return Ok(false);
         }
 
-        let table = self.get_or_create_table().await?;
+        let table = self.get_table().await?;
 
         // Query by filter
         let filter = format!("id = '{}'", id);
@@ -355,7 +344,7 @@ impl VectorBackend for LanceVectorBackend {
             return Ok(None);
         }
 
-        let table = self.get_or_create_table().await?;
+        let table = self.get_table().await?;
 
         // Query by filter
         let filter = format!("id = '{}'", id);
@@ -401,7 +390,7 @@ impl VectorBackend for LanceVectorBackend {
             return Ok(0);
         }
 
-        let table = self.get_or_create_table().await?;
+        let table = self.get_table().await?;
 
         // Count rows (no filter = count all)
         let count = table
