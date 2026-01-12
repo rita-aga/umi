@@ -34,6 +34,9 @@ mod postgres;
 #[cfg(feature = "lance")]
 mod lance;
 
+#[cfg(feature = "lance")]
+mod lance_vector;
+
 pub use backend::StorageBackend;
 pub use entity::{Entity, EntityBuilder, EntityType, SourceRef};
 pub use error::{StorageError, StorageResult};
@@ -46,3 +49,6 @@ pub use postgres::PostgresBackend;
 
 #[cfg(feature = "lance")]
 pub use lance::LanceStorageBackend;
+
+#[cfg(feature = "lance")]
+pub use lance_vector::LanceVectorBackend;
