@@ -50,6 +50,12 @@ openai = ["dep:reqwest"]
 # Convenience feature for all LLM providers
 llm-providers = ["anthropic", "openai"]
 
+# Embedding provider features
+embedding-openai = ["dep:reqwest"]
+
+# Convenience feature for all embedding providers
+embedding-providers = ["embedding-openai"]
+
 [[bench]]
 name = "storage"
 harness = false

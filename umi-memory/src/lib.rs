@@ -52,6 +52,7 @@
 
 pub mod constants;
 pub mod dst;
+pub mod embedding;
 pub mod evolution;
 pub mod extraction;
 pub mod llm;
@@ -106,6 +107,12 @@ pub use llm::AnthropicProvider;
 
 #[cfg(feature = "openai")]
 pub use llm::OpenAIProvider;
+
+// Embedding Provider exports
+pub use embedding::{EmbeddingError, EmbeddingProvider, SimEmbeddingProvider};
+
+#[cfg(feature = "embedding-openai")]
+pub use embedding::OpenAIEmbeddingProvider;
 
 // Extraction exports
 pub use extraction::{
