@@ -53,30 +53,30 @@ Umi is a memory library for AI agents with hybrid Rust+Python architecture. The 
 
 **Goal**: Production-ready storage beyond SimStorage
 
-### Phase 2a: PostgreSQL Backend
-- [ ] Create `umi/storage/postgres.py`
-- [ ] Implement async connection pool (asyncpg)
-- [ ] Schema: entities table with all fields including temporal
-- [ ] Full-text search using tsvector
-- [ ] Migration support
-
-### Phase 2b: Vector Storage (Qdrant)
-- [ ] Create `umi/storage/vectors.py`
-- [ ] Implement QdrantStorage class
+### Phase 2a: LanceDB Backend
+- [ ] Create `umi/storage/lance.py`
+- [ ] Implement LanceStorage class
+- [ ] Entity table with vector embeddings
 - [ ] Hybrid search (vector + metadata filters)
 - [ ] Batch operations for efficiency
 
-### Phase 2c: Unified Storage Interface
+### Phase 2b: Unified Storage Interface
 - [ ] Create `umi/storage/base.py` with Storage protocol
-- [ ] Factory function: `create_storage(backend="postgres|qdrant|sim")`
-- [ ] Connection string configuration
+- [ ] Factory function: `create_storage(backend="lance|sim")`
+- [ ] Path-based configuration (local directory)
 
 ### New Dependencies (optional extras)
 ```toml
 [project.optional-dependencies]
-postgres = ["asyncpg>=0.29"]
-qdrant = ["qdrant-client>=1.7"]
+lance = ["lancedb>=0.4"]
 ```
+
+### Why LanceDB?
+- Embedded (no separate service to run)
+- Native vector search with metadata filtering
+- Rust-native with Python bindings
+- Local-first, perfect for agent memory
+- Apache Arrow format (efficient columnar storage)
 
 ---
 
@@ -179,9 +179,9 @@ Phase R1: Port Python Layer to Rust ✅ COMPLETE
     └── TigerStyle: Preconditions, postconditions, explicit limits
 
 Phase R2: Storage Backends in Rust
-├── PostgreSQL (sqlx)
-├── Qdrant (qdrant-client)
-└── Unified StorageBackend trait
+├── LanceDB (embedded, Rust-native vector DB)
+├── Unified StorageBackend trait
+└── Migration from SimStorageBackend
 
 Phase R3: Publish to crates.io
 ├── umi-core crate
@@ -222,11 +222,9 @@ See `docs/letta-rust-feasibility.md` and `docs/isotopes-rust-replication.md` for
 ```
 Phase 1: PyPI ──────────────────────────────────────────────┐
                                                             │
-Phase 2a: Postgres ─────┐                                   │
-                        ├──→ Phase 2c: Unified Interface ───┼──→ Phase 4
-Phase 2b: Qdrant ───────┘                                   │
-                                                            │
-Phase 3: PyO3 Bindings ─────────────────────────────────────┘
+Phase 2a: LanceDB ──────┬──→ Phase 2b: Unified Interface ───┼──→ Phase 4
+                        │                                   │
+Phase 3: PyO3 Bindings ─┴───────────────────────────────────┘
 ```
 
 ---
