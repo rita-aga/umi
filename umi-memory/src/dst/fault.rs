@@ -87,6 +87,16 @@ pub enum FaultType {
     EmbeddingServiceUnavailable,
 
     // =========================================================================
+    // Vector Search Faults
+    // =========================================================================
+    /// Vector search operation timeout
+    VectorSearchTimeout,
+    /// Vector search operation fails
+    VectorSearchFail,
+    /// Vector store operation fails
+    VectorStoreFail,
+
+    // =========================================================================
     // Resource Faults
     // =========================================================================
     /// Out of memory
@@ -136,6 +146,9 @@ impl FaultType {
             Self::EmbeddingContextOverflow => "embedding_context_overflow",
             Self::EmbeddingInvalidResponse => "embedding_invalid_response",
             Self::EmbeddingServiceUnavailable => "embedding_service_unavailable",
+            Self::VectorSearchTimeout => "vector_search_timeout",
+            Self::VectorSearchFail => "vector_search_fail",
+            Self::VectorStoreFail => "vector_store_fail",
             Self::ResourceOom => "resource_oom",
             Self::ResourceFileLimit => "resource_file_limit",
             Self::ResourceCpuThrottle => "resource_cpu_throttle",

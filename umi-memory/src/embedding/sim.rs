@@ -56,6 +56,7 @@ use crate::dst::{DeterministicRng, FaultInjector};
 /// - Fast (no network calls)
 /// - Normalized embeddings (unit vectors)
 /// - Fault injection support for DST
+#[derive(Clone)]
 pub struct SimEmbeddingProvider {
     /// Base seed for RNG
     seed: u64,

@@ -20,8 +20,9 @@
 //! async fn main() {
 //!     let llm = SimLLMProvider::with_seed(42);
 //!     let embedder = SimEmbeddingProvider::with_seed(42);
+//!     let vector = SimVectorBackend::new(42);
 //!     let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-//!     let mut memory = Memory::new(llm, embedder, storage);
+//!     let mut memory = Memory::new(llm, embedder, vector, storage);
 //!
 //!     // Remember information
 //!     let result = memory.remember("Alice works at Acme", RememberOptions::default()).await.unwrap();
@@ -324,32 +325,35 @@ impl RememberResult {
 ///
 /// let llm = SimLLMProvider::with_seed(42);
 /// let embedder = SimEmbeddingProvider::with_seed(42);
+/// let vector = SimVectorBackend::new(42);
 /// let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-/// let mut memory = Memory::new(llm, embedder, storage);
+/// let mut memory = Memory::new(llm, embedder, vector, storage);
 ///
 /// // Store and retrieve memories
 /// memory.remember("Alice works at Acme", RememberOptions::default()).await?;
 /// let results = memory.recall("Alice", RecallOptions::default()).await?;
 /// ```
-pub struct Memory<L: LLMProvider, E: EmbeddingProvider, S: StorageBackend> {
+pub struct Memory<L: LLMProvider, E: EmbeddingProvider, S: StorageBackend, V: crate::storage::VectorBackend> {
     storage: S,
     extractor: EntityExtractor<L>,
-    retriever: DualRetriever<L, S>,
+    retriever: DualRetriever<L, E, V, S>,
     evolution: EvolutionTracker<L, S>,
     embedder: E,
+    vector: V,
 }
 
-impl<L: LLMProvider + Clone, E: EmbeddingProvider, S: StorageBackend + Clone> Memory<L, E, S> {
+impl<L: LLMProvider + Clone, E: EmbeddingProvider + Clone, S: StorageBackend + Clone, V: crate::storage::VectorBackend + Clone> Memory<L, E, S, V> {
     /// Create a new Memory with all components.
     ///
     /// # Arguments
     /// - `llm` - LLM provider (cloned for each component)
-    /// - `embedder` - Embedding provider
+    /// - `embedder` - Embedding provider (cloned for retriever)
+    /// - `vector` - Vector backend for similarity search
     /// - `storage` - Storage backend (cloned for retriever)
     #[must_use]
-    pub fn new(llm: L, embedder: E, storage: S) -> Self {
+    pub fn new(llm: L, embedder: E, vector: V, storage: S) -> Self {
         let extractor = EntityExtractor::new(llm.clone());
-        let retriever = DualRetriever::new(llm.clone(), storage.clone());
+        let retriever = DualRetriever::new(llm.clone(), embedder.clone(), vector.clone(), storage.clone());
         let evolution = EvolutionTracker::new(llm);
 
         Self {
@@ -358,6 +362,7 @@ impl<L: LLMProvider + Clone, E: EmbeddingProvider, S: StorageBackend + Clone> Me
             retriever,
             evolution,
             embedder,
+            vector,
         }
     }
 
@@ -459,6 +464,16 @@ impl<L: LLMProvider + Clone, E: EmbeddingProvider, S: StorageBackend + Clone> Me
         for entity in to_store {
             // Store returns the entity ID
             let _stored_id = self.storage.store_entity(&entity).await?;
+
+            // Store embedding in vector backend (graceful degradation: warn on failure)
+            if let Some(ref embedding) = entity.embedding {
+                if let Err(e) = self.vector.store(&entity.id, embedding).await {
+                    tracing::warn!(
+                        "Failed to store embedding in vector backend for entity {}: {}. Entity searchable by text only.",
+                        entity.id, e
+                    );
+                }
+            }
 
             // Track evolution (graceful: skip on failure)
             if options.track_evolution {
@@ -620,14 +635,15 @@ mod tests {
     use crate::dst::SimConfig;
     use crate::embedding::SimEmbeddingProvider;
     use crate::llm::SimLLMProvider;
-    use crate::storage::SimStorageBackend;
+    use crate::storage::{SimStorageBackend, SimVectorBackend};
 
     /// Helper to create a Memory with deterministic seed.
-    fn create_memory(seed: u64) -> Memory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend> {
+    fn create_memory(seed: u64) -> Memory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend> {
         let llm = SimLLMProvider::with_seed(seed);
         let embedder = SimEmbeddingProvider::with_seed(seed);
+        let vector = SimVectorBackend::new(seed);
         let storage = SimStorageBackend::new(SimConfig::with_seed(seed));
-        Memory::new(llm, embedder, storage)
+        Memory::new(llm, embedder, vector, storage)
     }
 
     // =========================================================================
@@ -992,7 +1008,7 @@ mod dst_tests {
     use crate::dst::{FaultConfig, FaultType, SimConfig, Simulation};
     use crate::embedding::SimEmbeddingProvider;
     use crate::llm::SimLLMProvider;
-    use crate::storage::SimStorageBackend;
+    use crate::storage::{SimStorageBackend, SimVectorBackend};
 
     #[tokio::test]
     async fn test_remember_with_embedding_timeout() {
@@ -1004,8 +1020,9 @@ mod dst_tests {
             // Create embedder with fault injector
             let embedder = SimEmbeddingProvider::with_faults(42, env.faults.clone());
             let llm = SimLLMProvider::with_seed(42);
+            let vector = SimVectorBackend::new(42);
             let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-            let mut memory = Memory::new(llm, embedder, storage);
+            let mut memory = Memory::new(llm, embedder, vector, storage);
 
             // Remember should succeed even though embeddings fail
             let result = memory
@@ -1032,8 +1049,9 @@ mod dst_tests {
         sim.run(|env| async move {
             let embedder = SimEmbeddingProvider::with_faults(42, env.faults.clone());
             let llm = SimLLMProvider::with_seed(42);
+            let vector = SimVectorBackend::new(42);
             let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-            let mut memory = Memory::new(llm, embedder, storage);
+            let mut memory = Memory::new(llm, embedder, vector, storage);
 
             // Try multiple times, some should succeed, some fail
             let mut successes = 0;
@@ -1072,8 +1090,9 @@ mod dst_tests {
         sim.run(|_env| async move {
             let embedder = SimEmbeddingProvider::with_seed(42);
             let llm = SimLLMProvider::with_seed(42);
+            let vector = SimVectorBackend::new(42);
             let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-            let mut memory = Memory::new(llm, embedder, storage);
+            let mut memory = Memory::new(llm, embedder, vector, storage);
 
             // Remember with embeddings disabled
             let result = memory
@@ -1099,8 +1118,9 @@ mod dst_tests {
         async fn run_with_seed(seed: u64) -> Vec<Vec<f32>> {
             let embedder = SimEmbeddingProvider::with_seed(seed);
             let llm = SimLLMProvider::with_seed(seed);
+            let vector = SimVectorBackend::new(seed);
             let storage = SimStorageBackend::new(SimConfig::with_seed(seed));
-            let mut memory = Memory::new(llm, embedder, storage);
+            let mut memory = Memory::new(llm, embedder, vector, storage);
 
             let result = memory
                 .remember("Alice works at Acme", RememberOptions::default())
@@ -1134,8 +1154,9 @@ mod dst_tests {
         sim.run(|_env| async move {
             let embedder = SimEmbeddingProvider::with_seed(42);
             let llm = SimLLMProvider::with_seed(42);
+            let vector = SimVectorBackend::new(42);
             let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-            let mut memory = Memory::new(llm, embedder, storage);
+            let mut memory = Memory::new(llm, embedder, vector, storage);
 
             // Remember with embeddings
             let result = memory
@@ -1175,8 +1196,9 @@ mod dst_tests {
         sim.run(|_env| async move {
             let embedder = SimEmbeddingProvider::with_seed(42);
             let llm = SimLLMProvider::with_seed(42);
+            let vector = SimVectorBackend::new(42);
             let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-            let mut memory = Memory::new(llm, embedder, storage);
+            let mut memory = Memory::new(llm, embedder, vector, storage);
 
             // Remember text that will extract multiple entities
             let result = memory
@@ -1216,8 +1238,9 @@ mod dst_tests {
         sim.run(|env| async move {
             let embedder = SimEmbeddingProvider::with_faults(42, env.faults.clone());
             let llm = SimLLMProvider::with_seed(42);
+            let vector = SimVectorBackend::new(42);
             let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-            let mut memory = Memory::new(llm, embedder, storage);
+            let mut memory = Memory::new(llm, embedder, vector, storage);
 
             // Should succeed despite embedding service being down
             let result = memory
@@ -1227,6 +1250,151 @@ mod dst_tests {
             assert!(!result.entities.is_empty());
             // No embedding due to service failure
             assert!(result.entities[0].embedding.is_none());
+
+            Ok::<(), MemoryError>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    // =========================================================================
+    // Vector Search DST Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_recall_with_vector_search() {
+        // Test that recall uses vector search when embeddings are available
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|_env| async move {
+            let embedder = SimEmbeddingProvider::with_seed(42);
+            let llm = SimLLMProvider::with_seed(42);
+            let vector = SimVectorBackend::new(42);
+            let storage = SimStorageBackend::new(SimConfig::with_seed(42));
+            let mut memory = Memory::new(llm, embedder, vector, storage);
+
+            // Store entities with embeddings
+            memory
+                .remember("Alice works at Acme Corp", RememberOptions::default())
+                .await?;
+            memory
+                .remember("Bob works at TechCo", RememberOptions::default())
+                .await?;
+
+            // Recall should use vector search
+            let result = memory.recall("Who works at Acme?", RecallOptions::default()).await?;
+
+            // Should find relevant results
+            assert!(!result.is_empty());
+            // Alice should be in results (content similarity)
+            assert!(result.iter().any(|e| e.name.contains("Alice")));
+
+            Ok::<(), MemoryError>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_recall_vector_search_timeout() {
+        // Test fallback to text search when vector search times out
+        let sim = Simulation::new(SimConfig::with_seed(42))
+            .with_fault(FaultConfig::new(FaultType::VectorSearchTimeout, 1.0));
+
+        sim.run(|env| async move {
+            let embedder = SimEmbeddingProvider::with_seed(42);
+            let llm = SimLLMProvider::with_seed(42);
+            let vector = SimVectorBackend::with_faults(42, env.faults.clone());
+            let storage = SimStorageBackend::new(SimConfig::with_seed(42));
+            let mut memory = Memory::new(llm, embedder, vector, storage);
+
+            // Store entity
+            memory
+                .remember("Alice works at Acme Corp", RememberOptions::default())
+                .await?;
+
+            // Recall should fall back to text search
+            let result = memory.recall("Alice", RecallOptions::default()).await;
+
+            // Should still work via text fallback
+            assert!(result.is_ok());
+            let entities = result.unwrap();
+            assert!(!entities.is_empty());
+
+            Ok::<(), MemoryError>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_recall_vector_deterministic() {
+        // Test that same seed produces same ranking
+        // Disable entity extraction to ensure deterministic entities
+        let seed = 42;
+
+        // First run
+        let embedder = SimEmbeddingProvider::with_seed(seed);
+        let llm = SimLLMProvider::with_seed(seed);
+        let vector = SimVectorBackend::new(seed);
+        let storage = SimStorageBackend::new(SimConfig::with_seed(seed));
+        let mut memory1 = Memory::new(llm, embedder, vector, storage);
+
+        memory1.remember("Alice works at Acme Corp", RememberOptions::default().without_extraction()).await.unwrap();
+        memory1.remember("Bob works at TechCo", RememberOptions::default().without_extraction()).await.unwrap();
+        memory1.remember("Charlie works at DataInc", RememberOptions::default().without_extraction()).await.unwrap();
+
+        let result1 = memory1.recall("works", RecallOptions::default().fast_only()).await.unwrap();
+        let names1: Vec<String> = result1.iter().map(|e| e.name.clone()).collect();
+
+        // Second run with same seed
+        let embedder2 = SimEmbeddingProvider::with_seed(seed);
+        let llm2 = SimLLMProvider::with_seed(seed);
+        let vector2 = SimVectorBackend::new(seed);
+        let storage2 = SimStorageBackend::new(SimConfig::with_seed(seed));
+        let mut memory2 = Memory::new(llm2, embedder2, vector2, storage2);
+
+        memory2.remember("Alice works at Acme Corp", RememberOptions::default().without_extraction()).await.unwrap();
+        memory2.remember("Bob works at TechCo", RememberOptions::default().without_extraction()).await.unwrap();
+        memory2.remember("Charlie works at DataInc", RememberOptions::default().without_extraction()).await.unwrap();
+
+        let result2 = memory2.recall("works", RecallOptions::default().fast_only()).await.unwrap();
+        let names2: Vec<String> = result2.iter().map(|e| e.name.clone()).collect();
+
+        // Same seed = same ordering
+        assert!(!names1.is_empty(), "Should find results");
+        assert_eq!(names1, names2, "Same seed must produce same ranking");
+    }
+
+    #[tokio::test]
+    async fn test_recall_vector_storage_partial_failure() {
+        // Test that some embeddings failing to store doesn't break recall
+        let sim = Simulation::new(SimConfig::with_seed(42))
+            .with_fault(FaultConfig::new(FaultType::VectorStoreFail, 0.5)); // 50% failure
+
+        sim.run(|env| async move {
+            let embedder = SimEmbeddingProvider::with_seed(42);
+            let llm = SimLLMProvider::with_seed(42);
+            let vector = SimVectorBackend::with_faults(42, env.faults.clone());
+            let storage = SimStorageBackend::new(SimConfig::with_seed(42));
+            let mut memory = Memory::new(llm, embedder, vector, storage);
+
+            // Store multiple entities (some will fail vector storage)
+            // Use without_extraction to ensure deterministic entities
+            for i in 0..10 {
+                let opts = RememberOptions::default().without_extraction();
+                memory
+                    .remember(&format!("Entity number {}", i), opts)
+                    .await?;
+            }
+
+            // Recall with text search should still work (fallback path)
+            let result = memory.recall("Entity", RecallOptions::default()).await;
+
+            assert!(result.is_ok());
+            let entities = result.unwrap();
+            // Should find entities via text search fallback
+            assert!(!entities.is_empty(), "Should find entities even with vector storage failures");
 
             Ok::<(), MemoryError>(())
         })

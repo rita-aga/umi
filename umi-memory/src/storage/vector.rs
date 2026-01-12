@@ -22,6 +22,7 @@
 //! ```
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 
@@ -89,13 +90,14 @@ pub trait VectorBackend: Send + Sync {
 /// - Deterministic similarity computation
 /// - Fault injection support
 /// - No external dependencies
+#[derive(Clone)]
 pub struct SimVectorBackend {
     /// Stored embeddings
-    embeddings: std::sync::RwLock<HashMap<String, Vec<f32>>>,
+    embeddings: Arc<std::sync::RwLock<HashMap<String, Vec<f32>>>>,
     /// Fault injector for testing error paths
-    fault_injector: Option<FaultInjector>,
+    fault_injector: Option<Arc<FaultInjector>>,
     /// RNG for deterministic behavior
-    _rng: DeterministicRng,
+    _rng: Arc<std::sync::RwLock<DeterministicRng>>,
 }
 
 impl SimVectorBackend {
@@ -103,19 +105,19 @@ impl SimVectorBackend {
     #[must_use]
     pub fn new(seed: u64) -> Self {
         Self {
-            embeddings: std::sync::RwLock::new(HashMap::new()),
+            embeddings: Arc::new(std::sync::RwLock::new(HashMap::new())),
             fault_injector: None,
-            _rng: DeterministicRng::new(seed),
+            _rng: Arc::new(std::sync::RwLock::new(DeterministicRng::new(seed))),
         }
     }
 
     /// Create with fault injection enabled.
     #[must_use]
-    pub fn with_faults(seed: u64, fault_injector: FaultInjector) -> Self {
+    pub fn with_faults(seed: u64, fault_injector: Arc<FaultInjector>) -> Self {
         Self {
-            embeddings: std::sync::RwLock::new(HashMap::new()),
+            embeddings: Arc::new(std::sync::RwLock::new(HashMap::new())),
             fault_injector: Some(fault_injector),
-            _rng: DeterministicRng::new(seed),
+            _rng: Arc::new(std::sync::RwLock::new(DeterministicRng::new(seed))),
         }
     }
 
@@ -163,7 +165,7 @@ impl VectorBackend for SimVectorBackend {
         );
 
         // Fault injection
-        if self.should_inject_fault("vector_store") {
+        if self.should_inject_fault("vector_store_fail") {
             return Err(StorageError::write("Injected fault: vector store failed"));
         }
 
@@ -191,7 +193,10 @@ impl VectorBackend for SimVectorBackend {
         assert!(limit > 0, "limit must be positive");
 
         // Fault injection
-        if self.should_inject_fault("vector_search") {
+        if self.should_inject_fault("vector_search_timeout") {
+            return Err(StorageError::timeout(5000)); // 5 second timeout
+        }
+        if self.should_inject_fault("vector_search_fail") {
             return Err(StorageError::read("Injected fault: vector search failed"));
         }
 
