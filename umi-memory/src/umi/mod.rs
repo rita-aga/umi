@@ -253,18 +253,31 @@ impl RecallOptions {
 
     /// Set maximum results.
     ///
-    /// # Panics
-    /// Panics if limit is 0 or exceeds maximum.
-    #[must_use]
-    pub fn with_limit(mut self, limit: usize) -> Self {
+    /// # Arguments
+    /// * `limit` - Maximum number of results (must be 1-100)
+    ///
+    /// # Errors
+    /// Returns `MemoryError::InvalidLimit` if limit is 0 or exceeds 100.
+    ///
+    /// # Example
+    /// ```
+    /// use umi_memory::umi::RecallOptions;
+    ///
+    /// let options = RecallOptions::default().with_limit(20).unwrap();
+    /// ```
+    pub fn with_limit(mut self, limit: usize) -> Result<Self, MemoryError> {
+        if limit == 0 || limit > MEMORY_RECALL_LIMIT_MAX {
+            return Err(MemoryError::InvalidLimit {
+                value: limit,
+                max: MEMORY_RECALL_LIMIT_MAX,
+            });
+        }
         debug_assert!(
             limit > 0 && limit <= MEMORY_RECALL_LIMIT_MAX,
-            "limit must be 1-{}: got {}",
-            MEMORY_RECALL_LIMIT_MAX,
-            limit
+            "limit validation failed"
         );
         self.limit = limit;
-        self
+        Ok(self)
     }
 
     /// Enable deep search.
@@ -606,7 +619,12 @@ impl<
         }
 
         // Build search options
-        let mut search_options = SearchOptions::new().with_limit(options.limit);
+        let mut search_options = SearchOptions::new()
+            .with_limit(options.limit)
+            .map_err(|_e| MemoryError::InvalidLimit {
+                value: options.limit,
+                max: MEMORY_RECALL_LIMIT_MAX,
+            })?;
 
         // Apply deep_search setting
         if let Some(deep) = options.deep_search {
@@ -769,6 +787,7 @@ mod tests {
     fn test_recall_options_builder() {
         let options = RecallOptions::new()
             .with_limit(20)
+            .unwrap()
             .with_deep_search()
             .with_time_range(1000, 2000);
 
@@ -785,15 +804,29 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "limit must be")]
     fn test_recall_options_invalid_limit_zero() {
-        let _ = RecallOptions::new().with_limit(0);
+        let result = RecallOptions::new().with_limit(0);
+        assert!(result.is_err());
+        match result {
+            Err(MemoryError::InvalidLimit { value, max }) => {
+                assert_eq!(value, 0);
+                assert_eq!(max, MEMORY_RECALL_LIMIT_MAX);
+            }
+            _ => panic!("Expected InvalidLimit error"),
+        }
     }
 
     #[test]
-    #[should_panic(expected = "limit must be")]
     fn test_recall_options_invalid_limit_too_large() {
-        let _ = RecallOptions::new().with_limit(MEMORY_RECALL_LIMIT_MAX + 1);
+        let result = RecallOptions::new().with_limit(MEMORY_RECALL_LIMIT_MAX + 1);
+        assert!(result.is_err());
+        match result {
+            Err(MemoryError::InvalidLimit { value, max }) => {
+                assert_eq!(value, MEMORY_RECALL_LIMIT_MAX + 1);
+                assert_eq!(max, MEMORY_RECALL_LIMIT_MAX);
+            }
+            _ => panic!("Expected InvalidLimit error"),
+        }
     }
 
     // =========================================================================
@@ -932,7 +965,7 @@ mod tests {
 
         // Recall with limit
         let results = memory
-            .recall("Item", RecallOptions::new().with_limit(2))
+            .recall("Item", RecallOptions::new().with_limit(2).unwrap())
             .await
             .unwrap();
 

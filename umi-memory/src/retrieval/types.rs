@@ -33,18 +33,31 @@ impl SearchOptions {
 
     /// Set the result limit.
     ///
-    /// # Panics
-    /// Panics if limit is 0 or exceeds maximum.
-    #[must_use]
-    pub fn with_limit(mut self, limit: usize) -> Self {
+    /// # Arguments
+    /// * `limit` - Maximum number of results (must be 1-100)
+    ///
+    /// # Errors
+    /// Returns `RetrievalError::InvalidLimit` if limit is 0 or exceeds 100.
+    ///
+    /// # Example
+    /// ```
+    /// use umi_memory::retrieval::SearchOptions;
+    ///
+    /// let options = SearchOptions::default().with_limit(20).unwrap();
+    /// ```
+    pub fn with_limit(mut self, limit: usize) -> Result<Self, super::RetrievalError> {
+        if limit == 0 || limit > RETRIEVAL_RESULTS_COUNT_MAX {
+            return Err(super::RetrievalError::InvalidLimit {
+                value: limit,
+                max: RETRIEVAL_RESULTS_COUNT_MAX,
+            });
+        }
         debug_assert!(
             limit > 0 && limit <= RETRIEVAL_RESULTS_COUNT_MAX,
-            "limit must be 1-{}: got {}",
-            RETRIEVAL_RESULTS_COUNT_MAX,
-            limit
+            "limit validation failed"
         );
         self.limit = limit;
-        self
+        Ok(self)
     }
 
     /// Enable or disable deep search.
@@ -250,6 +263,7 @@ pub fn needs_deep_search(query: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::retrieval::RetrievalError;
     use crate::storage::{Entity, EntityType};
 
     #[test]
@@ -265,6 +279,7 @@ mod tests {
     fn test_search_options_builder() {
         let options = SearchOptions::new()
             .with_limit(50)
+            .unwrap()
             .with_deep_search(false)
             .with_time_range(1000, 2000);
 
@@ -281,15 +296,29 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "limit must be")]
     fn test_search_options_invalid_limit_zero() {
-        let _ = SearchOptions::new().with_limit(0);
+        let result = SearchOptions::new().with_limit(0);
+        assert!(result.is_err());
+        match result {
+            Err(RetrievalError::InvalidLimit { value, max }) => {
+                assert_eq!(value, 0);
+                assert_eq!(max, RETRIEVAL_RESULTS_COUNT_MAX);
+            }
+            _ => panic!("Expected InvalidLimit error"),
+        }
     }
 
     #[test]
-    #[should_panic(expected = "limit must be")]
     fn test_search_options_invalid_limit_too_large() {
-        let _ = SearchOptions::new().with_limit(RETRIEVAL_RESULTS_COUNT_MAX + 1);
+        let result = SearchOptions::new().with_limit(RETRIEVAL_RESULTS_COUNT_MAX + 1);
+        assert!(result.is_err());
+        match result {
+            Err(RetrievalError::InvalidLimit { value, max }) => {
+                assert_eq!(value, RETRIEVAL_RESULTS_COUNT_MAX + 1);
+                assert_eq!(max, RETRIEVAL_RESULTS_COUNT_MAX);
+            }
+            _ => panic!("Expected InvalidLimit error"),
+        }
     }
 
     #[test]

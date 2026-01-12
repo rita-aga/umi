@@ -139,7 +139,7 @@ async fn test_memory_explicit_limit_overrides_config() {
 
     // Explicit limit should override config
     let results = memory
-        .recall("person", RecallOptions::default().with_limit(10))
+        .recall("person", RecallOptions::default().with_limit(10).unwrap())
         .await
         .unwrap();
 

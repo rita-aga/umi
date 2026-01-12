@@ -277,7 +277,7 @@ fn bench_recall_varying_limit(c: &mut Criterion) {
             b.to_async(&rt).iter(|| async {
                 black_box(
                     memory
-                        .recall(queries[0], RecallOptions::new().with_limit(limit))
+                        .recall(queries[0], RecallOptions::new().with_limit(limit).unwrap())
                         .await
                         .unwrap(),
                 );

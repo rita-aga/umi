@@ -112,7 +112,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Override recall limit at query time
     let limited_results = combined_memory
-        .recall("entity", RecallOptions::default().with_limit(5))
+        .recall("entity", RecallOptions::default().with_limit(5)?)
         .await?;
 
     println!("  Config default recall limit: {}", combined_config.default_recall_limit);

@@ -167,7 +167,7 @@ fn bench_recall_with_limit(c: &mut Criterion) {
                 memory
                     .recall(
                         black_box("entity"),
-                        RecallOptions::default().with_limit(limit),
+                        RecallOptions::default().with_limit(limit).unwrap(),
                     )
                     .await
                     .unwrap()

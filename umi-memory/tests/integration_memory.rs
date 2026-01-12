@@ -339,7 +339,7 @@ async fn test_recall_with_limit() {
 
     // Recall with limit
     let results = memory
-        .recall("item", RecallOptions::default().with_limit(5))
+        .recall("item", RecallOptions::default().with_limit(5).unwrap())
         .await
         .unwrap();
 
