@@ -10,8 +10,11 @@
 - ✅ Phase 7.2: Real LLM test examples created (test_anthropic.rs, test_openai.rs)
 - ✅ Phase 7.3: Python bindings documented (PYTHON.md, READMEs updated)
 - ✅ Phase 7.4: Final documentation polish complete (config reviewed, ADRs verified)
-- 🔄 Phase 7.5: Manual LLM testing (ready for API keys)
-- ⏳ Phase 7.6: Publish to crates.io (after testing)
+- ✅ Phase 7.5: Manual LLM testing COMPLETE (found & fixed JSON parsing bug!)
+  - Anthropic: Entity extraction, query rewriting, evolution detection ✅
+  - OpenAI: Entity extraction, embeddings, full pipeline ✅
+  - Fixed: JSON markdown block extraction
+- 🔄 Phase 7.6: Ready to publish to crates.io
 
 ---
 
