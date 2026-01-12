@@ -31,6 +31,9 @@ mod vector;
 #[cfg(feature = "postgres")]
 mod postgres;
 
+#[cfg(feature = "postgres")]
+mod postgres_vector;
+
 #[cfg(feature = "lance")]
 mod lance;
 
@@ -46,6 +49,9 @@ pub use vector::{SimVectorBackend, VectorBackend, VectorSearchResult};
 
 #[cfg(feature = "postgres")]
 pub use postgres::PostgresBackend;
+
+#[cfg(feature = "postgres")]
+pub use postgres_vector::PostgresVectorBackend;
 
 #[cfg(feature = "lance")]
 pub use lance::LanceStorageBackend;

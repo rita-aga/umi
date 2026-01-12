@@ -261,6 +261,7 @@ fn row_to_entity(row: &PgRow) -> StorageResult<Entity> {
         updated_at,
         document_time,
         event_time,
+        source_ref: None, // TODO: Add source_ref column to postgres schema
     })
 }
 
