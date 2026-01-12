@@ -19,7 +19,7 @@ A production-ready memory library for AI agents with deterministic simulation te
 
 ```toml
 [dependencies]
-umi-memory = "0.1"
+umi-memory = "0.2"
 ```
 
 ### Basic Usage
@@ -38,8 +38,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         RememberOptions::default()
     ).await?;
 
-    // Recall information
-    let results = memory.recall("Who works at Acme?", RecallOptions::default()).await?;
+    // Recall information (with optional limit: 1-100, default 10)
+    let results = memory.recall(
+        "Who works at Acme?",
+        RecallOptions::default().with_limit(20)?
+    ).await?;
 
     for entity in results {
         println!("Found: {} - {}", entity.name, entity.content);
@@ -95,7 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [dependencies]
-umi-memory = { version = "0.1", features = ["lance", "anthropic", "openai"] }
+umi-memory = { version = "0.2", features = ["lance", "anthropic", "openai"] }
 ```
 
 ## Architecture
@@ -175,6 +178,30 @@ let memory = Memory::sim(42);
 ```
 
 **Why?** Same seed = same results = reproducible tests and bugs.
+
+### Understanding SimLLM
+
+`SimLLMProvider` returns **deterministic placeholder data** by design for testing:
+
+- **Entity Names**: Rotates through "Alice", "Bob", "Eve", "Charlie", etc.
+- **Content**: Generic text like "Information about X"
+- **Purpose**: Enable reproducible testing without API costs
+
+**This is correct behavior!** SimLLM is designed for:
+- ✅ Unit tests that need consistent results
+- ✅ Development without API keys
+- ✅ CI/CD pipelines
+- ✅ Fault injection testing
+
+**For real content extraction**, use production LLM providers:
+```rust
+use umi_memory::llm::AnthropicProvider;
+
+let llm = AnthropicProvider::new(std::env::var("ANTHROPIC_API_KEY")?);
+let memory = MemoryBuilder::new().with_llm(llm).build();
+```
+
+See [`examples/test_anthropic.rs`](https://github.com/rita-aga/umi/blob/main/umi-memory/examples/test_anthropic.rs) and [`examples/test_openai.rs`](https://github.com/rita-aga/umi/blob/main/umi-memory/examples/test_openai.rs) for production setups.
 
 ### Graceful Degradation
 

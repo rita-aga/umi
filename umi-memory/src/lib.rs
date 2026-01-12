@@ -37,6 +37,11 @@
 //! # }
 //! ```
 //!
+//! **Note on SimLLM**: [`Memory::sim()`](umi::Memory::sim) uses simulation providers that return
+//! deterministic placeholder data (entity names like "Alice", "Bob", generic content). This is
+//! by design for reproducible testing. For real content extraction, use production LLM providers
+//! like [`AnthropicProvider`](llm::AnthropicProvider) or [`OpenAIProvider`](llm::OpenAIProvider).
+//!
 //! ## Architecture
 //!
 //! ```text
