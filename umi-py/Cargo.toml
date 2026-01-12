@@ -10,7 +10,7 @@ name = "umi"
 crate-type = ["cdylib"]
 
 [dependencies]
-umi-core = { path = "../umi-core" }
+umi-memory = { path = "../umi-memory" }
 pyo3 = { workspace = true }
 pyo3-asyncio = { workspace = true }
 tokio = { workspace = true }

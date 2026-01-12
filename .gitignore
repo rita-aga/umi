@@ -51,3 +51,6 @@ Thumbs.db
 
 # UV
 uv.lock
+
+# Private docs
+docs/isotopes-rust-replication.md

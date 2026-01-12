@@ -1,0 +1,50 @@
+[package]
+name = "umi-memory"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Memory library for AI agents with deterministic simulation testing"
+
+[dependencies]
+tokio = { workspace = true }
+async-trait = { workspace = true }
+bytes = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+tracing = { workspace = true }
+
+# Optional database support
+sqlx = { workspace = true, optional = true }
+
+# Optional LanceDB support (via vectordb crate)
+vectordb = { workspace = true, optional = true }
+arrow-array = { workspace = true, optional = true }
+arrow-schema = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+
+# Optional HTTP client for LLM providers
+reqwest = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3"
+
+[features]
+default = []
+postgres = ["dep:sqlx"]
+
+# LanceDB storage backend (via vectordb crate)
+lance = ["dep:vectordb", "dep:arrow-array", "dep:arrow-schema", "dep:futures"]
+
+# LLM provider features
+anthropic = ["dep:reqwest"]
+openai = ["dep:reqwest"]
+
+# Convenience feature for all LLM providers
+llm-providers = ["anthropic", "openai"]

@@ -27,11 +27,11 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use std::collections::HashMap;
 
-use umi_core::memory::{
+use umi_memory::memory::{
     CoreMemory as RustCoreMemory, CoreMemoryConfig, CoreMemoryError, MemoryBlockType,
     WorkingMemory as RustWorkingMemory, WorkingMemoryError,
 };
-use umi_core::storage::{
+use umi_memory::storage::{
     Entity as RustEntity, EntityType as RustEntityType, EvolutionRelation as RustEvolutionRelation,
     EvolutionType as RustEvolutionType,
 };

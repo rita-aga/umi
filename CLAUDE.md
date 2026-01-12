@@ -4,17 +4,21 @@ Instructions for Claude Code when working in the Umi repository.
 
 ## What Umi Is
 
-Umi is a memory library for AI agents with two layers:
+Umi is a memory library for AI agents, fully implemented in Rust:
 
-**Rust core** (`umi-core/`):
-- Memory tiers (CoreMemory, WorkingMemory, ArchivalMemory)
-- Storage backends with simulation support
+**Rust crate** (`umi-memory/`):
+- Memory class - Main interface with `remember()` and `recall()`
+- EntityExtractor - LLM-powered entity extraction
+- DualRetriever - Fast vector + LLM query rewriting with RRF merging
+- EvolutionTracker - Detects updates, contradictions, extensions
+- Storage backends - SimStorageBackend (testing) + LanceStorageBackend (production)
+- LLM providers - SimLLMProvider, AnthropicProvider, OpenAIProvider
 - DST (Deterministic Simulation Testing)
+- Memory tiers (CoreMemory, WorkingMemory, ArchivalMemory)
 
-**Python layer** (`umi/`):
-- Entity extraction from text
-- Dual retrieval (fast + LLM query expansion)
-- Evolution tracking (detecting updates/contradictions)
+**Python bindings** (`umi-py/`):
+- PyO3 bindings exposing Rust types to Python
+- Built with maturin for PyPI distribution
 
 ## Development Philosophy
 
@@ -22,22 +26,21 @@ Umi is a memory library for AI agents with two layers:
 
 Every component MUST have a simulation implementation:
 
-**Rust**: Use `SimConfig::with_seed(N)` for deterministic behavior
 ```rust
-let config = SimConfig::with_seed(42);
-let memory = CoreMemory::new(32 * 1024, config);
-```
+use umi_memory::{Memory, SimLLMProvider, SimStorageBackend, SimConfig};
 
-**Python**: Use `seed=N` parameter
-```python
-memory = Memory(seed=42)  # Deterministic, no LLM calls
+// Deterministic - same seed = same results
+let config = SimConfig::with_seed(42);
+let llm = SimLLMProvider::new();
+let storage = SimStorageBackend::new();
+let memory = Memory::new(llm, storage);
 ```
 
 **Why?** Same seed = same results = reproducible tests and bugs.
 
 ### TigerStyle Assertions
 
-**Rust**: Use `debug_assert!` for invariants
+Use `debug_assert!` for invariants:
 ```rust
 fn store(&mut self, data: &[u8]) -> Result<()> {
     debug_assert!(!data.is_empty(), "data must not be empty");
@@ -46,49 +49,40 @@ fn store(&mut self, data: &[u8]) -> Result<()> {
 }
 ```
 
-**Python**: Use `assert` for pre/postconditions
-```python
-async def remember(self, text: str) -> list[Entity]:
-    assert text, "text must not be empty"
-    assert len(text) <= 100_000, "text too large"
-    # ...
-    assert isinstance(result, list), "must return list"
-    return result
-```
-
-### Graceful Degradation (Python)
+### Graceful Degradation
 
 LLM calls can fail. Components should:
-- Catch `TimeoutError` and `RuntimeError`
-- Return fallback values (empty list, None) instead of crashing
+- Return fallback values instead of crashing
+- Log errors but continue operation
 
 ## Build & Test Commands
-
-### Python
-
-```bash
-pip install -e ".[dev]"
-pytest                      # 145 tests
-ruff check .
-ruff format --check .
-mypy umi/
-```
 
 ### Rust
 
 ```bash
-cargo test                  # 232 tests
+cargo test -p umi-memory --features lance   # 405 tests
 cargo clippy --all-features
 cargo fmt --check
 cargo build --release
 ```
 
+### Python Bindings (via maturin)
+
+```bash
+pip install maturin
+maturin develop                              # Build and install locally
+python -c "import umi; print(umi.__version__)"
+```
+
 ## Architecture Decision Records (ADRs)
 
 Document significant design decisions in `docs/adr/`:
-- `009-dual-retrieval.md` - Query rewriting and RRF merging
-- `010-entity-extraction.md` - LLM-powered extraction
-- `011-evolution-tracking.md` - Memory relationship detection
+- `013-llm-provider-trait.md` - LLM abstraction
+- `014-entity-extractor.md` - Entity extraction
+- `015-dual-retriever.md` - Query rewriting and RRF
+- `016-evolution-tracker.md` - Memory relationships
+- `017-memory-class.md` - Main orchestrator
+- `018-lance-storage-backend.md` - LanceDB storage
 
 Create new ADRs for architectural changes. Format: `NNN-short-name.md`
 
@@ -96,45 +90,47 @@ Create new ADRs for architectural changes. Format: `NNN-short-name.md`
 
 ```
 umi/
-├── umi/                    # Python package
-│   ├── __init__.py
-│   ├── memory.py           # Main Memory class
-│   ├── extraction.py       # EntityExtractor
-│   ├── retrieval.py        # DualRetriever
-│   ├── evolution.py        # EvolutionTracker
-│   ├── storage.py          # SimStorage, Entity
-│   ├── faults.py           # FaultConfig
-│   ├── providers/
-│   │   ├── base.py         # LLMProvider protocol
-│   │   ├── sim.py          # SimLLMProvider
-│   │   ├── anthropic.py
-│   │   └── openai.py
-│   └── tests/
-│
-├── umi-core/               # Rust core
+├── umi-memory/             # Rust crate (full implementation)
 │   └── src/
-│       ├── lib.rs
-│       ├── dst/            # Deterministic simulation
+│       ├── lib.rs          # Public exports
+│       ├── umi/            # Memory orchestrator
+│       ├── extraction/     # EntityExtractor
+│       ├── retrieval/      # DualRetriever
+│       ├── evolution/      # EvolutionTracker
+│       ├── storage/        # Sim + Lance backends
+│       ├── llm/            # LLM providers
 │       ├── memory/         # Memory tiers
-│       └── storage/        # Storage backends
+│       ├── dst/            # Deterministic simulation
+│       └── constants.rs    # TigerStyle limits
 │
-├── umi-py/                 # PyO3 bindings (not wired up yet)
+├── umi-py/                 # PyO3 bindings
+│   └── src/lib.rs          # Python module
 │
 ├── Cargo.toml              # Rust workspace
-├── pyproject.toml          # Python package
+├── pyproject.toml          # Python package (maturin)
 └── docs/adr/               # Architecture decisions
 ```
 
-## Current Limitations
+## Features
 
-- **Python storage is in-memory only** - SimStorage doesn't persist
-- **PyO3 bindings not wired up** - Python and Rust layers are separate
-- **No real database backends** - Postgres/Qdrant planned
+The `umi-memory` crate has optional features:
+
+```toml
+[dependencies]
+umi-memory = { version = "0.1", features = ["lance"] }
+```
+
+| Feature | Description |
+|---------|-------------|
+| `lance` | LanceDB storage backend (persistent, vector search) |
+| `anthropic` | Anthropic LLM provider |
+| `openai` | OpenAI LLM provider |
+| `llm-providers` | All LLM providers |
 
 ## Git Workflow
 
 - Use conventional commits: `feat:`, `fix:`, `docs:`, `chore:`
-- Run both Python and Rust tests before pushing
+- Run tests before pushing: `cargo test -p umi-memory --features lance`
 - Update ADRs for architectural changes
 - Always commit and push after completing work
 
@@ -145,26 +141,12 @@ umi/
 - `.vision/umi-vision.md` - Core principles and constraints
 - `.progress/` - Active plans and roadmaps
 
-Current active plan: `.progress/001_20260111_163000_umi-standalone-roadmap.md`
+## Next Steps
 
-## Roadmap (Next Steps)
-
-### Phase 1: PyPI Publication
-- Package name: `umi-memory` (or similar)
-- GitHub Actions workflow for auto-publishing
-- Create v0.1.0 release
-
-### Phase 2: Real Storage Backends
-- PostgreSQL with asyncpg
-- Qdrant for vector search
-- Unified Storage protocol
-
-### Phase 3: Wire PyO3 Bindings
-- Expose Rust memory tiers to Python
-- Optional high-performance backend
-- Benchmark Rust vs Python
-
-See `.progress/001_*.md` for full details.
+1. **Benchmarking** - Set up criterion benchmarks to validate performance
+2. **PyO3 bindings** - Expose full Memory API to Python
+3. **crates.io** - Publish `umi-memory` crate
+4. **PyPI** - Publish Python package via maturin
 
 ## Origin
 
