@@ -57,6 +57,7 @@ enum EmbeddingInput {
 struct EmbeddingResponse {
     data: Vec<EmbeddingData>,
     #[serde(default)]
+    #[allow(dead_code)] // Keep for future usage tracking
     usage: Option<Usage>,
 }
 

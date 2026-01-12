@@ -290,8 +290,11 @@ impl<P: LLMProvider> EntityExtractor<P> {
         response: &str,
         original_text: &str,
     ) -> (Vec<ExtractedEntity>, Vec<ExtractedRelation>) {
+        // Extract JSON from markdown code blocks if present
+        let json_str = Self::extract_json_from_response(response);
+
         // Try to parse as JSON
-        let data: LLMExtractionResponse = match serde_json::from_str(response) {
+        let data: LLMExtractionResponse = match serde_json::from_str(json_str) {
             Ok(d) => d,
             Err(_) => {
                 // Fallback on parse error
@@ -308,6 +311,35 @@ impl<P: LLMProvider> EntityExtractor<P> {
         }
 
         (entities, relations)
+    }
+
+    /// Extract JSON from LLM response, handling markdown code blocks.
+    ///
+    /// LLMs often wrap JSON in markdown: ```json ... ``` or ``` ... ```
+    /// This function extracts the JSON content from such blocks.
+    fn extract_json_from_response(response: &str) -> &str {
+        let trimmed = response.trim();
+
+        // Check for ```json code block
+        if trimmed.starts_with("```json") {
+            if let Some(start_idx) = trimmed.find('\n') {
+                if let Some(end_idx) = trimmed.rfind("```") {
+                    return trimmed[start_idx + 1..end_idx].trim();
+                }
+            }
+        }
+
+        // Check for generic ``` code block
+        if trimmed.starts_with("```") {
+            if let Some(start_idx) = trimmed.find('\n') {
+                if let Some(end_idx) = trimmed.rfind("```") {
+                    return trimmed[start_idx + 1..end_idx].trim();
+                }
+            }
+        }
+
+        // Return as-is if no code blocks found
+        trimmed
     }
 
     /// Parse raw entities into validated entities.

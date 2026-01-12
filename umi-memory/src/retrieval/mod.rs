@@ -285,8 +285,11 @@ impl<L: LLMProvider, E: EmbeddingProvider, V: VectorBackend, S: StorageBackend>
 
     /// Parse LLM response into query variations.
     fn parse_variations(&self, response: &str, original_query: &str) -> Vec<String> {
+        // Extract JSON from markdown code blocks if present
+        let json_str = Self::extract_json_from_response(response);
+
         // Try to parse as JSON array
-        let variations: Vec<String> = match serde_json::from_str(response) {
+        let variations: Vec<String> = match serde_json::from_str(json_str) {
             Ok(v) => v,
             Err(_) => return vec![original_query.to_string()],
         };
@@ -305,6 +308,35 @@ impl<L: LLMProvider, E: EmbeddingProvider, V: VectorBackend, S: StorageBackend>
 
         valid.truncate(RETRIEVAL_QUERY_REWRITE_COUNT_MAX);
         valid
+    }
+
+    /// Extract JSON from LLM response, handling markdown code blocks.
+    ///
+    /// LLMs often wrap JSON in markdown: ```json ... ``` or ``` ... ```
+    /// This function extracts the JSON content from such blocks.
+    fn extract_json_from_response(response: &str) -> &str {
+        let trimmed = response.trim();
+
+        // Check for ```json code block
+        if trimmed.starts_with("```json") {
+            if let Some(start_idx) = trimmed.find('\n') {
+                if let Some(end_idx) = trimmed.rfind("```") {
+                    return trimmed[start_idx + 1..end_idx].trim();
+                }
+            }
+        }
+
+        // Check for generic ``` code block
+        if trimmed.starts_with("```") {
+            if let Some(start_idx) = trimmed.find('\n') {
+                if let Some(end_idx) = trimmed.rfind("```") {
+                    return trimmed[start_idx + 1..end_idx].trim();
+                }
+            }
+        }
+
+        // Return as-is if no code blocks found
+        trimmed
     }
 
     /// Merge results using Reciprocal Rank Fusion.

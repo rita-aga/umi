@@ -13,7 +13,7 @@
 
 use umi_memory::extraction::{EntityExtractor, ExtractionOptions};
 use umi_memory::llm::AnthropicProvider;
-use umi_memory::retrieval::{DualRetriever, SearchOptions};
+use umi_memory::retrieval::DualRetriever;
 use umi_memory::evolution::{EvolutionTracker, DetectionOptions};
 use umi_memory::storage::{Entity, EntityType, SimStorageBackend, SimVectorBackend};
 use umi_memory::embedding::SimEmbeddingProvider;
