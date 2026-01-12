@@ -36,11 +36,13 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 
 use super::{EmbeddingError, EmbeddingProvider};
 use crate::constants::EMBEDDING_DIMENSIONS_COUNT;
-use crate::dst::DeterministicRng;
+use crate::dst::{DeterministicRng, FaultInjector};
 
 // =============================================================================
 // SimEmbeddingProvider
@@ -53,11 +55,14 @@ use crate::dst::DeterministicRng;
 /// - No external dependencies
 /// - Fast (no network calls)
 /// - Normalized embeddings (unit vectors)
+/// - Fault injection support for DST
 pub struct SimEmbeddingProvider {
     /// Base seed for RNG
     seed: u64,
     /// Embedding dimensions
     dimensions: usize,
+    /// Fault injector (optional for DST)
+    fault_injector: Option<Arc<FaultInjector>>,
 }
 
 impl SimEmbeddingProvider {
@@ -78,6 +83,7 @@ impl SimEmbeddingProvider {
         Self {
             seed,
             dimensions: EMBEDDING_DIMENSIONS_COUNT,
+            fault_injector: None,
         }
     }
 
@@ -85,6 +91,25 @@ impl SimEmbeddingProvider {
     #[must_use]
     pub fn with_seed(seed: u64) -> Self {
         Self::new(seed)
+    }
+
+    /// Create with fault injection enabled.
+    #[must_use]
+    pub fn with_faults(seed: u64, fault_injector: Arc<FaultInjector>) -> Self {
+        Self {
+            seed,
+            dimensions: EMBEDDING_DIMENSIONS_COUNT,
+            fault_injector: Some(fault_injector),
+        }
+    }
+
+    /// Check if a fault should be injected.
+    fn should_inject_fault(&self, operation: &str) -> bool {
+        if let Some(ref injector) = self.fault_injector {
+            injector.should_inject(operation).is_some()
+        } else {
+            false
+        }
     }
 
     /// Hash text to get a deterministic seed.
@@ -150,6 +175,17 @@ impl EmbeddingProvider for SimEmbeddingProvider {
             return Err(EmbeddingError::EmptyInput);
         }
 
+        // Fault injection
+        if self.should_inject_fault("embedding_timeout") {
+            return Err(EmbeddingError::Timeout);
+        }
+        if self.should_inject_fault("embedding_rate_limit") {
+            return Err(EmbeddingError::rate_limit(Some(60)));
+        }
+        if self.should_inject_fault("embedding_service_unavailable") {
+            return Err(EmbeddingError::service_unavailable("Simulated failure"));
+        }
+
         Ok(self.generate_embedding(text))
     }
 
@@ -157,6 +193,17 @@ impl EmbeddingProvider for SimEmbeddingProvider {
         // Precondition: batch must not be empty
         if texts.is_empty() {
             return Err(EmbeddingError::invalid_request("batch cannot be empty"));
+        }
+
+        // Fault injection (same as embed)
+        if self.should_inject_fault("embedding_timeout") {
+            return Err(EmbeddingError::Timeout);
+        }
+        if self.should_inject_fault("embedding_rate_limit") {
+            return Err(EmbeddingError::rate_limit(Some(60)));
+        }
+        if self.should_inject_fault("embedding_service_unavailable") {
+            return Err(EmbeddingError::service_unavailable("Simulated failure"));
         }
 
         // Generate embedding for each text

@@ -73,6 +73,20 @@ pub enum FaultType {
     LlmServiceUnavailable,
 
     // =========================================================================
+    // Embedding Faults
+    // =========================================================================
+    /// Embedding request timeout
+    EmbeddingTimeout,
+    /// Embedding rate limit exceeded
+    EmbeddingRateLimit,
+    /// Embedding context length exceeded
+    EmbeddingContextOverflow,
+    /// Embedding invalid response format
+    EmbeddingInvalidResponse,
+    /// Embedding service unavailable
+    EmbeddingServiceUnavailable,
+
+    // =========================================================================
     // Resource Faults
     // =========================================================================
     /// Out of memory
@@ -117,6 +131,11 @@ impl FaultType {
             Self::LlmContextOverflow => "llm_context_overflow",
             Self::LlmInvalidResponse => "llm_invalid_response",
             Self::LlmServiceUnavailable => "llm_service_unavailable",
+            Self::EmbeddingTimeout => "embedding_timeout",
+            Self::EmbeddingRateLimit => "embedding_rate_limit",
+            Self::EmbeddingContextOverflow => "embedding_context_overflow",
+            Self::EmbeddingInvalidResponse => "embedding_invalid_response",
+            Self::EmbeddingServiceUnavailable => "embedding_service_unavailable",
             Self::ResourceOom => "resource_oom",
             Self::ResourceFileLimit => "resource_file_limit",
             Self::ResourceCpuThrottle => "resource_cpu_throttle",

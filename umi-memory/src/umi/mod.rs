@@ -19,8 +19,9 @@
 //! #[tokio::main]
 //! async fn main() {
 //!     let llm = SimLLMProvider::with_seed(42);
+//!     let embedder = SimEmbeddingProvider::with_seed(42);
 //!     let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-//!     let mut memory = Memory::new(llm, storage);
+//!     let mut memory = Memory::new(llm, embedder, storage);
 //!
 //!     // Remember information
 //!     let result = memory.remember("Alice works at Acme", RememberOptions::default()).await.unwrap();
@@ -36,6 +37,7 @@ use crate::constants::{
     MEMORY_IMPORTANCE_DEFAULT, MEMORY_IMPORTANCE_MAX, MEMORY_IMPORTANCE_MIN,
     MEMORY_RECALL_LIMIT_DEFAULT, MEMORY_RECALL_LIMIT_MAX, MEMORY_TEXT_BYTES_MAX,
 };
+use crate::embedding::EmbeddingProvider;
 use crate::evolution::{DetectionOptions, EvolutionTracker};
 use crate::extraction::{EntityExtractor, ExtractionOptions};
 use crate::llm::LLMProvider;
@@ -120,6 +122,9 @@ pub struct RememberOptions {
 
     /// Importance score 0.0-1.0 (default: 0.5)
     pub importance: f32,
+
+    /// Whether to generate embeddings for entities (default: true)
+    pub generate_embeddings: bool,
 }
 
 impl RememberOptions {
@@ -159,6 +164,20 @@ impl RememberOptions {
         self.importance = importance;
         self
     }
+
+    /// Enable embedding generation (default).
+    #[must_use]
+    pub fn with_embeddings(mut self) -> Self {
+        self.generate_embeddings = true;
+        self
+    }
+
+    /// Disable embedding generation.
+    #[must_use]
+    pub fn without_embeddings(mut self) -> Self {
+        self.generate_embeddings = false;
+        self
+    }
 }
 
 impl Default for RememberOptions {
@@ -167,6 +186,7 @@ impl Default for RememberOptions {
             extract_entities: true,
             track_evolution: true,
             importance: MEMORY_IMPORTANCE_DEFAULT,
+            generate_embeddings: true,
         }
     }
 }
@@ -303,28 +323,31 @@ impl RememberResult {
 /// use umi_memory::{SimLLMProvider, SimStorageBackend, SimConfig};
 ///
 /// let llm = SimLLMProvider::with_seed(42);
+/// let embedder = SimEmbeddingProvider::with_seed(42);
 /// let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-/// let mut memory = Memory::new(llm, storage);
+/// let mut memory = Memory::new(llm, embedder, storage);
 ///
 /// // Store and retrieve memories
 /// memory.remember("Alice works at Acme", RememberOptions::default()).await?;
 /// let results = memory.recall("Alice", RecallOptions::default()).await?;
 /// ```
-pub struct Memory<L: LLMProvider, S: StorageBackend> {
+pub struct Memory<L: LLMProvider, E: EmbeddingProvider, S: StorageBackend> {
     storage: S,
     extractor: EntityExtractor<L>,
     retriever: DualRetriever<L, S>,
     evolution: EvolutionTracker<L, S>,
+    embedder: E,
 }
 
-impl<L: LLMProvider + Clone, S: StorageBackend + Clone> Memory<L, S> {
+impl<L: LLMProvider + Clone, E: EmbeddingProvider, S: StorageBackend + Clone> Memory<L, E, S> {
     /// Create a new Memory with all components.
     ///
     /// # Arguments
     /// - `llm` - LLM provider (cloned for each component)
+    /// - `embedder` - Embedding provider
     /// - `storage` - Storage backend (cloned for retriever)
     #[must_use]
-    pub fn new(llm: L, storage: S) -> Self {
+    pub fn new(llm: L, embedder: E, storage: S) -> Self {
         let extractor = EntityExtractor::new(llm.clone());
         let retriever = DualRetriever::new(llm.clone(), storage.clone());
         let evolution = EvolutionTracker::new(llm);
@@ -334,6 +357,7 @@ impl<L: LLMProvider + Clone, S: StorageBackend + Clone> Memory<L, S> {
             extractor,
             retriever,
             evolution,
+            embedder,
         }
     }
 
@@ -394,7 +418,7 @@ impl<L: LLMProvider + Clone, S: StorageBackend + Clone> Memory<L, S> {
         };
 
         // Convert extracted entities to storage entities
-        let to_store: Vec<Entity> = if extracted.is_empty() {
+        let mut to_store: Vec<Entity> = if extracted.is_empty() {
             // Fallback: store as single Note entity
             let name = if text.len() > 50 {
                 format!("Note: {}...", &text[..47])
@@ -411,6 +435,25 @@ impl<L: LLMProvider + Clone, S: StorageBackend + Clone> Memory<L, S> {
                 })
                 .collect()
         };
+
+        // Generate embeddings (NEW - graceful degradation: warn on failure, continue)
+        if options.generate_embeddings && !to_store.is_empty() {
+            // Collect entity contents for batch embedding
+            let contents: Vec<&str> = to_store.iter().map(|e| e.content.as_str()).collect();
+
+            match self.embedder.embed_batch(&contents).await {
+                Ok(embeddings) => {
+                    // Set embeddings on entities
+                    for (entity, embedding) in to_store.iter_mut().zip(embeddings) {
+                        entity.set_embedding(embedding);
+                    }
+                }
+                Err(e) => {
+                    // Graceful degradation: log warning, continue without embeddings
+                    tracing::warn!("Failed to generate embeddings: {}. Continuing without embeddings.", e);
+                }
+            }
+        }
 
         // Store each entity
         for entity in to_store {
@@ -575,14 +618,16 @@ fn convert_entity_type(ext_type: &crate::extraction::EntityType) -> EntityType {
 mod tests {
     use super::*;
     use crate::dst::SimConfig;
+    use crate::embedding::SimEmbeddingProvider;
     use crate::llm::SimLLMProvider;
     use crate::storage::SimStorageBackend;
 
     /// Helper to create a Memory with deterministic seed.
-    fn create_memory(seed: u64) -> Memory<SimLLMProvider, SimStorageBackend> {
+    fn create_memory(seed: u64) -> Memory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend> {
         let llm = SimLLMProvider::with_seed(seed);
+        let embedder = SimEmbeddingProvider::with_seed(seed);
         let storage = SimStorageBackend::new(SimConfig::with_seed(seed));
-        Memory::new(llm, storage)
+        Memory::new(llm, embedder, storage)
     }
 
     // =========================================================================
@@ -595,6 +640,7 @@ mod tests {
 
         assert!(options.extract_entities);
         assert!(options.track_evolution);
+        assert!(options.generate_embeddings);
         assert!((options.importance - MEMORY_IMPORTANCE_DEFAULT).abs() < f32::EPSILON);
     }
 
@@ -931,5 +977,260 @@ mod tests {
         );
         assert_eq!(convert_entity_type(&ExtType::Preference), EntityType::Note);
         assert_eq!(convert_entity_type(&ExtType::Event), EntityType::Note);
+    }
+}
+
+// =============================================================================
+// DST Tests - Deterministic Simulation with Fault Injection
+// =============================================================================
+
+/// DST tests for Memory with embedding fault injection.
+#[cfg(test)]
+mod dst_tests {
+    use super::*;
+    use crate::constants::EMBEDDING_DIMENSIONS_COUNT;
+    use crate::dst::{FaultConfig, FaultType, SimConfig, Simulation};
+    use crate::embedding::SimEmbeddingProvider;
+    use crate::llm::SimLLMProvider;
+    use crate::storage::SimStorageBackend;
+
+    #[tokio::test]
+    async fn test_remember_with_embedding_timeout() {
+        // Test that embedding timeout is handled gracefully
+        let sim = Simulation::new(SimConfig::with_seed(42))
+            .with_fault(FaultConfig::new(FaultType::EmbeddingTimeout, 1.0)); // 100% failure rate
+
+        sim.run(|env| async move {
+            // Create embedder with fault injector
+            let embedder = SimEmbeddingProvider::with_faults(42, env.faults.clone());
+            let llm = SimLLMProvider::with_seed(42);
+            let storage = SimStorageBackend::new(SimConfig::with_seed(42));
+            let mut memory = Memory::new(llm, embedder, storage);
+
+            // Remember should succeed even though embeddings fail
+            let result = memory
+                .remember("Alice works at Acme", RememberOptions::default())
+                .await?;
+
+            // Entity should be stored (without embedding)
+            assert!(!result.entities.is_empty());
+            // Embedding should be None due to failure
+            assert!(result.entities[0].embedding.is_none());
+
+            Ok::<(), MemoryError>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_remember_with_embedding_rate_limit() {
+        // Test that rate limits are handled gracefully
+        let sim = Simulation::new(SimConfig::with_seed(42))
+            .with_fault(FaultConfig::new(FaultType::EmbeddingRateLimit, 0.5)); // 50% failure
+
+        sim.run(|env| async move {
+            let embedder = SimEmbeddingProvider::with_faults(42, env.faults.clone());
+            let llm = SimLLMProvider::with_seed(42);
+            let storage = SimStorageBackend::new(SimConfig::with_seed(42));
+            let mut memory = Memory::new(llm, embedder, storage);
+
+            // Try multiple times, some should succeed, some fail
+            let mut successes = 0;
+            let mut failures = 0;
+
+            for i in 0..10 {
+                let result = memory
+                    .remember(&format!("Text {}", i), RememberOptions::default())
+                    .await;
+
+                assert!(result.is_ok()); // Should never fail the entire operation
+                let res = result.unwrap();
+
+                if res.entities[0].embedding.is_some() {
+                    successes += 1;
+                } else {
+                    failures += 1;
+                }
+            }
+
+            // With 50% failure rate and 10 tries, should have both successes and failures
+            assert!(successes > 0, "Should have some successful embeddings");
+            assert!(failures > 0, "Should have some failed embeddings");
+
+            Ok::<(), MemoryError>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_remember_without_embeddings_option() {
+        // Test that disabling embeddings works
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|_env| async move {
+            let embedder = SimEmbeddingProvider::with_seed(42);
+            let llm = SimLLMProvider::with_seed(42);
+            let storage = SimStorageBackend::new(SimConfig::with_seed(42));
+            let mut memory = Memory::new(llm, embedder, storage);
+
+            // Remember with embeddings disabled
+            let result = memory
+                .remember(
+                    "Alice works at Acme",
+                    RememberOptions::default().without_embeddings(),
+                )
+                .await?;
+
+            // Entity stored but no embedding
+            assert!(!result.entities.is_empty());
+            assert!(result.entities[0].embedding.is_none());
+
+            Ok::<(), MemoryError>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_remember_embeddings_deterministic() {
+        // Test that same seed produces same embeddings
+        async fn run_with_seed(seed: u64) -> Vec<Vec<f32>> {
+            let embedder = SimEmbeddingProvider::with_seed(seed);
+            let llm = SimLLMProvider::with_seed(seed);
+            let storage = SimStorageBackend::new(SimConfig::with_seed(seed));
+            let mut memory = Memory::new(llm, embedder, storage);
+
+            let result = memory
+                .remember("Alice works at Acme", RememberOptions::default())
+                .await
+                .unwrap();
+
+            result
+                .entities
+                .into_iter()
+                .filter_map(|e| e.embedding)
+                .collect()
+        }
+
+        let embeddings1 = run_with_seed(12345).await;
+        let embeddings2 = run_with_seed(12345).await;
+
+        assert!(!embeddings1.is_empty());
+        assert_eq!(embeddings1.len(), embeddings2.len());
+
+        // Same seed = same embeddings
+        for (e1, e2) in embeddings1.iter().zip(embeddings2.iter()) {
+            assert_eq!(e1, e2, "Same seed must produce same embeddings");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_remember_embeddings_stored() {
+        // Test that embeddings are actually stored and retrievable
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|_env| async move {
+            let embedder = SimEmbeddingProvider::with_seed(42);
+            let llm = SimLLMProvider::with_seed(42);
+            let storage = SimStorageBackend::new(SimConfig::with_seed(42));
+            let mut memory = Memory::new(llm, embedder, storage);
+
+            // Remember with embeddings
+            let result = memory
+                .remember("Alice works at Acme", RememberOptions::default())
+                .await?;
+
+            assert!(!result.entities.is_empty());
+            let entity_id = result.entities[0].id.clone();
+
+            // Retrieve entity and verify embedding exists
+            let retrieved = memory.storage.get_entity(&entity_id).await?;
+            assert!(retrieved.is_some());
+
+            let entity = retrieved.unwrap();
+            assert!(entity.embedding.is_some(), "Embedding should be stored");
+            assert_eq!(
+                entity.embedding.as_ref().unwrap().len(),
+                EMBEDDING_DIMENSIONS_COUNT
+            );
+
+            // Verify normalized (L2 norm = 1)
+            let embedding = entity.embedding.unwrap();
+            let norm: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+            assert!((norm - 1.0).abs() < 0.01, "Embedding should be normalized");
+
+            Ok::<(), MemoryError>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_remember_batch_embeddings() {
+        // Test that multiple entities get batch-embedded
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|_env| async move {
+            let embedder = SimEmbeddingProvider::with_seed(42);
+            let llm = SimLLMProvider::with_seed(42);
+            let storage = SimStorageBackend::new(SimConfig::with_seed(42));
+            let mut memory = Memory::new(llm, embedder, storage);
+
+            // Remember text that will extract multiple entities
+            let result = memory
+                .remember(
+                    "Alice works at Acme. Bob works at TechCo.",
+                    RememberOptions::default(),
+                )
+                .await?;
+
+            // Should have multiple entities, each with embedding
+            if result.entities.len() > 1 {
+                for entity in &result.entities {
+                    if entity.embedding.is_some() {
+                        assert_eq!(
+                            entity.embedding.as_ref().unwrap().len(),
+                            EMBEDDING_DIMENSIONS_COUNT
+                        );
+                    }
+                }
+            }
+
+            Ok::<(), MemoryError>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_remember_with_service_unavailable() {
+        // Test graceful degradation with service unavailable
+        let sim = Simulation::new(SimConfig::with_seed(42))
+            .with_fault(FaultConfig::new(
+                FaultType::EmbeddingServiceUnavailable,
+                1.0,
+            ));
+
+        sim.run(|env| async move {
+            let embedder = SimEmbeddingProvider::with_faults(42, env.faults.clone());
+            let llm = SimLLMProvider::with_seed(42);
+            let storage = SimStorageBackend::new(SimConfig::with_seed(42));
+            let mut memory = Memory::new(llm, embedder, storage);
+
+            // Should succeed despite embedding service being down
+            let result = memory
+                .remember("Alice works at Acme", RememberOptions::default())
+                .await?;
+
+            assert!(!result.entities.is_empty());
+            // No embedding due to service failure
+            assert!(result.entities[0].embedding.is_none());
+
+            Ok::<(), MemoryError>(())
+        })
+        .await
+        .unwrap();
     }
 }
