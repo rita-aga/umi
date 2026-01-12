@@ -493,6 +493,7 @@ impl<
     /// # Graceful Degradation
     /// - If extraction fails, falls back to storing raw text as Note
     /// - If evolution detection fails, skips without error
+    #[tracing::instrument(skip(self, text), fields(text_len = text.len()))]
     pub async fn remember(
         &mut self,
         text: &str,
@@ -526,7 +527,10 @@ impl<
                 .extract(text, ExtractionOptions::default())
                 .await
             {
-                Ok(result) => result.entities,
+                Ok(result) => {
+                    tracing::event!(tracing::Level::INFO, extracted_count = result.entities.len(), "Entities extracted");
+                    result.entities
+                }
                 Err(_) => vec![], // Extraction failed, will use fallback
             }
         } else {
@@ -559,6 +563,7 @@ impl<
 
             match self.embedder.embed_batch(&contents).await {
                 Ok(embeddings) => {
+                    tracing::event!(tracing::Level::INFO, embedding_count = embeddings.len(), "Embeddings generated");
                     // Set embeddings on entities
                     for (entity, embedding) in to_store.iter_mut().zip(embeddings) {
                         entity.set_embedding(embedding);
@@ -615,6 +620,8 @@ impl<
         // Postcondition (TigerStyle)
         debug_assert!(!entities.is_empty(), "must store at least one entity");
 
+        tracing::event!(tracing::Level::INFO, stored_count = entities.len(), evolution_count = evolutions.len(), "Entities stored");
+
         Ok(RememberResult::new(entities, evolutions))
     }
 
@@ -631,6 +638,7 @@ impl<
     /// # Returns
     /// `Ok(Vec<Entity>)` with matching entities,
     /// `Err(MemoryError)` for validation errors.
+    #[tracing::instrument(skip(self), fields(query_len = query.len(), limit = options.limit))]
     pub async fn recall(
         &self,
         query: &str,

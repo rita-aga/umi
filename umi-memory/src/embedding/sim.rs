@@ -190,6 +190,7 @@ impl EmbeddingProvider for SimEmbeddingProvider {
         Ok(self.generate_embedding(text))
     }
 
+    #[tracing::instrument(skip(self, texts), fields(batch_size = texts.len()))]
     async fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, EmbeddingError> {
         // Precondition: batch must not be empty
         if texts.is_empty() {

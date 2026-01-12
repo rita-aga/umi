@@ -173,6 +173,7 @@ impl<L: LLMProvider, E: EmbeddingProvider, V: VectorBackend, S: StorageBackend>
     ///
     /// # Graceful Degradation
     /// If LLM fails during query rewriting, falls back to fast search only.
+    #[tracing::instrument(skip(self), fields(query_len = query.len(), limit = options.limit))]
     pub async fn search(
         &self,
         query: &str,

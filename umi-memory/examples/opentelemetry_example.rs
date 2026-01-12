@@ -82,11 +82,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n✨ Done! Check Jaeger UI for traces:");
     println!("   http://localhost:16686");
     println!("   Service: umi-example");
-    println!("   Look for spans like:");
-    println!("     - memory::remember");
-    println!("     - memory::recall");
-    println!("     - entity_extraction");
-    println!("     - dual_retrieval");
+    println!("\n📋 Spans you'll see:");
+    println!("   - remember (with text_len, stored_count, evolution_count)");
+    println!("   - recall (with query_len, limit)");
+    println!("   - extract (entity extraction)");
+    println!("   - search (dual retrieval)");
+    println!("   - store_entity (storage operations)");
+    println!("   - complete (LLM calls with prompt_len)");
+    println!("   - embed_batch (embedding generation)");
+    println!("   - detect (evolution tracking)");
 
     // Keep the guard alive to flush remaining spans
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;

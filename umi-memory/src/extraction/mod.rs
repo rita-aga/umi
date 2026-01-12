@@ -169,6 +169,7 @@ impl<P: LLMProvider> EntityExtractor<P> {
     /// If the LLM fails or returns invalid JSON, a fallback "note" entity
     /// is created from the input text. This ensures extraction never fails
     /// due to LLM issues.
+    #[tracing::instrument(skip(self, text), fields(text_len = text.len()))]
     pub async fn extract(
         &self,
         text: &str,

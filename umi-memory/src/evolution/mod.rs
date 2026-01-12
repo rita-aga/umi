@@ -216,6 +216,7 @@ impl<L: LLMProvider, S: StorageBackend> EvolutionTracker<L, S> {
     /// # Graceful Degradation
     /// LLM failures return `Ok(None)` instead of errors to avoid breaking
     /// the calling code's flow.
+    #[tracing::instrument(skip(self, new_entity, existing_entities), fields(new_entity_id = %new_entity.id, existing_count = existing_entities.len()))]
     pub async fn detect(
         &self,
         new_entity: &Entity,

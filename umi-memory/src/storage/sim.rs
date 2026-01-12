@@ -105,6 +105,7 @@ impl SimStorageBackend {
 
 #[async_trait]
 impl StorageBackend for SimStorageBackend {
+    #[tracing::instrument(skip(self, entity), fields(entity_id = %entity.id))]
     async fn store_entity(&self, entity: &Entity) -> StorageResult<String> {
         // Check for faults
         self.maybe_inject_fault("store")?;
@@ -118,6 +119,7 @@ impl StorageBackend for SimStorageBackend {
         Ok(entity.id.clone())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_entity(&self, id: &str) -> StorageResult<Option<Entity>> {
         // Check for faults
         self.maybe_inject_fault("get")?;
@@ -134,6 +136,7 @@ impl StorageBackend for SimStorageBackend {
         Ok(storage.remove(id).is_some())
     }
 
+    #[tracing::instrument(skip(self), fields(query_len = query.len()))]
     async fn search(&self, query: &str, limit: usize) -> StorageResult<Vec<Entity>> {
         // Check for faults
         self.maybe_inject_fault("search")?;

@@ -130,6 +130,7 @@ impl SimLLMProvider {
 
 #[async_trait]
 impl LLMProvider for SimLLMProvider {
+    #[tracing::instrument(skip(self, request), fields(prompt_len = request.prompt.len()))]
     async fn complete(&self, request: &CompletionRequest) -> Result<String, ProviderError> {
         // Build the full prompt (system + user prompt)
         let full_prompt = match &request.system {
