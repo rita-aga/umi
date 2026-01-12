@@ -1,5 +1,7 @@
 # Umi
 
+[![Crates.io](https://img.shields.io/crates/v/umi-memory.svg)](https://crates.io/crates/umi-memory)
+[![Documentation](https://docs.rs/umi-memory/badge.svg)](https://docs.rs/umi-memory)
 [![Rust CI](https://github.com/rita-aga/umi/actions/workflows/ci-rust.yml/badge.svg)](https://github.com/rita-aga/umi/actions/workflows/ci-rust.yml)
 [![Python CI](https://github.com/rita-aga/umi/actions/workflows/ci.yml/badge.svg)](https://github.com/rita-aga/umi/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
