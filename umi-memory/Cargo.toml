@@ -71,3 +71,7 @@ harness = false
 [[bench]]
 name = "vector_backends"
 harness = false
+
+[[bench]]
+name = "memory"
+harness = false

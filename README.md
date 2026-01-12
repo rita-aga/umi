@@ -47,19 +47,34 @@ for entity in results:
 ### Rust
 
 ```bash
-cargo add umi-memory --features lance
+cargo add umi-memory
 ```
 
 ```rust
-use umi_memory::{CoreMemory, SimConfig};
+use umi_memory::umi::{Memory, RememberOptions, RecallOptions};
 
-// Create with deterministic seed
-let config = SimConfig::with_seed(42);
-let memory = CoreMemory::new(32 * 1024, config);
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Simulation mode (deterministic, no API calls)
+    let mut memory = Memory::sim(42);
 
-// Store and retrieve
-memory.write(b"important context")?;
-let data = memory.read_all()?;
+    // Remember information
+    let result = memory
+        .remember("Alice works at Acme Corp", RememberOptions::default())
+        .await?;
+    println!("Stored {} entities", result.entity_count());
+
+    // Recall memories
+    let results = memory
+        .recall("Alice", RecallOptions::default())
+        .await?;
+
+    for entity in results {
+        println!("  - {}: {}", entity.name, entity.content);
+    }
+
+    Ok(())
+}
 ```
 
 ## Architecture
@@ -106,8 +121,11 @@ let data = memory.read_all()?;
 
 | Component | Description | Status | Tests |
 |-----------|-------------|--------|-------|
-| **umi-memory** | Rust core (memory tiers, DST) | ✅ Complete | 232 |
+| **umi-memory** | Rust core (memory tiers, DST) | ✅ Complete | 470 |
 | **umi-py** | PyO3 bindings | 🚧 Planned | - |
+| Memory API | Main orchestrator with remember/recall | ✅ Complete | 12 |
+| MemoryBuilder | Builder pattern for Memory construction | ✅ Complete | 11 |
+| MemoryConfig | Global configuration system | ✅ Complete | 13 |
 | EntityExtractor | LLM-powered entity extraction | ✅ Complete | 38 |
 | DualRetriever | Fast + LLM semantic search | ✅ Complete | 42 |
 | EvolutionTracker | Memory relationship detection | ✅ Complete | 31 |
@@ -131,14 +149,35 @@ memory = Memory(provider="openai")
 ### Storage Backends
 
 ```rust
-// Simulation backend (in-memory)
-use umi_memory::{SimStorageBackend, SimVectorBackend};
+use umi_memory::umi::{Memory, MemoryBuilder};
+use umi_memory::embedding::SimEmbeddingProvider;
+use umi_memory::llm::SimLLMProvider;
+use umi_memory::storage::{SimStorageBackend, SimVectorBackend};
 
-// LanceDB backend (persistent, production)
-use umi_memory::LanceVectorBackend;
+// Quick start with simulation (all components)
+let mut memory = Memory::sim(42);
 
-// Postgres backend (with pgvector)
-use umi_memory::PostgresVectorBackend;
+// Or use builder for explicit configuration
+let memory = Memory::builder()
+    .with_llm(SimLLMProvider::with_seed(42))
+    .with_embedder(SimEmbeddingProvider::with_seed(42))
+    .with_vector(SimVectorBackend::new(42))
+    .with_storage(SimStorageBackend::new(/* config */))
+    .build();
+
+// Production with LanceDB (requires 'lance' feature)
+#[cfg(feature = "lance")]
+{
+    use umi_memory::storage::LanceVectorBackend;
+
+    let lance = LanceVectorBackend::connect("./lance_db").await?;
+    let memory = Memory::builder()
+        .with_llm(/* your LLM provider */)
+        .with_embedder(/* your embedding provider */)
+        .with_vector(lance)
+        .with_storage(/* your storage backend */)
+        .build();
+}
 ```
 
 ## Production Mode
@@ -161,6 +200,34 @@ results = await memory.recall("search query")
 ```
 
 ## Configuration
+
+### Memory Configuration (Rust)
+
+```rust
+use umi_memory::umi::{Memory, MemoryConfig};
+use std::time::Duration;
+
+// Default configuration
+let mut memory = Memory::sim(42);
+
+// Custom configuration
+let config = MemoryConfig::default()
+    .with_core_memory_bytes(64 * 1024)  // 64KB core memory
+    .with_recall_limit(20)              // Return up to 20 results
+    .without_embeddings();              // Disable embedding generation
+
+let mut memory = Memory::sim_with_config(42, config);
+
+// Configuration options:
+// - core_memory_bytes: Size of core memory (default: 32KB)
+// - working_memory_bytes: Size of working memory (default: 1MB)
+// - working_memory_ttl: TTL for working memory (default: 1 hour)
+// - generate_embeddings: Enable/disable embeddings (default: true)
+// - embedding_batch_size: Batch size for embedding generation (default: 100)
+// - default_recall_limit: Default limit for recall (default: 10)
+// - semantic_search_enabled: Enable semantic search (default: true)
+// - query_expansion_enabled: Enable query expansion (default: true)
+```
 
 ### Environment Variables
 
@@ -217,7 +284,7 @@ let config = SimConfig::with_seed(42);
 pip install -e ".[dev]"
 pytest -v
 
-# Rust tests (232 tests)
+# Rust tests (470 tests)
 cargo test -p umi-memory --features lance
 
 # All tests with specific DST seed
@@ -246,9 +313,9 @@ memory = Memory(
 
 | Category | Tests | Status | Coverage |
 |----------|-------|--------|----------|
-| **Rust Core** | 232 | ✅ Passing | ~85% |
+| **Rust Core** | 470 | ✅ Passing | ~85% |
 | **Python Layer** | 145 | ✅ Passing | ~78% |
-| **Total** | 377 | ✅ All Passing | ~82% |
+| **Total** | 615 | ✅ All Passing | ~82% |
 
 ## Performance
 
@@ -383,7 +450,7 @@ See [CLAUDE.md](./CLAUDE.md) for development guidelines.
 
 Key principles:
 1. **Simulation-first** - Every component has a Sim implementation
-2. **Tests must pass** - All 377 tests before commit
+2. **Tests must pass** - All 615 tests before commit
 3. **TigerStyle** - Explicit limits, assertions, no silent failures
 4. **No stubs** - Complete implementations or don't merge
 5. **Graceful degradation** - Handle LLM failures elegantly
