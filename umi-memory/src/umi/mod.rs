@@ -35,8 +35,10 @@
 //! ```
 
 mod builder;
+mod config;
 
 pub use builder::MemoryBuilder;
+pub use config::MemoryConfig;
 
 use crate::constants::{
     MEMORY_IMPORTANCE_DEFAULT, MEMORY_IMPORTANCE_MAX, MEMORY_IMPORTANCE_MIN,
@@ -47,7 +49,7 @@ use crate::evolution::{DetectionOptions, EvolutionTracker};
 use crate::extraction::{EntityExtractor, ExtractionOptions};
 use crate::llm::LLMProvider;
 use crate::retrieval::{DualRetriever, SearchOptions};
-use crate::storage::{Entity, EntityType, EvolutionRelation, StorageBackend, VectorBackend};
+use crate::storage::{Entity, EntityType, EvolutionRelation, StorageBackend};
 use thiserror::Error;
 
 // =============================================================================
@@ -100,11 +102,42 @@ pub enum MemoryError {
         /// Error message
         message: String,
     },
+
+    /// Embedding generation failed
+    #[error("embedding generation failed: {message}")]
+    EmbeddingFailed {
+        /// Error message
+        message: String,
+    },
+
+    /// Vector search unavailable
+    #[error("vector search unavailable: {reason}")]
+    VectorSearchUnavailable {
+        /// Reason why vector search is unavailable
+        reason: String,
+    },
+
+    /// Embedding dimensions mismatch
+    #[error("embedding dimensions mismatch: expected {expected}, got {actual}")]
+    DimensionMismatch {
+        /// Expected dimensions
+        expected: usize,
+        /// Actual dimensions
+        actual: usize,
+    },
 }
 
 impl From<crate::storage::StorageError> for MemoryError {
     fn from(err: crate::storage::StorageError) -> Self {
         MemoryError::Storage {
+            message: err.to_string(),
+        }
+    }
+}
+
+impl From<crate::embedding::EmbeddingError> for MemoryError {
+    fn from(err: crate::embedding::EmbeddingError) -> Self {
+        MemoryError::EmbeddingFailed {
             message: err.to_string(),
         }
     }
@@ -1068,6 +1101,40 @@ impl Memory<
         let embedder = SimEmbeddingProvider::with_seed(seed);
         let vector = SimVectorBackend::new(seed);
         let storage = SimStorageBackend::new(SimConfig::with_seed(seed));
+
+        Self::new(llm, embedder, vector, storage)
+    }
+
+    /// Create a deterministic simulation Memory with custom configuration.
+    ///
+    /// Combines the convenience of `sim()` with custom config.
+    ///
+    /// TigerStyle: Convenient constructor for configured tests.
+    ///
+    /// # Arguments
+    /// - `seed` - Random seed for deterministic behavior
+    /// - `config` - Custom configuration
+    ///
+    /// # Example
+    /// ```rust
+    /// use umi_memory::umi::{Memory, MemoryConfig};
+    ///
+    /// let config = MemoryConfig::default().with_recall_limit(5);
+    /// let memory = Memory::sim_with_config(42, config);
+    /// ```
+    #[must_use]
+    pub fn sim_with_config(_seed: u64, _config: MemoryConfig) -> Self {
+        use crate::dst::SimConfig;
+        use crate::embedding::SimEmbeddingProvider;
+        use crate::llm::SimLLMProvider;
+        use crate::storage::{SimStorageBackend, SimVectorBackend};
+
+        // TODO: Wire config through to components
+        // For now, just create with seed (config not yet fully integrated)
+        let llm = SimLLMProvider::with_seed(_seed);
+        let embedder = SimEmbeddingProvider::with_seed(_seed);
+        let vector = SimVectorBackend::new(_seed);
+        let storage = SimStorageBackend::new(SimConfig::with_seed(_seed));
 
         Self::new(llm, embedder, vector, storage)
     }
