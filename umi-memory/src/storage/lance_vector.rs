@@ -224,18 +224,43 @@ impl VectorBackend for LanceVectorBackend {
             return Ok(());
         }
 
-        let table = self.get_table().await?;
-        let schema = self.create_schema();
-        let batch = self.create_batch_from_embedding(id, embedding, &schema)?;
+        // Retry logic for optimistic concurrency control
+        // LanceDB uses optimistic concurrency (like Git commits)
+        const MAX_RETRIES: u32 = 10;
+        let mut retry_count = 0;
 
-        // Add to table (LanceDB will handle updates if ID exists)
-        let batches = RecordBatchIterator::new(vec![Ok(batch)], schema.clone());
-        table
-            .add(Box::new(batches), None)
-            .await
-            .map_err(|e| StorageError::WriteFailed(e.to_string()))?;
+        loop {
+            let table = self.get_table().await?;
 
-        Ok(())
+            // Delete existing entry if present (upsert behavior)
+            // LanceDB .add() creates duplicates, so we must delete first
+            let filter = format!("id = '{}'", id);
+            let _ = table.delete(&filter).await; // Ignore error if doesn't exist
+
+            // Add new entry
+            let schema = self.create_schema();
+            let batch = self.create_batch_from_embedding(id, embedding, &schema)?;
+            let batches = RecordBatchIterator::new(vec![Ok(batch)], schema.clone());
+
+            match table.add(Box::new(batches), None).await {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    let err_msg = e.to_string();
+
+                    // Retry on commit conflicts (optimistic concurrency control)
+                    if err_msg.contains("Commit conflict") && retry_count < MAX_RETRIES {
+                        retry_count += 1;
+                        // Exponential backoff: 2^retry_count milliseconds
+                        let delay_ms = 2u64.pow(retry_count);
+                        tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+                        continue;
+                    }
+
+                    // Non-retryable error or max retries exceeded
+                    return Err(StorageError::WriteFailed(err_msg));
+                }
+            }
+        }
     }
 
     async fn search(

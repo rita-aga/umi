@@ -347,15 +347,30 @@ InvalidArgumentError("Found unmasked nulls for non-nullable StructArray field \"
    - ✅ `test_lance_vector_store_and_search` - PASS
    - ✅ `test_lance_vector_update` - PASS
 
-**Test Suite**: All 457 tests pass (up from 439)
+**Test Suite**:
+- Unit tests: 457 tests pass (up from 439)
+- DST tests: 17 comprehensive tests covering persistence, consistency, concurrency, edge cases
+- **Total: 474 tests pass**
 
 **Files Created**:
-- `umi-memory/src/storage/lance_vector.rs` - LanceVectorBackend implementation (~450 lines)
+- `umi-memory/src/storage/lance_vector.rs` - LanceVectorBackend (~450 lines)
+- `umi-memory/tests/dst_lance_vector.rs` - DST test suite (17 tests, ~550 lines)
 - Updated `umi-memory/src/storage/mod.rs` - Export LanceVectorBackend
+- Fixed `umi-memory/src/retrieval/mod.rs` - Updated doctest example
 
-**Next Steps**:
-1. Investigate Lance vector index requirements
-2. Check if Lance table needs `create_index()` call before search
-3. Review Lance documentation for proper vector search setup
-4. Consider reaching out to Lance community for help
+**DST Testing Discoveries**:
+
+1. **Upsert Behavior**: LanceDB `.add()` creates duplicates instead of updating. Required explicit delete-then-add pattern.
+
+2. **Optimistic Concurrency**: LanceDB uses Git-style optimistic concurrency control. Concurrent writes cause commit conflicts requiring retry logic with exponential backoff (implemented with 10 retries).
+
+3. **Table Initialization**: Concurrent table creation causes conflicts. Solution: Pre-create table with dummy write before concurrent operations.
+
+4. **Production Characteristics**:
+   - Persistent storage across connections ✅
+   - Handles moderate concurrent writes (2-3 simultaneous) ✅
+   - Native ANN vector search works correctly ✅
+   - Behaves consistently with SimVectorBackend ✅
+
+**Phase 4.2 Status**: ✅ **COMPLETE with DST-FIRST**
 

@@ -19,14 +19,17 @@
 //! ```rust
 //! use umi_memory::retrieval::{DualRetriever, SearchOptions};
 //! use umi_memory::llm::SimLLMProvider;
-//! use umi_memory::storage::SimStorageBackend;
+//! use umi_memory::embedding::SimEmbeddingProvider;
+//! use umi_memory::storage::{SimStorageBackend, SimVectorBackend};
 //! use umi_memory::dst::SimConfig;
 //!
 //! #[tokio::main]
 //! async fn main() {
 //!     let llm = SimLLMProvider::with_seed(42);
+//!     let embedder = SimEmbeddingProvider::with_seed(42);
+//!     let vector = SimVectorBackend::new(42);
 //!     let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-//!     let retriever = DualRetriever::new(llm, storage);
+//!     let retriever = DualRetriever::new(llm, embedder, vector, storage);
 //!
 //!     let result = retriever.search("Who works at Acme?", SearchOptions::default()).await.unwrap();
 //!     println!("Found {} results", result.len());
