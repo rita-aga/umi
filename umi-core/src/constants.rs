@@ -232,6 +232,28 @@ pub const RETRIEVAL_QUERY_REWRITE_COUNT_MAX: usize = 3;
 pub const RETRIEVAL_RRF_K: usize = 60;
 
 // =============================================================================
+// Memory Class Limits (ADR-017)
+// =============================================================================
+
+/// Maximum text size for remember operations
+pub const MEMORY_TEXT_BYTES_MAX: usize = 100_000;
+
+/// Maximum results for recall operations
+pub const MEMORY_RECALL_LIMIT_MAX: usize = 100;
+
+/// Default results for recall operations
+pub const MEMORY_RECALL_LIMIT_DEFAULT: usize = 10;
+
+/// Default importance for entities
+pub const MEMORY_IMPORTANCE_DEFAULT: f32 = 0.5;
+
+/// Minimum importance value
+pub const MEMORY_IMPORTANCE_MIN: f32 = 0.0;
+
+/// Maximum importance value
+pub const MEMORY_IMPORTANCE_MAX: f32 = 1.0;
+
+// =============================================================================
 // Time Constants
 // =============================================================================
 

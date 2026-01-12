@@ -30,7 +30,7 @@ use super::error::{StorageError, StorageResult};
 /// - Deterministic via SimClock and DeterministicRng
 /// - Fault injection via FaultInjector
 /// - Thread-safe with RwLock
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SimStorageBackend {
     /// Stored entities indexed by ID
     storage: Arc<RwLock<HashMap<String, Entity>>>,

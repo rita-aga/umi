@@ -96,12 +96,12 @@ const COMMON_ORGS: &[&str] = &[
 ///
 /// // Same seed = same response
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SimLLM {
     /// Simulated clock for latency
     clock: SimClock,
-    /// RNG with thread-safe interior mutability
-    rng: Mutex<DeterministicRng>,
+    /// RNG with thread-safe interior mutability (Arc for Clone)
+    rng: Arc<Mutex<DeterministicRng>>,
     /// Shared fault injector
     fault_injector: Arc<FaultInjector>,
     /// Base latency for simulated responses
@@ -121,7 +121,7 @@ impl SimLLM {
     pub fn new(clock: SimClock, rng: DeterministicRng, fault_injector: Arc<FaultInjector>) -> Self {
         Self {
             clock,
-            rng: Mutex::new(rng),
+            rng: Arc::new(Mutex::new(rng)),
             fault_injector,
             base_latency_ms: LLM_LATENCY_MS_DEFAULT,
             simulate_latency_enabled: true,

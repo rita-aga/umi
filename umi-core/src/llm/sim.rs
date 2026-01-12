@@ -45,7 +45,7 @@ use crate::dst::{DeterministicRng, FaultInjector, LLMError, SimClock, SimLLM};
 ///     assert_eq!(response, response2);
 /// }
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SimLLMProvider {
     /// The underlying SimLLM from DST
     inner: SimLLM,

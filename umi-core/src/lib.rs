@@ -58,6 +58,7 @@ pub mod llm;
 pub mod memory;
 pub mod retrieval;
 pub mod storage;
+pub mod umi;
 
 // Re-export common types
 pub use constants::*;
@@ -116,3 +117,6 @@ pub use retrieval::{DualRetriever, RetrievalError, SearchOptions, SearchResult};
 
 // Evolution exports
 pub use evolution::{DetectionOptions, DetectionResult, EvolutionError, EvolutionTracker};
+
+// Umi Memory exports (main API)
+pub use umi::{Memory, MemoryError, RecallOptions, RememberOptions, RememberResult};

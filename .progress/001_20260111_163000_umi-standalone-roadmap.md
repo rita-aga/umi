@@ -148,7 +148,7 @@ Phase R0: SimLLM Foundation ✅ COMPLETE
 ├── Evolution detection routing
 └── Fault injection support
 
-Phase R1: Port Python Layer to Rust (IN PROGRESS)
+Phase R1: Port Python Layer to Rust ✅ COMPLETE
 ├── [✅] LLM Provider Trait (ADR-013)
 │   ├── LLMProvider trait (generic, async)
 │   ├── SimLLMProvider (wraps SimLLM)
@@ -171,7 +171,12 @@ Phase R1: Port Python Layer to Rust (IN PROGRESS)
 │   ├── Uses existing EvolutionType, EvolutionRelation from storage
 │   ├── Graceful degradation (returns None on LLM failure)
 │   └── Confidence threshold filtering
-└── [ ] Memory class (orchestrates all components)
+└── [✅] Memory class (ADR-017)
+    ├── Memory<L: LLMProvider, S: StorageBackend>
+    ├── RememberOptions, RecallOptions, RememberResult
+    ├── Orchestrates EntityExtractor, DualRetriever, EvolutionTracker
+    ├── Graceful degradation (fallback to Note on extraction failure)
+    └── TigerStyle: Preconditions, postconditions, explicit limits
 
 Phase R2: Storage Backends in Rust
 ├── PostgreSQL (sqlx)
@@ -193,6 +198,7 @@ Phase R3: Publish to crates.io
 | 2026-01-11 | R1 | EntityExtractor | 263 → 301 |
 | 2026-01-11 | R1 | DualRetriever | 301 → 334 |
 | 2026-01-11 | R1 | EvolutionTracker | 334 → 371 |
+| 2026-01-11 | R1 | Memory class (PHASE R1 COMPLETE) | 371 → 394 |
 
 ### When to Choose Full Rust
 
