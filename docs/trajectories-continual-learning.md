@@ -898,6 +898,574 @@ From the [Tinker × Agent Lightning integration](https://medium.com/@yugez/tunin
 
 ---
 
+## Part 11: LLM-Extracted Decisions and Entities
+
+### The Enrichment Pipeline
+
+Decisions and entities are **extracted post-hoc by LLMs**, not captured at runtime:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Trajectory Enrichment Pipeline                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  1. RUNTIME: Agent executes, produces raw trajectory            │
+│     ┌─────────────────────────────────────────────────────────┐ │
+│     │ messages: [user, assistant, tool_call, tool_result, ...]│ │
+│     │ outcome: success/failure                                 │ │
+│     │ (no structured decisions/entities yet)                   │ │
+│     └─────────────────────────────────────────────────────────┘ │
+│                              │                                   │
+│                              ▼                                   │
+│  2. POST-HOC EXTRACTION: LLM analyzes trajectory                │
+│     ┌─────────────────────────────────────────────────────────┐ │
+│     │ LLM prompt: "What decisions were made? What entities?"  │ │
+│     │                                                          │ │
+│     │ Extracted decisions: [                                   │ │
+│     │   {type: "tool_selection", reasoning: "...",            │ │
+│     │    alternatives: [...], confidence: 0.9}                 │ │
+│     │ ]                                                        │ │
+│     │                                                          │ │
+│     │ Extracted entities: [                                    │ │
+│     │   {name: "ACME Corp", type: "org", discovered_at: 1}    │ │
+│     │ ]                                                        │ │
+│     └─────────────────────────────────────────────────────────┘ │
+│                              │                                   │
+│                              ▼                                   │
+│  3. ENRICHED TRAJECTORY: Store for all uses                    │
+│     ┌─────────────────────────────────────────────────────────┐ │
+│     │ {                                                        │ │
+│     │   raw_messages: [...],                                   │ │
+│     │   decisions: [...],      ← LLM-extracted                 │ │
+│     │   entities: [...],       ← LLM-extracted                 │ │
+│     │   outcome: "success",                                    │ │
+│     │   reward: 0.85                                           │ │
+│     │ }                                                        │ │
+│     └─────────────────────────────────────────────────────────┘ │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Extraction Implementation
+
+```python
+async def enrich_trajectory(raw_trajectory: RawTrajectory) -> EnrichedTrajectory:
+    """Extract decisions and entities from raw trajectory using LLM."""
+
+    # Extract decisions
+    decisions = await llm.extract(
+        prompt=f"""
+        Analyze this agent trajectory and extract all decisions made:
+
+        {format_messages(raw_trajectory.messages)}
+
+        For each decision, identify:
+        - type: tool_selection | reasoning | branching | backtrack | delegation
+        - reasoning: why this choice was made
+        - alternatives_considered: other options the agent could have taken
+        - chosen_action: what the agent actually did
+        - confidence: how certain the agent seemed (0-1)
+        - step_index: which step this decision occurred at
+        """,
+        output_schema=DecisionList
+    )
+
+    # Extract entities
+    entities = await llm.extract(
+        prompt=f"""
+        What entities were discovered or referenced in this trajectory?
+
+        {format_messages(raw_trajectory.messages)}
+
+        For each entity, identify:
+        - name: the entity identifier
+        - type: person | org | service | metric | document | etc.
+        - discovered_at_step: when first mentioned
+        - importance: critical | relevant | peripheral
+        - relationships: connections to other entities
+        """,
+        output_schema=EntityList
+    )
+
+    return EnrichedTrajectory(
+        raw=raw_trajectory,
+        decisions=decisions,
+        entities=entities,
+        # Reward computed later using extracted structure
+    )
+```
+
+### Runtime Capture vs LLM Extraction
+
+| Aspect | Runtime Capture | LLM Extraction |
+|--------|-----------------|----------------|
+| **When** | During execution | After execution |
+| **Source** | Structured logging | LLM interpretation |
+| **Cost** | Zero | LLM call per trajectory |
+| **Accuracy** | Exact | Interpreted |
+| **Flexibility** | Fixed schema | Can re-extract with better prompts |
+| **Works on** | Only your agents | Any agent's trajectories |
+
+### Advantages of LLM Extraction
+
+1. **Works on any trajectory** - Even from agents you don't control
+2. **Can improve over time** - Better prompts → better extraction
+3. **Can re-process** - Extract new fields from old trajectories
+4. **Richer interpretation** - LLM can infer implicit decisions
+
+```python
+# LLM can infer decisions that weren't explicitly logged
+raw_message = "I'll check the database first, then verify with the API"
+
+# Extracted decision (implicit sequencing choice):
+decisions = [{
+    "type": "sequencing",
+    "reasoning": "Prioritizing database as primary source",
+    "alternatives": ["API first", "parallel queries"],
+    "implicit": True  # Agent didn't explicitly log this
+}]
+```
+
+---
+
+## Part 12: GRPO Variants and Credit Assignment
+
+### The Credit Assignment Problem
+
+Standard GRPO uses **outcome-only (sparse) rewards**:
+
+```
+Step 1: query_database    → reward: ???
+Step 2: calculate_metrics → reward: ???
+Step 3: generate_report   → reward: ???
+                            ─────────────
+Final outcome: Success    → reward: 1.0  ← Only this is known
+```
+
+All steps get the same reward. No distinction between good and bad intermediate steps.
+
+### GRPO Variants with Per-Step Rewards
+
+| Variant | Per-Step? | How It Works | Source |
+|---------|-----------|--------------|--------|
+| **Vanilla GRPO** | No | Outcome reward only | DeepSeek |
+| **GRPO + LightningRL** | Yes | Credit assignment module | Microsoft |
+| **GSPO** | Yes | Sequence-level importance sampling | Qwen/Alibaba |
+| **GRPO + PRM** | Yes | Process Reward Model scores steps | OpenAI-style |
+| **ART per-turn** | Yes | Each turn has its own reward | OpenPipe |
+
+### GSPO (Group Sequence Policy Optimization)
+
+From Qwen team, supported in [Unsloth](https://unsloth.ai/docs/get-started/reinforcement-learning-rl-guide/gspo-reinforcement-learning):
+
+```python
+from unsloth import GRPOConfig
+
+config = GRPOConfig(
+    importance_sampling_level="sequence"  # Enables GSPO
+)
+# GRPO: token-level importance sampling
+# GSPO: sequence/step-level importance sampling
+```
+
+### LightningRL Credit Assignment
+
+[Agent Lightning's](https://github.com/microsoft/agent-lightning) hierarchical approach:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                LightningRL Credit Assignment                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Episode reward: 1.0                                            │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  Step 1: Credit Assignment Module                        │    │
+│  │                                                          │    │
+│  │  Episode Return (1.0)                                    │    │
+│  │       │                                                  │    │
+│  │       ▼                                                  │    │
+│  │  Distribute across actions (LLM calls)                   │    │
+│  │       │                                                  │    │
+│  │       ├── Action 1: 0.3                                  │    │
+│  │       ├── Action 2: 0.2                                  │    │
+│  │       └── Action 3: 0.5                                  │    │
+│  │                                                          │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  Step 2: Token-Level Supervision                         │    │
+│  │                                                          │    │
+│  │  Each action's credit distributed to its tokens          │    │
+│  │  Apply GRPO/PPO/REINFORCE++ per action                   │    │
+│  │                                                          │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### AIR (Automatic Intermediate Rewarding)
+
+From Agent Lightning - turns system signals into intermediate rewards:
+
+```python
+# Tool return status → intermediate reward
+def air_reward(step):
+    if step.tool_call.status == "success":
+        return 0.1  # Small positive reward
+    elif step.tool_call.status == "error":
+        return -0.1  # Small negative reward
+    else:
+        return 0.0
+```
+
+### Using Decisions for Credit Assignment
+
+LLM-extracted decisions enable **smarter credit assignment**:
+
+```python
+def decision_based_credit(trajectory: EnrichedTrajectory) -> list[float]:
+    """Assign credit using extracted decision structure."""
+    credits = []
+
+    for step in trajectory.steps:
+        decision = step.decision
+        credit = 0.0
+
+        # Reward based on decision quality
+        if decision.confidence > 0.8:
+            credit += 0.1
+
+        # Reward considering alternatives (shows reasoning)
+        if decision.alternatives_considered:
+            credit += 0.1
+
+        # Reward entity discovery
+        new_entities = step.entities_discovered
+        credit += 0.05 * len(new_entities)
+
+        # Weight critical decision points more
+        if decision.type == "branching":
+            credit *= 1.5
+
+        # Penalize backtracking
+        if decision.type == "backtrack":
+            credit -= 0.2
+
+        credits.append(credit)
+
+    # Normalize to sum to final_reward
+    total = sum(credits)
+    if total > 0:
+        credits = [c * trajectory.final_reward / total for c in credits]
+
+    return credits
+```
+
+---
+
+## Part 13: Tinker Integration
+
+### What is Tinker?
+
+[Tinker](https://thinkingmachines.ai/tinker/) from Thinking Machines Lab (founded by former OpenAI CTO Mira Murati) provides **token-level training primitives**:
+
+```python
+# Tinker's low-level API
+tinker.forward_backward(tokens, rewards)  # Token-level gradients
+tinker.sample(prompt)                      # Generate tokens
+tinker.update()                            # Update weights
+tinker.checkpoint()                        # Save state
+```
+
+### Tinker vs Other Frameworks
+
+| Framework | Level | You Handle | It Handles |
+|-----------|-------|------------|------------|
+| **Tinker** | Token | Credit assignment, loss function | Distributed compute, gradients |
+| **Unsloth** | Step/Turn | Data, rewards | Training loop, GRPO |
+| **Fireworks** | Trajectory | Evaluator | Everything else |
+
+### Tinker × Agent Lightning Integration
+
+From the [tutorial](https://medium.com/@yugez/tuning-any-ai-agent-with-tinker-agent-lightning-part-1-1d8c9a397f0e):
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Tinker × Agent Lightning                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Agent Lightning (What to train on)    Tinker (How to train)   │
+│  ┌─────────────────────────────────┐  ┌─────────────────────┐  │
+│  │ • Collect rollouts              │  │ • Token-level API   │  │
+│  │ • LightningRL credit assignment │──│ • Distributed GPU   │  │
+│  │ • Group by task                 │  │ • forward_backward  │  │
+│  │ • AIR intermediate rewards      │  │ • GRPO/PPO impl     │  │
+│  └─────────────────────────────────┘  └─────────────────────┘  │
+│                                                                  │
+│  Separation of concerns:                                        │
+│  • Agent Lightning: data pipeline, credit assignment            │
+│  • Tinker: distributed training infrastructure                  │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Two Clients Architecture
+
+```python
+# Tinker's architecture
+training_client = TinkerTrainingClient()   # Forward/backward, weight updates
+sampling_client = TinkerSamplingClient()   # Generate new data for training
+
+# Training loop
+while training:
+    # Sample new trajectories using current model
+    rollouts = sampling_client.generate(prompts)
+
+    # Score and assign credit (Agent Lightning)
+    transitions = lightning_rl.process(rollouts)
+
+    # Train with token-level control (Tinker)
+    for transition in transitions:
+        tokens = tokenize(transition)
+        rewards = transition.per_token_rewards
+        training_client.forward_backward(tokens, rewards)
+
+    training_client.update()
+```
+
+---
+
+## Part 14: How Decisions and Entities Flow Through Training
+
+### The Complete Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│         How Decisions + Entities Flow Through Training           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  1. CAPTURE: Raw trajectory (messages, tool calls)              │
+│                              │                                   │
+│                              ▼                                   │
+│  2. EXTRACT: LLM extracts decisions + entities                  │
+│                              │                                   │
+│     ┌────────────────────────┼────────────────────────┐         │
+│     │                        │                        │         │
+│     ▼                        ▼                        ▼         │
+│  ┌─────────┐          ┌─────────────┐          ┌──────────┐    │
+│  │ Better  │          │   Better    │          │  Better  │    │
+│  │ Rewards │          │  Grouping   │          │  Credit  │    │
+│  │         │          │             │          │Assignment│    │
+│  │entities │          │ entity      │          │ decision │    │
+│  │inform   │          │ similarity  │          │ quality  │    │
+│  │scoring  │          │ for GRPO    │          │ scoring  │    │
+│  └────┬────┘          └──────┬──────┘          └────┬─────┘    │
+│       │                      │                      │           │
+│       └──────────────────────┼──────────────────────┘           │
+│                              │                                   │
+│                              ▼                                   │
+│  3. TRAINING: GRPO sees messages + computed rewards             │
+│     ┌─────────────────────────────────────────────────────────┐ │
+│     │ Messages: "I'll query the database..."                  │ │
+│     │ Reward: 0.85 (computed using decisions/entities)        │ │
+│     │                                                          │ │
+│     │ The STRUCTURE is not in gradients,                      │ │
+│     │ but it INFORMED the reward that drives gradients        │ │
+│     └─────────────────────────────────────────────────────────┘ │
+│                              │                                   │
+│                              ▼                                   │
+│  4. MODEL UPDATE: Weights adjusted based on rewards             │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### What Gradients Actually See
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              What the Training Actually Uses                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Your Rich Format                    What Enters Gradient       │
+│  ┌─────────────────────────┐        ┌─────────────────────────┐ │
+│  │ decisions: [            │        │                         │ │
+│  │   {type: "tool",        │        │ tokens: [1547, 892, ...]│ │
+│  │    reasoning: "...",    │   ──►  │ reward: 0.85            │ │
+│  │    confidence: 0.9}     │        │                         │ │
+│  │ ]                       │        │ (that's it)             │ │
+│  │ entities: [...]         │        │                         │ │
+│  └─────────────────────────┘        └─────────────────────────┘ │
+│                                                                  │
+│  BUT the 0.85 reward was COMPUTED using decisions/entities     │
+│  So the structure influenced training INDIRECTLY               │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Where Decisions/Entities Are Used
+
+| Use | How It Works | Framework |
+|-----|--------------|-----------|
+| **Reward computation** | `reward = f(decision_quality, entity_coverage)` | All |
+| **GRPO grouping** | Group by entity overlap, not just task string | All GRPO |
+| **Credit assignment** | Per-decision rewards based on quality | Agent Lightning |
+| **Data filtering** | Only train on trajectories with good decisions | All |
+| **RULER rubrics** | "Did agent identify all entities?" | ART |
+| **Context learning** | Retrieve by entity similarity | Inference-time |
+| **Simulation** | Predict based on entity state | Inference-time |
+
+### Example: Entity-Based Reward
+
+```python
+def entity_aware_reward(trajectory: EnrichedTrajectory) -> float:
+    """Compute reward using extracted entities."""
+    # Get expected entities for this task type
+    expected = get_expected_entities(trajectory.task)
+    extracted = set(e.name for e in trajectory.entities)
+
+    # Precision: of what we found, how much was relevant?
+    precision = len(extracted & expected) / len(extracted) if extracted else 0
+
+    # Recall: of what exists, how much did we find?
+    recall = len(extracted & expected) / len(expected) if expected else 0
+
+    # F1 score
+    if precision + recall > 0:
+        entity_score = 2 * precision * recall / (precision + recall)
+    else:
+        entity_score = 0
+
+    # Combine with outcome
+    outcome_score = 1.0 if trajectory.outcome == "success" else 0.0
+
+    return 0.6 * outcome_score + 0.4 * entity_score
+```
+
+### Example: Decision-Based Grouping for GRPO
+
+```python
+def entity_based_grouping(trajectories: list[EnrichedTrajectory]) -> list[list]:
+    """Group trajectories by entity overlap for GRPO."""
+    groups = []
+
+    for t in trajectories:
+        entity_set = frozenset(e.name for e in t.entities)
+
+        # Find best matching group
+        best_group = None
+        best_overlap = 0.0
+
+        for group in groups:
+            group_entities = frozenset(
+                e.name for traj in group for e in traj.entities
+            )
+            overlap = len(entity_set & group_entities) / len(entity_set | group_entities)
+
+            if overlap > best_overlap and overlap > 0.3:  # Threshold
+                best_overlap = overlap
+                best_group = group
+
+        if best_group:
+            best_group.append(t)
+        else:
+            groups.append([t])
+
+    return groups
+
+# Result: trajectories about "ACME sales" and "ACME revenue"
+# are in same group because they share the ACME entity
+```
+
+### The Key Insight
+
+**LLM extraction is another form of LLM-as-judge**, but for structure instead of score:
+
+| RULER | Decision/Entity Extraction |
+|-------|----------------------------|
+| Input: trajectory | Input: trajectory |
+| Output: score (0.85) | Output: structure ([decisions], [entities]) |
+| Used as: reward | Used for: reward computation, grouping, credit |
+
+Both use LLMs to interpret trajectories. Extraction just produces **richer structure** that enables more sophisticated training pipelines.
+
+---
+
+## Part 15: Putting It All Together
+
+### The Complete Training Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Complete Training Pipeline                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  RUST RUNTIME (Letta-rs + Umi)                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ Agent executes → Raw trajectories                        │    │
+│  └────────────────────────┬────────────────────────────────┘    │
+│                           │                                      │
+│                           ▼                                      │
+│  LLM EXTRACTION                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ Extract decisions + entities from raw trajectories       │    │
+│  │ Store enriched trajectories in Umi                       │    │
+│  └────────────────────────┬────────────────────────────────┘    │
+│                           │                                      │
+│         ┌─────────────────┼─────────────────┐                   │
+│         │                 │                 │                    │
+│         ▼                 ▼                 ▼                    │
+│  ┌───────────┐     ┌───────────┐     ┌───────────┐              │
+│  │  Reward   │     │  GRPO     │     │  Credit   │              │
+│  │Computation│     │ Grouping  │     │Assignment │              │
+│  │           │     │           │     │           │              │
+│  │ entities →│     │ entities →│     │decisions→ │              │
+│  │  score    │     │  groups   │     │ per-step  │              │
+│  └─────┬─────┘     └─────┬─────┘     └─────┬─────┘              │
+│        │                 │                 │                     │
+│        └─────────────────┼─────────────────┘                     │
+│                          │                                       │
+│                          ▼                                       │
+│  TRAINING (Agent Lightning + Tinker/Unsloth)                    │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ Input: messages + computed rewards + credit assignments  │    │
+│  │ Algorithm: GRPO/GSPO/PPO                                  │    │
+│  │ Output: updated model weights                             │    │
+│  └────────────────────────┬────────────────────────────────┘    │
+│                           │                                      │
+│                           ▼                                      │
+│  DEPLOYMENT                                                      │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ Deploy improved model back to Rust agent                  │    │
+│  │ Flywheel: better model → better trajectories → repeat    │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Framework Selection Guide
+
+| Your Situation | Recommended Stack |
+|----------------|-------------------|
+| **Managed, low ops** | Fireworks RFT |
+| **Open source, local GPU** | Unsloth + ART + RULER |
+| **Custom credit assignment** | Agent Lightning + Unsloth |
+| **Maximum control** | Agent Lightning + Tinker |
+| **Per-step rewards needed** | Any with LightningRL or GSPO |
+
+### What Your Trajectory Format Enables
+
+| Capability | Without Decisions/Entities | With Decisions/Entities |
+|------------|---------------------------|-------------------------|
+| Reward | Outcome only (0/1) | Quality-based (0.0-1.0) |
+| Grouping | Task string match | Semantic entity overlap |
+| Credit assignment | Uniform across steps | Per-decision quality |
+| Filtering | Outcome-based | Decision quality + entity coverage |
+| Context learning | Task similarity | Entity + decision similarity |
+| Simulation | Basic | Decision-point counterfactuals |
+
+---
+
 ## Conclusion
 
 Trajectories complete the Rust agent ecosystem by providing:
