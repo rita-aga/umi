@@ -1,12 +1,12 @@
-//! TigerStyle Constants
+//! `TigerStyle` Constants
 //!
-//! All limits use big-endian naming: CATEGORY_SPECIFICS_UNIT_LIMIT
-//! Example: CORE_MEMORY_SIZE_BYTES_MAX (not MAX_CORE_MEMORY_SIZE)
+//! All limits use big-endian naming: `CATEGORY_SPECIFICS_UNIT_LIMIT`
+//! Example: `CORE_MEMORY_SIZE_BYTES_MAX` (not `MAX_CORE_MEMORY_SIZE`)
 //!
 //! Every constant includes units in the name:
-//! - _BYTES_MAX/MIN for size limits
-//! - _SECS_DEFAULT for time durations
-//! - _COUNT_MAX for quantity limits
+//! - _`BYTES_MAX/MIN` for size limits
+//! - _`SECS_DEFAULT` for time durations
+//! - _`COUNT_MAX` for quantity limits
 //! - _MS for milliseconds
 
 // =============================================================================
@@ -268,6 +268,34 @@ pub const TIME_MS_PER_HOUR: u64 = 60 * TIME_MS_PER_MIN;
 
 /// Milliseconds per day
 pub const TIME_MS_PER_DAY: u64 = 24 * TIME_MS_PER_HOUR;
+
+// =============================================================================
+// OpenTelemetry Limits
+// =============================================================================
+
+/// Maximum batch size for telemetry spans
+pub const TELEMETRY_BATCH_SIZE_MAX: usize = 512;
+
+/// Timeout for telemetry export in milliseconds
+pub const TELEMETRY_EXPORT_TIMEOUT_MS: u64 = 5000; // 5 seconds
+
+/// Maximum size of telemetry span queue
+pub const TELEMETRY_SPAN_QUEUE_SIZE_MAX: usize = 2048;
+
+/// Default sampling rate (1.0 = 100%, all spans sampled)
+pub const TELEMETRY_SAMPLING_RATE_DEFAULT: f64 = 1.0;
+
+/// Minimum sampling rate
+pub const TELEMETRY_SAMPLING_RATE_MIN: f64 = 0.0;
+
+/// Maximum sampling rate
+pub const TELEMETRY_SAMPLING_RATE_MAX: f64 = 1.0;
+
+/// Default OTLP endpoint port
+pub const TELEMETRY_OTLP_PORT_DEFAULT: u16 = 4317;
+
+/// Maximum scheduled delay for batch export in milliseconds
+pub const TELEMETRY_BATCH_DELAY_MS_MAX: u64 = 30_000; // 30 seconds
 
 #[cfg(test)]
 mod tests {

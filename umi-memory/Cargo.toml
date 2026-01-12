@@ -26,6 +26,7 @@ serde_json = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 # Optional database support
 sqlx = { workspace = true, optional = true }
@@ -38,6 +39,12 @@ futures = { workspace = true, optional = true }
 
 # Optional HTTP client for LLM providers
 reqwest = { workspace = true, optional = true }
+
+# Optional OpenTelemetry support
+opentelemetry = { workspace = true, optional = true }
+opentelemetry_sdk = { workspace = true, optional = true }
+opentelemetry-otlp = { workspace = true, optional = true }
+tracing-opentelemetry = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4"
@@ -63,6 +70,9 @@ embedding-openai = ["dep:reqwest"]
 
 # Convenience feature for all embedding providers
 embedding-providers = ["embedding-openai"]
+
+# OpenTelemetry distributed tracing and metrics
+opentelemetry = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-otlp", "dep:tracing-opentelemetry"]
 
 [[bench]]
 name = "storage"

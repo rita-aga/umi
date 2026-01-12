@@ -1,6 +1,6 @@
-//! SimNetwork - Simulated Network with Fault Injection
+//! `SimNetwork` - Simulated Network with Fault Injection
 //!
-//! TigerStyle: Configurable network conditions with explicit fault injection.
+//! `TigerStyle`: Configurable network conditions with explicit fault injection.
 //! Supports partitions, delays, packet loss, and message reordering.
 
 use bytes::Bytes;
@@ -56,7 +56,7 @@ pub enum NetworkError {
 
 /// Simulated network for DST.
 ///
-/// TigerStyle:
+/// `TigerStyle`:
 /// - Deterministic message delivery with configurable delays
 /// - Explicit partitions with heal/partition API
 /// - Fault injection at send/receive boundaries
@@ -70,7 +70,7 @@ pub struct SimNetwork {
     clock: SimClock,
     /// Fault injector (shared)
     fault_injector: Arc<FaultInjector>,
-    /// RNG for latency jitter (RefCell for interior mutability)
+    /// RNG for latency jitter (`RefCell` for interior mutability)
     rng: RefCell<DeterministicRng>,
     /// Base latency in milliseconds
     base_latency_ms: u64,
@@ -81,7 +81,7 @@ pub struct SimNetwork {
 impl SimNetwork {
     /// Create a new simulated network.
     ///
-    /// TigerStyle: Takes shared fault injector for consistent fault injection.
+    /// `TigerStyle`: Takes shared fault injector for consistent fault injection.
     #[must_use]
     pub fn new(clock: SimClock, rng: DeterministicRng, fault_injector: Arc<FaultInjector>) -> Self {
         Self {
@@ -98,15 +98,13 @@ impl SimNetwork {
     /// Set network latency parameters.
     ///
     /// # Panics
-    /// Panics if base_ms exceeds NETWORK_LATENCY_MS_MAX.
+    /// Panics if `base_ms` exceeds `NETWORK_LATENCY_MS_MAX`.
     #[must_use]
     pub fn with_latency(mut self, base_ms: u64, jitter_ms: u64) -> Self {
         // Precondition
         assert!(
             base_ms <= NETWORK_LATENCY_MS_MAX,
-            "base_latency_ms {} exceeds max {}",
-            base_ms,
-            NETWORK_LATENCY_MS_MAX
+            "base_latency_ms {base_ms} exceeds max {NETWORK_LATENCY_MS_MAX}"
         );
 
         self.base_latency_ms = base_ms;
@@ -256,13 +254,13 @@ impl SimNetwork {
     /// Get count of pending messages for a node.
     pub async fn pending_count(&self, node_id: &str) -> usize {
         let messages = self.messages.read().await;
-        messages.get(node_id).map(|q| q.len()).unwrap_or(0)
+        messages.get(node_id).map_or(0, std::collections::VecDeque::len)
     }
 
     /// Get total pending messages across all nodes.
     pub async fn total_pending(&self) -> usize {
         let messages = self.messages.read().await;
-        messages.values().map(|q| q.len()).sum()
+        messages.values().map(std::collections::VecDeque::len).sum()
     }
 
     /// Clear all pending messages.
@@ -425,6 +423,6 @@ mod tests {
     #[should_panic(expected = "cannot partition node with itself")]
     fn test_partition_self() {
         let network = create_network();
-        let _ = tokio_test::block_on(network.partition("node-1", "node-1"));
+        let () = tokio_test::block_on(network.partition("node-1", "node-1"));
     }
 }

@@ -1,6 +1,6 @@
 //! Extraction Types - Entity and Relation Data Structures
 //!
-//! TigerStyle: Type-safe enums, explicit validation, no invalid states.
+//! `TigerStyle`: Type-safe enums, explicit validation, no invalid states.
 
 use serde::{Deserialize, Serialize};
 
@@ -15,9 +15,10 @@ use crate::constants::{
 
 /// Types of entities that can be extracted.
 ///
-/// TigerStyle: Exhaustive enum prevents invalid states.
+/// `TigerStyle`: Exhaustive enum prevents invalid states.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum EntityType {
     /// Person mentioned in text
     Person,
@@ -35,6 +36,7 @@ pub enum EntityType {
     /// Event or meeting
     Event,
     /// Fallback for unstructured content
+    #[default]
     Note,
 }
 
@@ -85,11 +87,6 @@ impl EntityType {
     }
 }
 
-impl Default for EntityType {
-    fn default() -> Self {
-        EntityType::Note
-    }
-}
 
 impl std::fmt::Display for EntityType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -103,9 +100,10 @@ impl std::fmt::Display for EntityType {
 
 /// Types of relations between entities.
 ///
-/// TigerStyle: Exhaustive enum prevents invalid states.
+/// `TigerStyle`: Exhaustive enum prevents invalid states.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum RelationType {
     /// Person works at organization
     WorksAt,
@@ -114,6 +112,7 @@ pub enum RelationType {
     /// Person manages project
     Manages,
     /// Generic relation
+    #[default]
     RelatesTo,
     /// User prefers something
     Prefers,
@@ -148,7 +147,7 @@ impl RelationType {
         }
     }
 
-    /// Parse from string, defaulting to RelatesTo for unknown types.
+    /// Parse from string, defaulting to `RelatesTo` for unknown types.
     #[must_use]
     pub fn from_str_or_relates_to(s: &str) -> Self {
         match s.to_lowercase().as_str() {
@@ -163,11 +162,6 @@ impl RelationType {
     }
 }
 
-impl Default for RelationType {
-    fn default() -> Self {
-        RelationType::RelatesTo
-    }
-}
 
 impl std::fmt::Display for RelationType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -181,7 +175,7 @@ impl std::fmt::Display for RelationType {
 
 /// Entity extracted from text by LLM.
 ///
-/// TigerStyle: Immutable after creation, validated on construction.
+/// `TigerStyle`: Immutable after creation, validated on construction.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExtractedEntity {
     /// Entity name/identifier
@@ -222,10 +216,7 @@ impl ExtractedEntity {
         );
         assert!(
             (EXTRACTION_CONFIDENCE_MIN..=EXTRACTION_CONFIDENCE_MAX).contains(&confidence),
-            "confidence must be {}-{}, got {}",
-            EXTRACTION_CONFIDENCE_MIN,
-            EXTRACTION_CONFIDENCE_MAX,
-            confidence
+            "confidence must be {EXTRACTION_CONFIDENCE_MIN}-{EXTRACTION_CONFIDENCE_MAX}, got {confidence}"
         );
 
         Self {
@@ -265,7 +256,7 @@ impl ExtractedEntity {
 
 /// Relation between two entities extracted from text.
 ///
-/// TigerStyle: Immutable after creation, validated on construction.
+/// `TigerStyle`: Immutable after creation, validated on construction.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExtractedRelation {
     /// Source entity name
@@ -299,10 +290,7 @@ impl ExtractedRelation {
         assert!(!target.is_empty(), "relation target must not be empty");
         assert!(
             (EXTRACTION_CONFIDENCE_MIN..=EXTRACTION_CONFIDENCE_MAX).contains(&confidence),
-            "confidence must be {}-{}, got {}",
-            EXTRACTION_CONFIDENCE_MIN,
-            EXTRACTION_CONFIDENCE_MAX,
-            confidence
+            "confidence must be {EXTRACTION_CONFIDENCE_MIN}-{EXTRACTION_CONFIDENCE_MAX}, got {confidence}"
         );
 
         Self {
@@ -444,9 +432,7 @@ impl ExtractionOptions {
     pub fn with_min_confidence(mut self, min_confidence: f64) -> Self {
         assert!(
             (EXTRACTION_CONFIDENCE_MIN..=EXTRACTION_CONFIDENCE_MAX).contains(&min_confidence),
-            "min_confidence must be {}-{}",
-            EXTRACTION_CONFIDENCE_MIN,
-            EXTRACTION_CONFIDENCE_MAX
+            "min_confidence must be {EXTRACTION_CONFIDENCE_MIN}-{EXTRACTION_CONFIDENCE_MAX}"
         );
         self.min_confidence = min_confidence;
         self

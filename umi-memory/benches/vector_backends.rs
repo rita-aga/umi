@@ -7,7 +7,6 @@
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::time::Duration;
-use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
 use umi_memory::constants::EMBEDDING_DIMENSIONS_COUNT;

@@ -80,7 +80,7 @@ fn bench_core_memory_render(c: &mut Criterion) {
                 for i in 0..block_count {
                     core.set_block(
                         block_types[i],
-                        &format!("Block {} content with some text to make it realistic.", i),
+                        format!("Block {} content with some text to make it realistic.", i),
                     )
                     .unwrap();
                 }
@@ -121,7 +121,8 @@ fn bench_working_memory_set(c: &mut Criterion) {
         let value = b"This is a test value with some content.";
 
         b.iter(|| {
-            black_box(working.set(key, value, None).unwrap());
+            working.set(key, value, None).unwrap();
+            black_box(());
         });
     });
 }
@@ -200,14 +201,15 @@ fn bench_working_memory_bulk_operations(c: &mut Criterion) {
                     },
                     |mut working| {
                         for i in 0..count {
+                            working
+                            .set(
+                                &format!("key_{}", i),
+                                format!("value_{}", i).as_bytes(),
+                                None,
+                            )
+                            .unwrap();
                             black_box(
-                                working
-                                    .set(
-                                        &format!("key_{}", i),
-                                        format!("value_{}", i).as_bytes(),
-                                        None,
-                                    )
-                                    .unwrap(),
+                                (),
                             );
                         }
                     },

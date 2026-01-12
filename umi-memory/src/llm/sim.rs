@@ -1,9 +1,9 @@
-//! SimLLMProvider - Simulation-First LLM Provider
+//! `SimLLMProvider` - Simulation-First LLM Provider
 //!
-//! TigerStyle: Primary implementation, wraps DST SimLLM.
+//! `TigerStyle`: Primary implementation, wraps DST `SimLLM`.
 //!
 //! This is the DEFAULT provider for all tests and development.
-//! Real providers (Anthropic, OpenAI) are secondary.
+//! Real providers (Anthropic, `OpenAI`) are secondary.
 
 use std::sync::Arc;
 
@@ -16,9 +16,9 @@ use crate::dst::{DeterministicRng, FaultInjector, LLMError, SimClock, SimLLM};
 // SimLLMProvider
 // =============================================================================
 
-/// Simulation LLM provider wrapping DST SimLLM.
+/// Simulation LLM provider wrapping DST `SimLLM`.
 ///
-/// TigerStyle: Primary implementation, always available.
+/// `TigerStyle`: Primary implementation, always available.
 ///
 /// This provider wraps the deterministic `SimLLM` from the DST module,
 /// providing the same interface as production providers but with:
@@ -47,7 +47,7 @@ use crate::dst::{DeterministicRng, FaultInjector, LLMError, SimClock, SimLLM};
 /// ```
 #[derive(Debug, Clone)]
 pub struct SimLLMProvider {
-    /// The underlying SimLLM from DST
+    /// The underlying `SimLLM` from DST
     inner: SimLLM,
 }
 

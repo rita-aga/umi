@@ -1,6 +1,6 @@
-//! SimStorageBackend - In-Memory Storage for Testing
+//! `SimStorageBackend` - In-Memory Storage for Testing
 //!
-//! TigerStyle: Deterministic testing with fault injection.
+//! `TigerStyle`: Deterministic testing with fault injection.
 //!
 //! # Simulation-First
 //!
@@ -26,10 +26,10 @@ use super::error::{StorageError, StorageResult};
 
 /// In-memory storage backend for testing.
 ///
-/// TigerStyle:
-/// - Deterministic via SimClock and DeterministicRng
-/// - Fault injection via FaultInjector
-/// - Thread-safe with RwLock
+/// `TigerStyle`:
+/// - Deterministic via `SimClock` and `DeterministicRng`
+/// - Fault injection via `FaultInjector`
+/// - Thread-safe with `RwLock`
 #[derive(Debug, Clone)]
 pub struct SimStorageBackend {
     /// Stored entities indexed by ID
@@ -44,7 +44,7 @@ pub struct SimStorageBackend {
 }
 
 impl SimStorageBackend {
-    /// Create a new SimStorageBackend with given config.
+    /// Create a new `SimStorageBackend` with given config.
     #[must_use]
     pub fn new(config: SimConfig) -> Self {
         let mut rng = DeterministicRng::new(config.seed());
@@ -61,7 +61,7 @@ impl SimStorageBackend {
     /// Add fault configuration.
     ///
     /// Note: Creates a new backend with the fault registered.
-    /// FaultInjector uses interior mutability, but register needs &mut self
+    /// `FaultInjector` uses interior mutability, but register needs &mut self
     /// which we can't do through Arc. So we create with faults upfront.
     #[must_use]
     pub fn with_faults(mut self, config: FaultConfig) -> Self {
@@ -89,8 +89,7 @@ impl SimStorageBackend {
     fn maybe_inject_fault(&self, operation: &str) -> StorageResult<()> {
         if let Some(fault_type) = self.fault_injector.should_inject(operation) {
             Err(StorageError::simulated_fault(format!(
-                "{:?} during {}",
-                fault_type, operation
+                "{fault_type:?} during {operation}"
             )))
         } else {
             Ok(())
@@ -411,7 +410,7 @@ mod tests {
             backend
                 .store_entity(&Entity::new(
                     EntityType::Note,
-                    format!("Note {}", i),
+                    format!("Note {i}"),
                     "common content".to_string(),
                 ))
                 .await
@@ -502,7 +501,7 @@ mod tests {
             backend
                 .store_entity(&Entity::new(
                     EntityType::Note,
-                    format!("Note {}", i),
+                    format!("Note {i}"),
                     "content".to_string(),
                 ))
                 .await
@@ -619,7 +618,7 @@ mod dst_tests {
         for i in 0..100 {
             let entity = Entity::new(
                 EntityType::Note,
-                format!("Test {}", i),
+                format!("Test {i}"),
                 "content".to_string(),
             );
             match backend.store_entity(&entity).await {
@@ -752,10 +751,8 @@ mod property_tests {
                 match op {
                     StorageOp::Store { entity_type, name } => {
                         let entity = Entity::new(*entity_type, name.clone(), "content".to_string());
-                        if self.backend.store_entity(&entity).await.is_ok() {
-                            if !self.known_ids.contains(&entity.id) {
-                                self.known_ids.push(entity.id);
-                            }
+                        if self.backend.store_entity(&entity).await.is_ok() && !self.known_ids.contains(&entity.id) {
+                            self.known_ids.push(entity.id);
                         }
                     }
                     StorageOp::Get { id } => {

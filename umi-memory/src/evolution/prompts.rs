@@ -1,6 +1,6 @@
 //! Evolution Detection Prompts - LLM Prompt Templates
 //!
-//! TigerStyle: Structured prompts with clear output format.
+//! `TigerStyle`: Structured prompts with clear output format.
 
 /// Evolution detection prompt template.
 ///
@@ -58,7 +58,7 @@ pub fn format_entity_for_prompt(id: &str, name: &str, content: &str) -> String {
     } else {
         content.to_string()
     };
-    format!("[{}] {}: {}", id, name, content_preview)
+    format!("[{id}] {name}: {content_preview}")
 }
 
 #[cfg(test)]

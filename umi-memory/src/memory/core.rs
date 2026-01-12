@@ -1,6 +1,6 @@
 //! Core Memory - Always-in-Context Memory for LLM
 //!
-//! TigerStyle: Fixed capacity memory that's always loaded in LLM context.
+//! `TigerStyle`: Fixed capacity memory that's always loaded in LLM context.
 //!
 //! # Design
 //!
@@ -76,22 +76,18 @@ impl CoreMemoryConfig {
     /// Create a new configuration with the given max size.
     ///
     /// # Panics
-    /// Panics if max_bytes is less than `CORE_MEMORY_SIZE_BYTES_MIN`
+    /// Panics if `max_bytes` is less than `CORE_MEMORY_SIZE_BYTES_MIN`
     /// or greater than `CORE_MEMORY_SIZE_BYTES_MAX`.
     #[must_use]
     pub fn new(max_bytes: usize) -> Self {
         // Preconditions
         assert!(
             max_bytes >= CORE_MEMORY_SIZE_BYTES_MIN,
-            "max_bytes {} below minimum {}",
-            max_bytes,
-            CORE_MEMORY_SIZE_BYTES_MIN
+            "max_bytes {max_bytes} below minimum {CORE_MEMORY_SIZE_BYTES_MIN}"
         );
         assert!(
             max_bytes <= CORE_MEMORY_SIZE_BYTES_MAX,
-            "max_bytes {} exceeds maximum {}",
-            max_bytes,
-            CORE_MEMORY_SIZE_BYTES_MAX
+            "max_bytes {max_bytes} exceeds maximum {CORE_MEMORY_SIZE_BYTES_MAX}"
         );
 
         Self { max_bytes }
@@ -108,7 +104,7 @@ impl Default for CoreMemoryConfig {
 
 /// Core memory - always in LLM context.
 ///
-/// TigerStyle:
+/// `TigerStyle`:
 /// - Fixed capacity (~32KB)
 /// - One block per type (type-indexed)
 /// - Deterministic render order
@@ -136,7 +132,7 @@ pub struct CoreMemory {
     /// Current total size in bytes
     current_bytes: usize,
     /// Clock source for timestamps (milliseconds since epoch)
-    /// In production this comes from system time, in tests from SimClock
+    /// In production this comes from system time, in tests from `SimClock`
     clock_ms: u64,
 }
 
@@ -160,7 +156,7 @@ impl CoreMemory {
 
     /// Set the internal clock (for DST).
     ///
-    /// TigerStyle: Explicit time control for simulation.
+    /// `TigerStyle`: Explicit time control for simulation.
     pub fn set_clock_ms(&mut self, ms: u64) {
         self.clock_ms = ms;
     }
@@ -198,8 +194,7 @@ impl CoreMemory {
         let old_size = self
             .blocks_by_type
             .get(&block_type)
-            .map(|b| b.size_bytes())
-            .unwrap_or(0);
+            .map_or(0, super::block::MemoryBlock::size_bytes);
         let projected_size = self.current_bytes - old_size + new_size;
 
         // Check capacity
@@ -253,8 +248,7 @@ impl CoreMemory {
         let old_size = self
             .blocks_by_type
             .get(&block_type)
-            .map(|b| b.size_bytes())
-            .unwrap_or(0);
+            .map_or(0, super::block::MemoryBlock::size_bytes);
         let projected_size = self.current_bytes - old_size + new_size;
 
         // Check capacity
@@ -284,7 +278,7 @@ impl CoreMemory {
     /// Get block content by type.
     #[must_use]
     pub fn get_content(&self, block_type: MemoryBlockType) -> Option<&str> {
-        self.blocks_by_type.get(&block_type).map(|b| b.content())
+        self.blocks_by_type.get(&block_type).map(super::block::MemoryBlock::content)
     }
 
     /// Check if a block type exists.
@@ -366,7 +360,7 @@ impl CoreMemory {
 
     /// Iterate over blocks in render order.
     ///
-    /// TigerStyle: Deterministic ordering by block type priority.
+    /// `TigerStyle`: Deterministic ordering by block type priority.
     pub fn blocks_ordered(&self) -> impl Iterator<Item = &MemoryBlock> {
         MemoryBlockType::all_ordered()
             .iter()
@@ -375,7 +369,7 @@ impl CoreMemory {
 
     /// Render core memory as XML for LLM context.
     ///
-    /// TigerStyle: Deterministic, predictable output format.
+    /// `TigerStyle`: Deterministic, predictable output format.
     ///
     /// # Example Output
     ///
@@ -729,7 +723,7 @@ mod dst_tests {
                 env.clock.advance_ms(500);
                 core.set_clock_ms(env.clock.now_ms());
 
-                let content = format!("Block {}", i);
+                let content = format!("Block {i}");
                 let block_type = match i {
                     0 => MemoryBlockType::System,
                     1 => MemoryBlockType::Human,
@@ -794,7 +788,7 @@ mod dst_tests {
                 match core.set_block(*block_type, content) {
                     Ok(_) => total_added += size,
                     Err(CoreMemoryError::Full { .. }) => break,
-                    Err(e) => panic!("Unexpected error: {:?}", e),
+                    Err(e) => panic!("Unexpected error: {e:?}"),
                 }
 
                 env.clock.advance_ms(100);

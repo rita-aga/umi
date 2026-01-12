@@ -1,13 +1,13 @@
-//! DeterministicRng - Seeded Random Number Generator
+//! `DeterministicRng` - Seeded Random Number Generator
 //!
-//! TigerStyle: ChaCha20-based RNG for deterministic simulation.
+//! `TigerStyle`: ChaCha20-based RNG for deterministic simulation.
 
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 
 /// A deterministic random number generator.
 ///
-/// TigerStyle:
+/// `TigerStyle`:
 /// - Same seed always produces same sequence
 /// - Fork creates independent streams
 /// - All randomness flows through this
@@ -68,7 +68,7 @@ impl DeterministicRng {
     /// Panics if min > max.
     pub fn next_int(&mut self, min: i64, max: i64) -> i64 {
         // Precondition
-        assert!(min <= max, "min ({}) must be <= max ({})", min, max);
+        assert!(min <= max, "min ({min}) must be <= max ({max})");
 
         let value = self.rng.gen_range(min..=max);
 
@@ -83,7 +83,7 @@ impl DeterministicRng {
     /// Panics if min > max.
     pub fn next_usize(&mut self, min: usize, max: usize) -> usize {
         // Precondition
-        assert!(min <= max, "min ({}) must be <= max ({})", min, max);
+        assert!(min <= max, "min ({min}) must be <= max ({max})");
 
         let value = self.rng.gen_range(min..=max);
 
@@ -100,8 +100,7 @@ impl DeterministicRng {
         // Precondition
         assert!(
             (0.0..=1.0).contains(&probability),
-            "probability must be in [0, 1], got {}",
-            probability
+            "probability must be in [0, 1], got {probability}"
         );
 
         self.next_float() < probability
@@ -130,7 +129,7 @@ impl DeterministicRng {
 
     /// Create an independent fork of this RNG.
     ///
-    /// TigerStyle: Forks have independent sequences derived from parent.
+    /// `TigerStyle`: Forks have independent sequences derived from parent.
     ///
     /// # Example
     /// ```
@@ -281,7 +280,7 @@ mod tests {
         // Should be different order (with very high probability)
         assert_ne!(items, original, "shuffle should change order");
         // But same elements
-        items.sort();
+        items.sort_unstable();
         assert_eq!(items, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     }
 

@@ -1,6 +1,6 @@
 //! Storage Errors
 //!
-//! TigerStyle: Explicit error types with context.
+//! `TigerStyle`: Explicit error types with context.
 
 use thiserror::Error;
 

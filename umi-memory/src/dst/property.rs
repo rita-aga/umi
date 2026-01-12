@@ -1,14 +1,14 @@
 //! Property-Based Testing for DST
 //!
-//! TigerStyle: Random operation sequences with invariant checking.
+//! `TigerStyle`: Random operation sequences with invariant checking.
 //!
 //! # Philosophy
 //!
 //! Property-based testing generates random operations and verifies that
 //! invariants hold after each operation. Combined with DST, this gives:
 //! - Deterministic reproduction via seed
-//! - Time control via SimClock
-//! - Fault injection via FaultInjector
+//! - Time control via `SimClock`
+//! - Fault injection via `FaultInjector`
 //!
 //! # Example
 //!
@@ -68,7 +68,7 @@ use crate::constants::DST_SIMULATION_STEPS_MAX;
 
 /// Trait for systems that can be property-tested.
 ///
-/// TigerStyle: Explicit operation generation and invariant checking.
+/// `TigerStyle`: Explicit operation generation and invariant checking.
 pub trait PropertyTestable {
     /// The type of operations that can be performed.
     type Operation: Debug + Clone;
@@ -198,7 +198,7 @@ impl TimeAdvanceConfig {
     /// Advance with given range and probability.
     #[must_use]
     pub fn random(min_ms: u64, max_ms: u64, probability: f64) -> Self {
-        assert!(probability >= 0.0 && probability <= 1.0);
+        assert!((0.0..=1.0).contains(&probability));
         assert!(min_ms <= max_ms);
         Self {
             min_ms,
@@ -210,7 +210,7 @@ impl TimeAdvanceConfig {
 
 /// Property-based test runner.
 ///
-/// TigerStyle:
+/// `TigerStyle`:
 /// - Deterministic via seed
 /// - Explicit operation count limits
 /// - Invariant checking after each operation
@@ -227,7 +227,7 @@ impl PropertyTest {
     /// Create a new property test with the given seed.
     ///
     /// # Panics
-    /// Panics if max_operations would exceed DST_SIMULATION_STEPS_MAX.
+    /// Panics if `max_operations` would exceed `DST_SIMULATION_STEPS_MAX`.
     #[must_use]
     pub fn new(seed: u64) -> Self {
         Self {
@@ -241,14 +241,12 @@ impl PropertyTest {
     /// Set the maximum number of operations to run.
     ///
     /// # Panics
-    /// Panics if max exceeds DST_SIMULATION_STEPS_MAX.
+    /// Panics if max exceeds `DST_SIMULATION_STEPS_MAX`.
     #[must_use]
     pub fn with_max_operations(mut self, max: u64) -> Self {
         assert!(
             max <= DST_SIMULATION_STEPS_MAX,
-            "max_operations {} exceeds DST_SIMULATION_STEPS_MAX {}",
-            max,
-            DST_SIMULATION_STEPS_MAX
+            "max_operations {max} exceeds DST_SIMULATION_STEPS_MAX {DST_SIMULATION_STEPS_MAX}"
         );
         self.max_operations = max;
         self
@@ -286,7 +284,7 @@ impl PropertyTest {
                     failure: Some(PropertyTestFailure {
                         operation_index: 0,
                         operation: "(initial state)".to_string(),
-                        message: format!("Initial state violates invariants: {}", msg),
+                        message: format!("Initial state violates invariants: {msg}"),
                         state_description: state.describe_state(),
                     }),
                 };
@@ -309,7 +307,7 @@ impl PropertyTest {
 
             // Generate and apply operation
             let op = state.generate_operation(&mut rng);
-            let op_debug = format!("{:?}", op);
+            let op_debug = format!("{op:?}");
             state.apply_operation(&op, &clock);
 
             // Check invariants
@@ -347,7 +345,7 @@ impl PropertyTest {
 
 /// Run multiple property tests with different seeds.
 ///
-/// TigerStyle: Multi-seed testing for broader coverage.
+/// `TigerStyle`: Multi-seed testing for broader coverage.
 ///
 /// # Panics
 /// Panics if any test fails.

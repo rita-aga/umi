@@ -1,6 +1,6 @@
 //! Dual Retrieval - Fast search + LLM reasoning
 //!
-//! TigerStyle: Sim-first, deterministic, graceful degradation.
+//! `TigerStyle`: Sim-first, deterministic, graceful degradation.
 //!
 //! See ADR-015 for design rationale.
 //!
@@ -110,7 +110,7 @@ impl From<crate::storage::StorageError> for RetrievalError {
 
 /// Dual retriever: fast search + LLM reasoning.
 ///
-/// TigerStyle: Generic over LLM and storage for sim/production flexibility.
+/// `TigerStyle`: Generic over LLM and storage for sim/production flexibility.
 ///
 /// # Example
 ///
@@ -163,7 +163,7 @@ impl<L: LLMProvider, E: EmbeddingProvider, V: VectorBackend, S: StorageBackend>
     ///
     /// # Arguments
     /// - `query` - Search query
-    /// - `options` - Search options (limit, deep_search, time_range)
+    /// - `options` - Search options (limit, `deep_search`, `time_range`)
     ///
     /// # Returns
     /// `SearchResult` with entities, query info, and metadata.
@@ -463,14 +463,14 @@ impl<L: LLMProvider, E: EmbeddingProvider, V: VectorBackend, S: StorageBackend>
                                 }
                             }
 
-                            if !found.is_empty() {
-                                found
-                            } else {
+                            if found.is_empty() {
                                 // Vector search got no results, try text fallback
                                 self.storage
                                     .search(variation, limit)
                                     .await
                                     .unwrap_or_default()
+                            } else {
+                                found
                             }
                         }
                         Err(_) => {
@@ -870,9 +870,8 @@ mod dst_tests {
             match result {
                 Ok(search_result) => {
                     // PROPER VERIFICATION: Check that deep search was skipped
-                    assert_eq!(
-                        search_result.deep_search_used,
-                        false,
+                    assert!(
+                        !search_result.deep_search_used,
                         "BUG: LLM timeout should skip deep search (query expansion), got deep_search_used=true"
                     );
 
@@ -898,7 +897,7 @@ mod dst_tests {
                 }
                 Err(e) => {
                     // Also acceptable if returns error gracefully
-                    println!("LLM timeout returned error (acceptable): {:?}", e);
+                    println!("LLM timeout returned error (acceptable): {e:?}");
                 }
             }
 
@@ -940,7 +939,7 @@ mod dst_tests {
                 }
                 Err(e) => {
                     // Error is also acceptable if properly reported
-                    println!("Vector timeout returned error (acceptable): {:?}", e);
+                    println!("Vector timeout returned error (acceptable): {e:?}");
                 }
             }
 
@@ -981,7 +980,7 @@ mod dst_tests {
                 }
                 Err(e) => {
                     // Error return is expected and acceptable
-                    println!("✓ VERIFIED: Storage failure returned error: {:?}", e);
+                    println!("✓ VERIFIED: Storage failure returned error: {e:?}");
                 }
             }
 
@@ -1017,9 +1016,8 @@ mod dst_tests {
                     // With both faults, should have:
                     // - deep_search_used = false (LLM failed)
                     // - possibly empty results (vector failed)
-                    assert_eq!(
-                        search_result.deep_search_used,
-                        false,
+                    assert!(
+                        !search_result.deep_search_used,
                         "BUG: With LLM timeout, deep search should be skipped"
                     );
 
@@ -1031,7 +1029,7 @@ mod dst_tests {
                 }
                 Err(e) => {
                     // Error is acceptable if gracefully reported
-                    println!("Multiple faults returned error (acceptable): {:?}", e);
+                    println!("Multiple faults returned error (acceptable): {e:?}");
                 }
             }
 
@@ -1064,7 +1062,7 @@ mod dst_tests {
             for i in 0..10 {
                 let result = retriever
                     .search(
-                        &format!("Who is person {}?", i), // Triggers deep search heuristic
+                        &format!("Who is person {i}?"), // Triggers deep search heuristic
                         SearchOptions::default(),
                     )
                     .await;
@@ -1084,8 +1082,7 @@ mod dst_tests {
             }
 
             println!(
-                "✓ Probabilistic LLM failure DETERMINISTIC: {} deep, {} fast (seed 42)",
-                deep_search_count, fast_search_count
+                "✓ Probabilistic LLM failure DETERMINISTIC: {deep_search_count} deep, {fast_search_count} fast (seed 42)"
             );
 
             // With seed 42, verify consistent behavior (actual numbers TBD)

@@ -1,6 +1,6 @@
 //! Embedding Provider Trait - Unified Interface for Text Embeddings
 //!
-//! TigerStyle: Simulation-first embedding generation.
+//! `TigerStyle`: Simulation-first embedding generation.
 //!
 //! See ADR-019 for design rationale.
 //!
@@ -45,7 +45,7 @@ use async_trait::async_trait;
 
 /// Unified error type for all embedding providers.
 ///
-/// TigerStyle: Explicit variants for all failure modes.
+/// `TigerStyle`: Explicit variants for all failure modes.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum EmbeddingError {
     /// Request timed out

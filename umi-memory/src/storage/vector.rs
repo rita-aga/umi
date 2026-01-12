@@ -1,6 +1,6 @@
 //! Vector Backend - Embedding Storage and Similarity Search (ADR-006)
 //!
-//! TigerStyle: Trait-based abstraction, simulation-first testing.
+//! `TigerStyle`: Trait-based abstraction, simulation-first testing.
 //!
 //! # Overview
 //!

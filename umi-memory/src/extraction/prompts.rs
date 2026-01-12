@@ -1,6 +1,6 @@
 //! Extraction Prompts - LLM Prompt Templates
 //!
-//! TigerStyle: Structured prompts with clear output format.
+//! `TigerStyle`: Structured prompts with clear output format.
 
 /// Extraction prompt template.
 ///

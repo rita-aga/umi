@@ -1,6 +1,6 @@
-//! SimClock - Simulated Time
+//! `SimClock` - Simulated Time
 //!
-//! TigerStyle: Deterministic, controllable time for simulation.
+//! `TigerStyle`: Deterministic, controllable time for simulation.
 //! Supports async sleep/notify for coordinating time-dependent tasks.
 
 use crate::constants::{DST_TIME_ADVANCE_MS_MAX, TIME_MS_PER_SEC};
@@ -11,7 +11,7 @@ use tokio::sync::Notify;
 
 /// A simulated clock for deterministic testing.
 ///
-/// TigerStyle:
+/// `TigerStyle`:
 /// - Time only moves forward
 /// - All time operations are explicit
 /// - No reliance on system time
@@ -52,7 +52,7 @@ impl SimClock {
         }
     }
 
-    /// Create a clock starting at the given DateTime.
+    /// Create a clock starting at the given `DateTime`.
     #[must_use]
     pub fn at_datetime(dt: DateTime<Utc>) -> Self {
         let ms = dt.timestamp_millis() as u64;
@@ -77,7 +77,7 @@ impl SimClock {
         self.now_ms() / TIME_MS_PER_SEC
     }
 
-    /// Get current time as DateTime<Utc>.
+    /// Get current time as `DateTime`<Utc>.
     #[must_use]
     pub fn now(&self) -> DateTime<Utc> {
         let ms = self.now_ms() as i64;
@@ -90,17 +90,15 @@ impl SimClock {
     /// Advance time by the given milliseconds.
     ///
     /// # Panics
-    /// Panics if ms exceeds DST_TIME_ADVANCE_MS_MAX.
+    /// Panics if ms exceeds `DST_TIME_ADVANCE_MS_MAX`.
     ///
     /// # Returns
     /// The new current time.
-    pub fn advance_ms(&self, ms: u64) -> u64 {
+    #[must_use] pub fn advance_ms(&self, ms: u64) -> u64 {
         // Preconditions
         assert!(
             ms <= DST_TIME_ADVANCE_MS_MAX,
-            "advance_ms({}) exceeds max ({})",
-            ms,
-            DST_TIME_ADVANCE_MS_MAX
+            "advance_ms({ms}) exceeds max ({DST_TIME_ADVANCE_MS_MAX})"
         );
 
         let old_time = self.current_ms.fetch_add(ms, Ordering::SeqCst);
@@ -118,10 +116,10 @@ impl SimClock {
     /// Advance time by the given seconds.
     ///
     /// # Panics
-    /// Panics if resulting ms exceeds DST_TIME_ADVANCE_MS_MAX.
-    pub fn advance_secs(&self, secs: f64) -> u64 {
+    /// Panics if resulting ms exceeds `DST_TIME_ADVANCE_MS_MAX`.
+    #[must_use] pub fn advance_secs(&self, secs: f64) -> u64 {
         // Precondition
-        assert!(secs >= 0.0, "secs must be non-negative, got {}", secs);
+        assert!(secs >= 0.0, "secs must be non-negative, got {secs}");
 
         let ms = (secs * 1000.0) as u64;
         self.advance_ms(ms)
@@ -144,9 +142,7 @@ impl SimClock {
         // Precondition
         assert!(
             ms >= current,
-            "cannot set time backwards: {} < {}",
-            ms,
-            current
+            "cannot set time backwards: {ms} < {current}"
         );
 
         self.current_ms.store(ms, Ordering::SeqCst);
@@ -156,7 +152,7 @@ impl SimClock {
         assert_eq!(self.now_ms(), ms, "time must be set correctly");
     }
 
-    /// Set time to a DateTime.
+    /// Set time to a `DateTime`.
     pub fn set(&self, time: DateTime<Utc>) {
         let ms = time.timestamp_millis() as u64;
         self.set_ms(ms);
@@ -172,9 +168,7 @@ impl SimClock {
         // Precondition
         assert!(
             since <= current,
-            "elapsed_since({}) is in the future (now={})",
-            since,
-            current
+            "elapsed_since({since}) is in the future (now={current})"
         );
 
         current - since
@@ -192,7 +186,7 @@ impl SimClock {
         self.now_ms() >= deadline_ms
     }
 
-    /// Check if a DateTime deadline has passed.
+    /// Check if a `DateTime` deadline has passed.
     #[must_use]
     pub fn is_past(&self, deadline: DateTime<Utc>) -> bool {
         self.now() >= deadline
@@ -207,7 +201,7 @@ impl SimClock {
     /// Sleep until the specified duration has passed.
     ///
     /// In simulation mode, this yields and waits for time to be advanced.
-    /// Returns when current_time >= start_time + duration_ms.
+    /// Returns when `current_time` >= `start_time` + `duration_ms`.
     pub async fn sleep_ms(&self, duration_ms: u64) {
         let target_ms = self.now_ms() + duration_ms;
 

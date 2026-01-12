@@ -1,6 +1,6 @@
-//! SimConfig - Simulation Configuration
+//! `SimConfig` - Simulation Configuration
 //!
-//! TigerStyle: Seed management for deterministic testing.
+//! `TigerStyle`: Seed management for deterministic testing.
 
 use rand::Rng;
 use std::env;
@@ -9,7 +9,7 @@ use crate::constants::DST_SIMULATION_STEPS_MAX;
 
 /// Configuration for a simulation run.
 ///
-/// TigerStyle:
+/// `TigerStyle`:
 /// - Immutable after creation
 /// - Seed logged for reproducibility
 /// - All limits explicit
@@ -45,9 +45,9 @@ impl SimConfig {
         config
     }
 
-    /// Create config from DST_SEED env var or random.
+    /// Create config from `DST_SEED` env var or random.
     ///
-    /// If DST_SEED is set, uses that value.
+    /// If `DST_SEED` is set, uses that value.
     /// Otherwise, generates a random seed and prints it for reproducibility.
     ///
     /// # Example
@@ -58,18 +58,15 @@ impl SimConfig {
     /// ```
     #[must_use]
     pub fn from_env_or_random() -> Self {
-        let seed = match env::var("DST_SEED") {
-            Ok(seed_str) => {
-                // Precondition: DST_SEED must be valid u64
-                seed_str.parse::<u64>().unwrap_or_else(|_| {
-                    panic!("DST_SEED must be a valid u64, got: {}", seed_str);
-                })
-            }
-            Err(_) => {
-                let seed = rand::thread_rng().gen::<u64>();
-                eprintln!("DST: Generated random seed (replay with DST_SEED={})", seed);
-                seed
-            }
+        let seed = if let Ok(seed_str) = env::var("DST_SEED") {
+            // Precondition: DST_SEED must be valid u64
+            seed_str.parse::<u64>().unwrap_or_else(|_| {
+                panic!("DST_SEED must be a valid u64, got: {seed_str}");
+            })
+        } else {
+            let seed = rand::thread_rng().gen::<u64>();
+            eprintln!("DST: Generated random seed (replay with DST_SEED={seed})");
+            seed
         };
 
         Self::with_seed(seed)
@@ -87,7 +84,7 @@ impl SimConfig {
         self.steps_max
     }
 
-    /// Create a new config with a different steps_max.
+    /// Create a new config with a different `steps_max`.
     #[must_use]
     pub fn with_steps_max(self, steps_max: u64) -> Self {
         // Precondition
@@ -149,7 +146,7 @@ mod tests {
     #[test]
     fn test_random_seed_generation() {
         // Clear env to ensure random generation
-        let _ = env::remove_var("DST_SEED");
+        let () = env::remove_var("DST_SEED");
 
         // Just verify that from_env_or_random() works without DST_SEED
         // We can't easily test the exact value since it's random

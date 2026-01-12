@@ -1,13 +1,13 @@
 //! Umi Memory - Main Interface (ADR-017)
 //!
-//! TigerStyle: Sim-first, deterministic, graceful degradation.
+//! `TigerStyle`: Sim-first, deterministic, graceful degradation.
 //!
 //! # Overview
 //!
 //! The Memory class orchestrates all Umi components:
-//! - EntityExtractor for extracting entities from text
-//! - DualRetriever for searching memories
-//! - EvolutionTracker for detecting memory relationships
+//! - `EntityExtractor` for extracting entities from text
+//! - `DualRetriever` for searching memories
+//! - `EvolutionTracker` for detecting memory relationships
 //! - Storage backend for persistence
 //!
 //! # Example
@@ -149,7 +149,7 @@ impl From<crate::embedding::EmbeddingError> for MemoryError {
 
 /// Options for remember operations.
 ///
-/// TigerStyle: Builder pattern with defaults.
+/// `TigerStyle`: Builder pattern with defaults.
 #[derive(Debug, Clone)]
 pub struct RememberOptions {
     /// Whether to extract entities using LLM (default: true)
@@ -194,10 +194,7 @@ impl RememberOptions {
     pub fn with_importance(mut self, importance: f32) -> Self {
         debug_assert!(
             (MEMORY_IMPORTANCE_MIN..=MEMORY_IMPORTANCE_MAX).contains(&importance),
-            "importance must be {}-{}: got {}",
-            MEMORY_IMPORTANCE_MIN,
-            MEMORY_IMPORTANCE_MAX,
-            importance
+            "importance must be {MEMORY_IMPORTANCE_MIN}-{MEMORY_IMPORTANCE_MAX}: got {importance}"
         );
         self.importance = importance;
         self
@@ -231,7 +228,7 @@ impl Default for RememberOptions {
 
 /// Options for recall operations.
 ///
-/// TigerStyle: Builder pattern with defaults.
+/// `TigerStyle`: Builder pattern with defaults.
 #[derive(Debug, Clone)]
 pub struct RecallOptions {
     /// Maximum results (default: 10)
@@ -240,7 +237,7 @@ pub struct RecallOptions {
     /// Use LLM for deep search (default: auto based on query)
     pub deep_search: Option<bool>,
 
-    /// Time range filter (start_ms, end_ms)
+    /// Time range filter (`start_ms`, `end_ms`)
     pub time_range: Option<(u64, u64)>,
 }
 
@@ -364,8 +361,8 @@ impl RememberResult {
 /// Orchestrates all components for a simple remember/recall API.
 ///
 /// # Type Parameters
-/// - `L`: LLM provider for extraction, retrieval, evolution (SimLLMProvider for testing)
-/// - `S`: Storage backend for persistence (SimStorageBackend for testing)
+/// - `L`: LLM provider for extraction, retrieval, evolution (`SimLLMProvider` for testing)
+/// - `S`: Storage backend for persistence (`SimStorageBackend` for testing)
 ///
 /// # Example
 ///
@@ -464,7 +461,7 @@ impl<
         }
     }
 
-    /// Create a MemoryBuilder for constructing Memory with builder pattern.
+    /// Create a `MemoryBuilder` for constructing Memory with builder pattern.
     ///
     /// # Example
     /// ```rust,ignore
@@ -542,7 +539,7 @@ impl<
             let name = if text.len() > 50 {
                 format!("Note: {}...", &text[..47])
             } else {
-                format!("Note: {}", text)
+                format!("Note: {text}")
             };
             vec![Entity::new(EntityType::Note, name, text.to_string())]
         } else {
@@ -623,7 +620,7 @@ impl<
 
     /// Retrieve memories matching query.
     ///
-    /// Uses DualRetriever for smart search:
+    /// Uses `DualRetriever` for smart search:
     /// - Fast path: Direct search in storage
     /// - Deep path: LLM rewrites query into variations, merges results
     ///
@@ -739,7 +736,7 @@ impl<
 // Helper Functions
 // =============================================================================
 
-/// Convert extraction EntityType to storage EntityType.
+/// Convert extraction `EntityType` to storage `EntityType`.
 fn convert_entity_type(ext_type: &crate::extraction::EntityType) -> EntityType {
     use crate::extraction::EntityType as ExtType;
 
@@ -996,7 +993,7 @@ mod tests {
         for i in 0..5 {
             memory
                 .remember(
-                    &format!("Item {} is interesting", i),
+                    &format!("Item {i} is interesting"),
                     RememberOptions::new().without_extraction(),
                 )
                 .await
@@ -1151,7 +1148,7 @@ impl Memory<
     /// All components (LLM, embedder, vector, storage) use the same seed
     /// for reproducible behavior.
     ///
-    /// TigerStyle: Convenient constructor for tests.
+    /// `TigerStyle`: Convenient constructor for tests.
     ///
     /// # Arguments
     /// - `seed` - Random seed for deterministic behavior
@@ -1182,7 +1179,7 @@ impl Memory<
     ///
     /// Combines the convenience of `sim()` with custom config.
     ///
-    /// TigerStyle: Convenient constructor for configured tests.
+    /// `TigerStyle`: Convenient constructor for configured tests.
     ///
     /// # Arguments
     /// - `seed` - Random seed for deterministic behavior
@@ -1274,7 +1271,7 @@ mod dst_tests {
 
             for i in 0..10 {
                 let result = memory
-                    .remember(&format!("Text {}", i), RememberOptions::default())
+                    .remember(&format!("Text {i}"), RememberOptions::default())
                     .await;
 
                 assert!(result.is_ok()); // Should never fail the entire operation
@@ -1642,7 +1639,7 @@ mod dst_tests {
             for i in 0..10 {
                 let opts = RememberOptions::default().without_extraction();
                 memory
-                    .remember(&format!("Entity number {}", i), opts)
+                    .remember(&format!("Entity number {i}"), opts)
                     .await?;
             }
 

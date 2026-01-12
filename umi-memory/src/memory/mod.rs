@@ -1,6 +1,6 @@
 //! Memory - Core and Working Memory for Umi
 //!
-//! TigerStyle: Three-tier memory architecture with explicit limits.
+//! `TigerStyle`: Three-tier memory architecture with explicit limits.
 //!
 //! # Memory Tiers
 //!

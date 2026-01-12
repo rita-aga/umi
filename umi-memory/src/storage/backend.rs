@@ -1,10 +1,10 @@
 //! Storage Backend Trait
 //!
-//! TigerStyle: Abstract interface for entity storage.
+//! `TigerStyle`: Abstract interface for entity storage.
 //!
 //! # Simulation-First
 //!
-//! Tests are written using SimStorageBackend before PostgresBackend.
+//! Tests are written using `SimStorageBackend` before `PostgresBackend`.
 //! All implementations must satisfy the same trait contract.
 
 use async_trait::async_trait;

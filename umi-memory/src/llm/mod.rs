@@ -1,6 +1,6 @@
 //! LLM Provider Trait - Unified Interface for Sim and Production
 //!
-//! TigerStyle: Simulation-first LLM abstraction.
+//! `TigerStyle`: Simulation-first LLM abstraction.
 //!
 //! See ADR-013 for design rationale.
 //!
@@ -56,7 +56,7 @@ use crate::constants::{LLM_PROMPT_BYTES_MAX, LLM_RESPONSE_BYTES_MAX};
 
 /// Unified error type for all LLM providers.
 ///
-/// TigerStyle: Explicit variants for all failure modes.
+/// `TigerStyle`: Explicit variants for all failure modes.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ProviderError {
     /// Request timed out
@@ -192,7 +192,7 @@ impl ProviderError {
 
 /// Request for LLM completion.
 ///
-/// TigerStyle: Explicit fields, no hidden defaults.
+/// `TigerStyle`: Explicit fields, no hidden defaults.
 #[derive(Debug, Clone)]
 pub struct CompletionRequest {
     /// The prompt text (required)
@@ -220,8 +220,7 @@ impl CompletionRequest {
         assert!(!prompt.is_empty(), "prompt must not be empty");
         assert!(
             prompt.len() <= LLM_PROMPT_BYTES_MAX,
-            "prompt exceeds {} bytes",
-            LLM_PROMPT_BYTES_MAX
+            "prompt exceeds {LLM_PROMPT_BYTES_MAX} bytes"
         );
 
         Self {

@@ -95,6 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - **`openai`** - OpenAI LLM provider (GPT, embeddings)
 - **`llm-providers`** - All LLM providers (convenience flag)
 - **`embedding-providers`** - All embedding providers (convenience flag)
+- **`opentelemetry`** - OpenTelemetry distributed tracing and metrics export
 
 ```toml
 [dependencies]

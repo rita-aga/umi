@@ -1,6 +1,6 @@
-//! FaultInjector - Probabilistic Fault Injection
+//! `FaultInjector` - Probabilistic Fault Injection
 //!
-//! TigerStyle: Explicit fault injection for chaos testing.
+//! `TigerStyle`: Explicit fault injection for chaos testing.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -11,7 +11,7 @@ use crate::constants::DST_FAULT_PROBABILITY_MAX;
 
 /// Types of faults that can be injected.
 ///
-/// TigerStyle: Every fault type is explicit and documented.
+/// `TigerStyle`: Every fault type is explicit and documented.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FaultType {
     // =========================================================================
@@ -181,9 +181,7 @@ impl FaultConfig {
         // Precondition
         assert!(
             (0.0..=DST_FAULT_PROBABILITY_MAX).contains(&probability),
-            "probability must be in [0, {}], got {}",
-            DST_FAULT_PROBABILITY_MAX,
-            probability
+            "probability must be in [0, {DST_FAULT_PROBABILITY_MAX}], got {probability}"
         );
 
         Self {
@@ -219,7 +217,7 @@ struct FaultStats {
 
 /// Fault injector for simulation testing.
 ///
-/// TigerStyle:
+/// `TigerStyle`:
 /// - Explicit fault registration
 /// - Deterministic through RNG
 /// - Statistics tracked
@@ -272,8 +270,8 @@ impl FaultInjector {
     ///
     /// Returns the fault type if one should be injected, None otherwise.
     ///
-    /// TigerStyle: Uses interior mutability (Mutex) so can be called on &self,
-    /// allowing FaultInjector to be shared via Arc.
+    /// `TigerStyle`: Uses interior mutability (Mutex) so can be called on &self,
+    /// allowing `FaultInjector` to be shared via Arc.
     pub fn should_inject(&self, operation: &str) -> Option<FaultType> {
         for config in &self.configs {
             // Check operation filter
@@ -352,9 +350,9 @@ impl FaultInjector {
     }
 }
 
-/// Builder for FaultInjector (Kelpie pattern).
+/// Builder for `FaultInjector` (Kelpie pattern).
 ///
-/// TigerStyle: Builder pattern for clean configuration before sharing via Arc.
+/// `TigerStyle`: Builder pattern for clean configuration before sharing via Arc.
 pub struct FaultInjectorBuilder {
     rng: DeterministicRng,
     configs: Vec<FaultConfig>,
@@ -398,7 +396,7 @@ impl FaultInjectorBuilder {
             .with_fault(FaultConfig::new(FaultType::LlmRateLimit, probability))
     }
 
-    /// Build the FaultInjector.
+    /// Build the `FaultInjector`.
     #[must_use]
     pub fn build(self) -> FaultInjector {
         let mut injector = FaultInjector::new(self.rng);

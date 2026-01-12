@@ -1,6 +1,6 @@
 //! Evolution - Memory Evolution Tracking (ADR-006)
 //!
-//! TigerStyle: Explicit types, comprehensive testing.
+//! `TigerStyle`: Explicit types, comprehensive testing.
 //!
 //! # Overview
 //!
@@ -158,8 +158,7 @@ impl EvolutionRelation {
         );
         assert!(
             (0.0..=1.0).contains(&confidence),
-            "confidence {} must be between 0.0 and 1.0",
-            confidence
+            "confidence {confidence} must be between 0.0 and 1.0"
         );
 
         Self {
@@ -200,7 +199,7 @@ impl EvolutionRelation {
 // Evolution Relation Builder
 // =============================================================================
 
-/// Builder for EvolutionRelation with fluent API.
+/// Builder for `EvolutionRelation` with fluent API.
 #[derive(Debug)]
 pub struct EvolutionRelationBuilder {
     source_id: String,
@@ -248,7 +247,7 @@ impl EvolutionRelationBuilder {
         self
     }
 
-    /// Set created_at (for DST).
+    /// Set `created_at` (for DST).
     #[must_use]
     pub fn with_created_at(mut self, created_at: DateTime<Utc>) -> Self {
         self.created_at = Some(created_at);
@@ -392,14 +391,14 @@ mod tests {
             "a".to_string(),
             "b".to_string(),
             EvolutionType::Update,
-            "".to_string(),
+            String::new(),
             0.9,
         );
         let low = EvolutionRelation::new(
             "a".to_string(),
             "b".to_string(),
             EvolutionType::Update,
-            "".to_string(),
+            String::new(),
             0.5,
         );
 
@@ -448,10 +447,10 @@ mod tests {
     #[should_panic(expected = "source_id must not be empty")]
     fn test_evolution_relation_empty_source() {
         let _ = EvolutionRelation::new(
-            "".to_string(),
+            String::new(),
             "target".to_string(),
             EvolutionType::Update,
-            "".to_string(),
+            String::new(),
             0.5,
         );
     }
@@ -461,9 +460,9 @@ mod tests {
     fn test_evolution_relation_empty_target() {
         let _ = EvolutionRelation::new(
             "source".to_string(),
-            "".to_string(),
+            String::new(),
             EvolutionType::Update,
-            "".to_string(),
+            String::new(),
             0.5,
         );
     }
@@ -475,7 +474,7 @@ mod tests {
             "same-id".to_string(),
             "same-id".to_string(),
             EvolutionType::Update,
-            "".to_string(),
+            String::new(),
             0.5,
         );
     }
@@ -487,7 +486,7 @@ mod tests {
             "a".to_string(),
             "b".to_string(),
             EvolutionType::Update,
-            "".to_string(),
+            String::new(),
             1.5, // Too high
         );
     }
@@ -499,7 +498,7 @@ mod tests {
             "a".to_string(),
             "b".to_string(),
             EvolutionType::Update,
-            "".to_string(),
+            String::new(),
             -0.1, // Too low
         );
     }

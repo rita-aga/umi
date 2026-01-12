@@ -1,6 +1,6 @@
 //! Memory Configuration
 //!
-//! TigerStyle: Sensible defaults, builder pattern, explicit over implicit.
+//! `TigerStyle`: Sensible defaults, builder pattern, explicit over implicit.
 //!
 //! Provides global configuration for Memory system behavior.
 
@@ -12,7 +12,7 @@ use std::time::Duration;
 
 /// Global configuration for Memory system.
 ///
-/// TigerStyle:
+/// `TigerStyle`:
 /// - Sensible defaults via Default impl
 /// - Builder pattern for customization
 /// - All fields public for transparency

@@ -9,7 +9,7 @@
 //! - **🔄 Evolution Tracking**: Automatically detect updates, contradictions, and derived insights
 //! - **✅ Graceful Degradation**: System continues operating even when LLM/storage components fail
 //! - **🎯 Deterministic Testing**: Full DST (Deterministic Simulation Testing) for reproducible fault injection
-//! - **🚀 Production Backends**: LanceDB for embedded vectors, Postgres for persistence
+//! - **🚀 Production Backends**: `LanceDB` for embedded vectors, Postgres for persistence
 //!
 //! ## Quick Start
 //!
@@ -37,7 +37,7 @@
 //! # }
 //! ```
 //!
-//! **Note on SimLLM**: [`Memory::sim()`](umi::Memory::sim) uses simulation providers that return
+//! **Note on `SimLLM`**: [`Memory::sim()`](umi::Memory::sim) uses simulation providers that return
 //! deterministic placeholder data (entity names like "Alice", "Bob", generic content). This is
 //! by design for reproducible testing. For real content extraction, use production LLM providers
 //! like [`AnthropicProvider`](llm::AnthropicProvider) or [`OpenAIProvider`](llm::OpenAIProvider).
@@ -89,12 +89,13 @@
 //!
 //! ## Feature Flags
 //!
-//! - `lance` - LanceDB storage backend
-//! - `postgres` - PostgreSQL storage backend
+//! - `lance` - `LanceDB` storage backend
+//! - `postgres` - `PostgreSQL` storage backend
 //! - `anthropic` - Anthropic LLM provider (Claude)
-//! - `openai` - OpenAI LLM provider (GPT, embeddings)
+//! - `openai` - `OpenAI` LLM provider (GPT, embeddings)
 //! - `llm-providers` - All LLM providers
 //! - `embedding-providers` - All embedding providers
+//! - `opentelemetry` - OpenTelemetry distributed tracing and metrics
 //!
 //! ## Examples
 //!
@@ -124,6 +125,7 @@ pub mod llm;
 pub mod memory;
 pub mod retrieval;
 pub mod storage;
+pub mod telemetry;
 pub mod umi;
 
 // Re-export common types
@@ -195,3 +197,8 @@ pub use evolution::{DetectionOptions, DetectionResult, EvolutionError, Evolution
 
 // Umi Memory exports (main API)
 pub use umi::{Memory, MemoryError, RecallOptions, RememberOptions, RememberResult};
+
+// Telemetry exports
+pub use telemetry::{
+    init_telemetry, TelemetryConfig, TelemetryConfigBuilder, TelemetryError, TelemetryGuard,
+};

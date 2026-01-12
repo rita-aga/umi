@@ -1,6 +1,6 @@
 //! Storage - Backend Trait and Implementations
 //!
-//! TigerStyle: Abstract storage with simulation-first testing.
+//! `TigerStyle`: Abstract storage with simulation-first testing.
 //!
 //! # Architecture
 //!
@@ -18,7 +18,7 @@
 //!
 //! # Simulation-First
 //!
-//! Tests are written BEFORE implementation. SimStorageBackend enables
+//! Tests are written BEFORE implementation. `SimStorageBackend` enables
 //! deterministic testing with fault injection.
 
 mod backend;

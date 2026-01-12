@@ -1,6 +1,6 @@
 //! Working Memory - Session-Scoped KV Store with TTL
 //!
-//! TigerStyle: Explicit limits, TTL expiration, simulation-first testing.
+//! `TigerStyle`: Explicit limits, TTL expiration, simulation-first testing.
 //!
 //! # Design
 //!
@@ -127,11 +127,11 @@ struct Entry {
 
 /// Working memory - session-scoped KV store with TTL.
 ///
-/// TigerStyle:
+/// `TigerStyle`:
 /// - Bounded capacity (~1MB)
 /// - TTL-based expiration
 /// - Explicit size tracking
-/// - DST-compatible via set_clock_ms()
+/// - DST-compatible via `set_clock_ms()`
 #[derive(Debug)]
 pub struct WorkingMemory {
     /// Configuration
@@ -164,7 +164,7 @@ impl WorkingMemory {
 
     /// Set the internal clock (for DST).
     ///
-    /// TigerStyle: Explicit time control for simulation.
+    /// `TigerStyle`: Explicit time control for simulation.
     pub fn set_clock_ms(&mut self, ms: u64) {
         self.clock_ms = ms;
     }
@@ -207,8 +207,7 @@ impl WorkingMemory {
         let old_size = self
             .entries
             .get(key)
-            .map(|e| key_len + e.size_bytes)
-            .unwrap_or(0);
+            .map_or(0, |e| key_len + e.size_bytes);
         let projected_size = self.current_bytes - old_size + entry_size;
 
         // Check capacity
@@ -284,8 +283,7 @@ impl WorkingMemory {
     pub fn exists(&self, key: &str) -> bool {
         self.entries
             .get(key)
-            .map(|entry| entry.expires_at_ms > self.clock_ms)
-            .unwrap_or(false)
+            .is_some_and(|entry| entry.expires_at_ms > self.clock_ms)
     }
 
     /// Remove all expired entries.
@@ -486,10 +484,10 @@ mod tests {
         let mut wm = WorkingMemory::with_config(config);
 
         // Fill up most of the space
-        wm.set("key1", &vec![0u8; 80], None).unwrap();
+        wm.set("key1", &[0u8; 80], None).unwrap();
 
         // This should fail - not enough space
-        let result = wm.set("key2", &vec![0u8; 50], None);
+        let result = wm.set("key2", &[0u8; 50], None);
         assert!(matches!(result, Err(WorkingMemoryError::MemoryFull { .. })));
     }
 
@@ -755,7 +753,7 @@ mod property_tests {
         DeterministicRng, PropertyTest, PropertyTestable, SimClock, TimeAdvanceConfig,
     };
 
-    /// Operations that can be performed on WorkingMemory
+    /// Operations that can be performed on `WorkingMemory`
     #[derive(Debug, Clone)]
     enum WorkingMemoryOp {
         Set {
@@ -838,10 +836,8 @@ mod property_tests {
                     ttl_ms,
                 } => {
                     let value = vec![0u8; *value_len];
-                    if self.inner.set(key, &value, Some(*ttl_ms)).is_ok() {
-                        if !self.known_keys.contains(key) {
-                            self.known_keys.push(key.clone());
-                        }
+                    if self.inner.set(key, &value, Some(*ttl_ms)).is_ok() && !self.known_keys.contains(key) {
+                        self.known_keys.push(key.clone());
                     }
                 }
                 WorkingMemoryOp::Get { key } => {

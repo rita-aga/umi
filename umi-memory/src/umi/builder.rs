@@ -1,6 +1,6 @@
 //! Memory Builder Pattern
 //!
-//! TigerStyle: Clean API, sensible defaults, fail fast.
+//! `TigerStyle`: Clean API, sensible defaults, fail fast.
 //!
 //! Provides a builder pattern for constructing Memory instances with
 //! explicit component configuration.
@@ -16,9 +16,9 @@ use crate::storage::{StorageBackend, VectorBackend};
 
 /// Builder for constructing Memory instances.
 ///
-/// TigerStyle:
+/// `TigerStyle`:
 /// - Fluent API with method chaining
-/// - Panics on build() if required components missing (fail fast)
+/// - Panics on `build()` if required components missing (fail fast)
 /// - All components required (no defaults)
 ///
 /// # Example

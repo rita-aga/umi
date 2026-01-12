@@ -1,6 +1,6 @@
-//! SimStorage - Simulated Storage with Fault Injection
+//! `SimStorage` - Simulated Storage with Fault Injection
 //!
-//! TigerStyle: In-memory storage that can fail deterministically.
+//! `TigerStyle`: In-memory storage that can fail deterministically.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -64,11 +64,11 @@ struct StorageEntry {
 
 /// Simulated storage for DST testing.
 ///
-/// TigerStyle:
-/// - In-memory HashMap storage
+/// `TigerStyle`:
+/// - In-memory `HashMap` storage
 /// - Fault injection at every operation
 /// - Full statistics tracking
-/// - Shared FaultInjector via Arc (Kelpie pattern)
+/// - Shared `FaultInjector` via Arc (Kelpie pattern)
 #[derive(Debug)]
 pub struct SimStorage {
     data: HashMap<String, StorageEntry>,
@@ -87,7 +87,7 @@ pub struct SimStorage {
 impl SimStorage {
     /// Create a new simulated storage.
     ///
-    /// TigerStyle: Takes Arc<FaultInjector> to share with simulation harness.
+    /// `TigerStyle`: Takes Arc<FaultInjector> to share with simulation harness.
     #[must_use]
     pub fn new(clock: SimClock, rng: DeterministicRng, faults: Arc<FaultInjector>) -> Self {
         Self {
@@ -247,21 +247,21 @@ impl SimStorage {
     fn fault_to_error(&self, fault: FaultType, operation: &str) -> StorageError {
         match fault {
             FaultType::StorageWriteFail => {
-                StorageError::Write(format!("injected {} fault", operation))
+                StorageError::Write(format!("injected {operation} fault"))
             }
             FaultType::StorageReadFail => {
-                StorageError::Read(format!("injected {} fault", operation))
+                StorageError::Read(format!("injected {operation} fault"))
             }
             FaultType::StorageDeleteFail => {
-                StorageError::Delete(format!("injected {} fault", operation))
+                StorageError::Delete(format!("injected {operation} fault"))
             }
             FaultType::StorageCorruption => {
-                StorageError::Corruption(format!("injected {} fault", operation))
+                StorageError::Corruption(format!("injected {operation} fault"))
             }
             FaultType::StorageDiskFull => {
-                StorageError::DiskFull(format!("injected {} fault", operation))
+                StorageError::DiskFull(format!("injected {operation} fault"))
             }
-            _ => StorageError::Write(format!("unexpected fault type for {}", operation)),
+            _ => StorageError::Write(format!("unexpected fault type for {operation}")),
         }
     }
 }

@@ -1,6 +1,6 @@
 //! Retrieval Types - Search Options and Results
 //!
-//! TigerStyle: Type-safe options, explicit validation.
+//! `TigerStyle`: Type-safe options, explicit validation.
 
 use crate::constants::{RETRIEVAL_RESULTS_COUNT_DEFAULT, RETRIEVAL_RESULTS_COUNT_MAX};
 use crate::storage::Entity;
@@ -11,7 +11,7 @@ use crate::storage::Entity;
 
 /// Options for search operations.
 ///
-/// TigerStyle: Builder pattern with validation.
+/// `TigerStyle`: Builder pattern with validation.
 #[derive(Debug, Clone)]
 pub struct SearchOptions {
     /// Maximum number of results to return.
@@ -20,7 +20,7 @@ pub struct SearchOptions {
     /// Whether to use deep search (LLM query rewriting).
     pub deep_search: bool,
 
-    /// Optional time range filter (start_ms, end_ms).
+    /// Optional time range filter (`start_ms`, `end_ms`).
     pub time_range: Option<(u64, u64)>,
 }
 
@@ -74,14 +74,12 @@ impl SearchOptions {
     /// - `end_ms` - End time in milliseconds since epoch
     ///
     /// # Panics
-    /// Panics if start_ms > end_ms.
+    /// Panics if `start_ms` > `end_ms`.
     #[must_use]
     pub fn with_time_range(mut self, start_ms: u64, end_ms: u64) -> Self {
         debug_assert!(
             start_ms <= end_ms,
-            "start_ms must be <= end_ms: {} > {}",
-            start_ms,
-            end_ms
+            "start_ms must be <= end_ms: {start_ms} > {end_ms}"
         );
         self.time_range = Some((start_ms, end_ms));
         self

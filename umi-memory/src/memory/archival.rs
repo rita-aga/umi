@@ -1,6 +1,6 @@
 //! Archival Memory - Tier 3 Long-Term Storage
 //!
-//! TigerStyle: High-level API over StorageBackend.
+//! `TigerStyle`: High-level API over `StorageBackend`.
 //!
 //! # Simulation-First
 //!
@@ -56,8 +56,8 @@ impl Default for ArchivalMemoryConfig {
 
 /// Archival Memory - Tier 3 long-term storage.
 ///
-/// TigerStyle:
-/// - High-level API over StorageBackend
+/// `TigerStyle`:
+/// - High-level API over `StorageBackend`
 /// - Automatic naming from content
 /// - Generic over backend for testing
 #[derive(Debug)]
@@ -183,14 +183,14 @@ impl<B: StorageBackend> ArchivalMemory<B> {
             if let Some(last_space) = truncated.rfind(' ') {
                 format!("{}...", &truncated[..last_space])
             } else {
-                format!("{}...", truncated)
+                format!("{truncated}...")
             }
         }
     }
 
     /// Get the underlying backend (for testing).
     #[cfg(test)]
-    pub fn backend(&self) -> &B {
+    #[must_use] pub fn backend(&self) -> &B {
         &self.backend
     }
 }
@@ -304,7 +304,7 @@ mod tests {
 
         for i in 0..10 {
             memory
-                .remember(&format!("Note {} about coding", i), EntityType::Note, None)
+                .remember(&format!("Note {i} about coding"), EntityType::Note, None)
                 .await
                 .unwrap();
         }
@@ -524,7 +524,7 @@ mod property_tests {
     };
     use crate::storage::SimStorageBackend;
 
-    /// Operations on ArchivalMemory
+    /// Operations on `ArchivalMemory`
     #[derive(Debug, Clone)]
     enum MemoryOp {
         Remember {

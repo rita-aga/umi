@@ -1,6 +1,6 @@
 //! Retrieval Prompts - LLM Prompt Templates
 //!
-//! TigerStyle: Structured prompts with clear output format.
+//! `TigerStyle`: Structured prompts with clear output format.
 
 /// Query rewrite prompt template.
 ///

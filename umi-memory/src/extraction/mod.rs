@@ -1,6 +1,6 @@
 //! Entity Extraction - LLM-powered entity and relation extraction
 //!
-//! TigerStyle: Sim-first, deterministic, graceful degradation.
+//! `TigerStyle`: Sim-first, deterministic, graceful degradation.
 //!
 //! See ADR-014 for design rationale.
 //!
@@ -118,7 +118,7 @@ struct RawRelation {
 
 /// Entity extractor using LLM.
 ///
-/// TigerStyle: Generic over provider for sim/production flexibility.
+/// `TigerStyle`: Generic over provider for sim/production flexibility.
 ///
 /// # Example
 ///
@@ -368,8 +368,7 @@ impl<P: LLMProvider> EntityExtractor<P> {
             let entity_type = raw
                 .entity_type
                 .as_deref()
-                .map(EntityType::from_str_or_note)
-                .unwrap_or(EntityType::Note);
+                .map_or(EntityType::Note, EntityType::from_str_or_note);
 
             // Get content
             let content = raw
@@ -388,8 +387,7 @@ impl<P: LLMProvider> EntityExtractor<P> {
             // Parse confidence
             let confidence = raw
                 .confidence
-                .map(|c| c.clamp(EXTRACTION_CONFIDENCE_MIN, EXTRACTION_CONFIDENCE_MAX))
-                .unwrap_or(EXTRACTION_CONFIDENCE_DEFAULT);
+                .map_or(EXTRACTION_CONFIDENCE_DEFAULT, |c| c.clamp(EXTRACTION_CONFIDENCE_MIN, EXTRACTION_CONFIDENCE_MAX));
 
             entities.push(ExtractedEntity::new(name, entity_type, content, confidence));
         }
@@ -417,14 +415,12 @@ impl<P: LLMProvider> EntityExtractor<P> {
             let relation_type = raw
                 .relation_type
                 .as_deref()
-                .map(RelationType::from_str_or_relates_to)
-                .unwrap_or(RelationType::RelatesTo);
+                .map_or(RelationType::RelatesTo, RelationType::from_str_or_relates_to);
 
             // Parse confidence
             let confidence = raw
                 .confidence
-                .map(|c| c.clamp(EXTRACTION_CONFIDENCE_MIN, EXTRACTION_CONFIDENCE_MAX))
-                .unwrap_or(EXTRACTION_CONFIDENCE_DEFAULT);
+                .map_or(EXTRACTION_CONFIDENCE_DEFAULT, |c| c.clamp(EXTRACTION_CONFIDENCE_MIN, EXTRACTION_CONFIDENCE_MAX));
 
             relations.push(ExtractedRelation::new(
                 source,
@@ -793,7 +789,7 @@ mod dst_tests {
                              entity.name, entity.confidence);
                 }
                 Err(e) => {
-                    panic!("BUG: LLM timeout should return fallback, not error: {:?}", e);
+                    panic!("BUG: LLM timeout should return fallback, not error: {e:?}");
                 }
             }
 
@@ -831,8 +827,7 @@ mod dst_tests {
                 }
                 Err(e) => {
                     panic!(
-                        "BUG: Rate limit should return fallback, not error: {:?}",
-                        e
+                        "BUG: Rate limit should return fallback, not error: {e:?}"
                     );
                 }
             }
@@ -875,7 +870,7 @@ mod dst_tests {
                 }
                 Err(e) => {
                     // Also acceptable if properly reported
-                    println!("Invalid response returned error (acceptable): {:?}", e);
+                    println!("Invalid response returned error (acceptable): {e:?}");
                 }
             }
 
@@ -905,7 +900,7 @@ mod dst_tests {
             for i in 0..10 {
                 let result = extractor
                     .extract(
-                        &format!("Person {} is a software engineer", i),
+                        &format!("Person {i} is a software engineer"),
                         ExtractionOptions::default(),
                     )
                     .await;
@@ -931,18 +926,15 @@ mod dst_tests {
             // This is CORRECT behavior - deterministic RNG means same seed = same results
             assert!(
                 fallback_count == 10,
-                "BUG: With seed 42 + 50% rate, should have 10 fallbacks (deterministic). Got {}",
-                fallback_count
+                "BUG: With seed 42 + 50% rate, should have 10 fallbacks (deterministic). Got {fallback_count}"
             );
             assert!(
                 success_count == 0,
-                "BUG: With seed 42 + 50% rate, should have 0 successes (deterministic). Got {}",
-                success_count
+                "BUG: With seed 42 + 50% rate, should have 0 successes (deterministic). Got {success_count}"
             );
 
             println!(
-                "✓ Probabilistic failure DETERMINISTIC: {} fallbacks, {} successes (seed 42)",
-                fallback_count, success_count
+                "✓ Probabilistic failure DETERMINISTIC: {fallback_count} fallbacks, {success_count} successes (seed 42)"
             );
 
             Ok::<_, anyhow::Error>(())
@@ -978,8 +970,7 @@ mod dst_tests {
                 }
                 Err(e) => {
                     panic!(
-                        "BUG: Service unavailable should return fallback, not error: {:?}",
-                        e
+                        "BUG: Service unavailable should return fallback, not error: {e:?}"
                     );
                 }
             }

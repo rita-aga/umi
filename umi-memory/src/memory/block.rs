@@ -1,6 +1,6 @@
 //! Memory Block - Individual blocks within Core Memory
 //!
-//! TigerStyle: Each block has explicit type, label, and size tracking.
+//! `TigerStyle`: Each block has explicit type, label, and size tracking.
 
 use std::fmt;
 use uuid::Uuid;
@@ -45,7 +45,7 @@ impl fmt::Display for MemoryBlockId {
 
 /// Types of memory blocks in core memory.
 ///
-/// TigerStyle: Fixed set of block types with clear purposes.
+/// `TigerStyle`: Fixed set of block types with clear purposes.
 ///
 /// # Block Types
 ///
@@ -87,7 +87,7 @@ impl MemoryBlockType {
 
     /// Get render priority (lower = rendered first).
     ///
-    /// TigerStyle: Explicit ordering for deterministic rendering.
+    /// `TigerStyle`: Explicit ordering for deterministic rendering.
     #[must_use]
     pub fn priority(&self) -> u8 {
         match self {
@@ -122,7 +122,7 @@ impl fmt::Display for MemoryBlockType {
 
 /// A single memory block.
 ///
-/// TigerStyle: Immutable content with explicit size tracking.
+/// `TigerStyle`: Immutable content with explicit size tracking.
 #[derive(Debug, Clone)]
 pub struct MemoryBlock {
     /// Unique identifier
@@ -296,7 +296,7 @@ impl MemoryBlock {
 
     /// Render the block as XML for LLM context.
     ///
-    /// TigerStyle: Deterministic, predictable output format.
+    /// `TigerStyle`: Deterministic, predictable output format.
     #[must_use]
     pub fn render(&self) -> String {
         let type_attr = self.block_type.as_str();

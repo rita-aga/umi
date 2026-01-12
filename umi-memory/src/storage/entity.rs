@@ -1,6 +1,6 @@
 //! Entity - Structured data for Archival Memory
 //!
-//! TigerStyle: Explicit types, validation, builder pattern.
+//! `TigerStyle`: Explicit types, validation, builder pattern.
 
 use std::collections::HashMap;
 
@@ -88,7 +88,7 @@ impl std::fmt::Display for EntityType {
 ///
 /// Used when an entity was extracted from multimedia content (images, audio,
 /// video, PDFs, web pages). The entity stores the extracted text/summary,
-/// while SourceRef points to the original content.
+/// while `SourceRef` points to the original content.
 ///
 /// # Example
 ///
@@ -187,7 +187,7 @@ impl std::fmt::Display for SourceRef {
 
 /// An entity in archival memory.
 ///
-/// TigerStyle: Explicit fields, no Option where not needed.
+/// `TigerStyle`: Explicit fields, no Option where not needed.
 ///
 /// # Temporal Metadata (ADR-006)
 ///
@@ -815,6 +815,6 @@ mod tests {
     #[test]
     fn test_source_ref_display() {
         let source_ref = SourceRef::new("file:///photos/image.png".to_string());
-        assert_eq!(format!("{}", source_ref), "file:///photos/image.png");
+        assert_eq!(format!("{source_ref}"), "file:///photos/image.png");
     }
 }

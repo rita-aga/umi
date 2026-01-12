@@ -1,6 +1,6 @@
 //! Evolution Tracking - Memory Relationship Detection (ADR-016)
 //!
-//! TigerStyle: Sim-first, deterministic, graceful degradation.
+//! `TigerStyle`: Sim-first, deterministic, graceful degradation.
 //!
 //! # Overview
 //!
@@ -60,7 +60,7 @@ pub enum EvolutionError {
 
 /// Options for evolution detection.
 ///
-/// TigerStyle: Builder pattern with validation.
+/// `TigerStyle`: Builder pattern with validation.
 #[derive(Debug, Clone)]
 pub struct DetectionOptions {
     /// Minimum confidence threshold to return a result.
@@ -86,10 +86,7 @@ impl DetectionOptions {
         debug_assert!(
             (EVOLUTION_CONFIDENCE_MIN as f32..=EVOLUTION_CONFIDENCE_MAX as f32)
                 .contains(&confidence),
-            "min_confidence must be {}-{}: got {}",
-            EVOLUTION_CONFIDENCE_MIN,
-            EVOLUTION_CONFIDENCE_MAX,
-            confidence
+            "min_confidence must be {EVOLUTION_CONFIDENCE_MIN}-{EVOLUTION_CONFIDENCE_MAX}: got {confidence}"
         );
         self.min_confidence = confidence;
         self
@@ -98,14 +95,12 @@ impl DetectionOptions {
     /// Set the maximum number of comparisons.
     ///
     /// # Panics
-    /// Panics if max_comparisons is 0 or exceeds limit.
+    /// Panics if `max_comparisons` is 0 or exceeds limit.
     #[must_use]
     pub fn with_max_comparisons(mut self, max_comparisons: usize) -> Self {
         debug_assert!(
             max_comparisons > 0 && max_comparisons <= EVOLUTION_EXISTING_ENTITIES_COUNT_MAX,
-            "max_comparisons must be 1-{}: got {}",
-            EVOLUTION_EXISTING_ENTITIES_COUNT_MAX,
-            max_comparisons
+            "max_comparisons must be 1-{EVOLUTION_EXISTING_ENTITIES_COUNT_MAX}: got {max_comparisons}"
         );
         self.max_comparisons = max_comparisons;
         self
@@ -176,7 +171,7 @@ impl DetectionResult {
 /// Uses LLM to detect relationships between new and existing memories.
 ///
 /// # Type Parameters
-/// - `L`: LLM provider for detection (SimLLMProvider for testing)
+/// - `L`: LLM provider for detection (`SimLLMProvider` for testing)
 /// - `S`: Storage backend for entity lookup
 ///
 /// # Example
@@ -279,7 +274,7 @@ impl<L: LLMProvider, S: StorageBackend> EvolutionTracker<L, S> {
         Ok(Some(DetectionResult::new(relation, true)))
     }
 
-    /// Parse LLM response into EvolutionRelation.
+    /// Parse LLM response into `EvolutionRelation`.
     ///
     /// # Arguments
     /// - `response` - Raw LLM response
@@ -320,9 +315,8 @@ impl<L: LLMProvider, S: StorageBackend> EvolutionTracker<L, S> {
         // Get confidence
         let confidence = data
             .get("confidence")
-            .and_then(|c| c.as_f64())
-            .map(|c| c as f32)
-            .unwrap_or(0.5)
+            .and_then(serde_json::Value::as_f64)
+            .map_or(0.5, |c| c as f32)
             .clamp(
                 EVOLUTION_CONFIDENCE_MIN as f32,
                 EVOLUTION_CONFIDENCE_MAX as f32,
@@ -504,7 +498,7 @@ mod tests {
 
         let new_entity = create_entity("new-1", "Test", "New content");
         let existing: Vec<Entity> = (0..20)
-            .map(|i| create_entity(&format!("old-{}", i), "Test", &format!("Content {}", i)))
+            .map(|i| create_entity(&format!("old-{i}"), "Test", &format!("Content {i}")))
             .collect();
 
         let options = DetectionOptions::new().with_max_comparisons(3);
@@ -703,8 +697,7 @@ mod tests {
 
         let long_reason = "a".repeat(2000);
         let response = format!(
-            r#"{{"type": "update", "reason": "{}", "related_id": "old-1", "confidence": 0.9}}"#,
-            long_reason
+            r#"{{"type": "update", "reason": "{long_reason}", "related_id": "old-1", "confidence": 0.9}}"#
         );
         let result = tracker.parse_response(&response, "new-1");
 
@@ -856,7 +849,7 @@ mod dst_tests {
                 .detect(&new_entity, &[old_entity], DetectionOptions::default())
                 .await;
 
-            println!("Result: {:?}", result);
+            println!("Result: {result:?}");
 
             // PROPER VERIFICATION: Check that result is Ok(None)
             assert!(
@@ -901,7 +894,7 @@ mod dst_tests {
                 .detect(&new_entity, &[old_entity], DetectionOptions::default())
                 .await;
 
-            println!("Result: {:?}", result);
+            println!("Result: {result:?}");
 
             // PROPER VERIFICATION
             assert!(
@@ -945,7 +938,7 @@ mod dst_tests {
                 .detect(&new_entity, &[old_entity], DetectionOptions::default())
                 .await;
 
-            println!("Result: {:?}", result);
+            println!("Result: {result:?}");
 
             // PROPER VERIFICATION: Invalid JSON should be parsed as None
             assert!(
@@ -989,13 +982,13 @@ mod dst_tests {
             let mut some_count = 0;
 
             for i in 0..10 {
-                let new_entity = create_entity(&format!("new-{}", i), "Test", &format!("Content {}", i));
+                let new_entity = create_entity(&format!("new-{i}"), "Test", &format!("Content {i}"));
 
                 let result = tracker
                     .detect(&new_entity, &[old_entity.clone()], DetectionOptions::default())
                     .await;
 
-                assert!(result.is_ok(), "Iteration {}: Expected Ok, got Err", i);
+                assert!(result.is_ok(), "Iteration {i}: Expected Ok, got Err");
 
                 match result.unwrap() {
                     None => none_count += 1,
@@ -1004,8 +997,8 @@ mod dst_tests {
             }
 
             println!("Results after 10 detections with 50% failure rate (seed 42):");
-            println!("  - Skipped (None): {}", none_count);
-            println!("  - Detected (Some): {}", some_count);
+            println!("  - Skipped (None): {none_count}");
+            println!("  - Detected (Some): {some_count}");
 
             // PROPER VERIFICATION: With seed 42, pattern should be deterministic and reproducible
             // CRITICAL: With seed 42 + 50% rate, we get 10 None, 0 Some (deterministic!)
@@ -1021,8 +1014,7 @@ mod dst_tests {
             assert_eq!(total, 10, "BUG: Should have exactly 10 results");
 
             println!(
-                "✓ Probabilistic failure is deterministic: {} skipped, {} detected (seed 42)",
-                none_count, some_count
+                "✓ Probabilistic failure is deterministic: {none_count} skipped, {some_count} detected (seed 42)"
             );
             println!("  (Deterministic: same seed always produces same sequence)");
 
@@ -1055,7 +1047,7 @@ mod dst_tests {
                 .detect(&new_entity, &[old_entity], DetectionOptions::default())
                 .await;
 
-            println!("Result: {:?}", result);
+            println!("Result: {result:?}");
 
             // PROPER VERIFICATION
             assert!(
@@ -1094,7 +1086,7 @@ mod dst_tests {
 
             // Multiple existing entities
             let existing: Vec<Entity> = (0..5)
-                .map(|i| create_entity(&format!("old-{}", i), "Alice", &format!("Content {}", i)))
+                .map(|i| create_entity(&format!("old-{i}"), "Alice", &format!("Content {i}")))
                 .collect();
 
             let new_entity = create_entity("new-1", "Alice", "New information");

@@ -1,6 +1,6 @@
 //! Simulated Embedding Provider for Deterministic Testing
 //!
-//! TigerStyle: Deterministic, reproducible embeddings for DST.
+//! `TigerStyle`: Deterministic, reproducible embeddings for DST.
 //!
 //! # Overview
 //!
@@ -413,9 +413,7 @@ mod tests {
             let norm: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
             assert!(
                 (norm - 1.0).abs() < 0.001,
-                "embedding for '{}' must be normalized, got norm {}",
-                text,
-                norm
+                "embedding for '{text}' must be normalized, got norm {norm}"
             );
         }
     }

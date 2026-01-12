@@ -1,6 +1,6 @@
-//! SimLLM - Deterministic LLM Simulation
+//! `SimLLM` - Deterministic LLM Simulation
 //!
-//! TigerStyle: Deterministic LLM responses for simulation testing.
+//! `TigerStyle`: Deterministic LLM responses for simulation testing.
 //!
 //! See ADR-012 for design rationale.
 
@@ -23,7 +23,7 @@ use crate::constants::{
 
 /// Errors from LLM operations.
 ///
-/// TigerStyle: Explicit error variants for all failure modes.
+/// `TigerStyle`: Explicit error variants for all failure modes.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum LLMError {
     /// Request timed out
@@ -77,7 +77,7 @@ const COMMON_ORGS: &[&str] = &[
 
 /// Simulated LLM for deterministic testing.
 ///
-/// TigerStyle:
+/// `TigerStyle`:
 /// - Deterministic responses via seeded RNG
 /// - Prompt routing to domain-specific generators
 /// - Fault injection integration
@@ -111,7 +111,7 @@ pub struct SimLLM {
 }
 
 impl SimLLM {
-    /// Create a new SimLLM.
+    /// Create a new `SimLLM`.
     ///
     /// # Arguments
     /// - `clock`: Simulated clock for latency
@@ -130,7 +130,7 @@ impl SimLLM {
 
     /// Disable latency simulation (useful for tests without time advancement).
     ///
-    /// By default, SimLLM simulates latency using the clock. This blocks if
+    /// By default, `SimLLM` simulates latency using the clock. This blocks if
     /// the clock isn't being advanced. Use this method to disable latency
     /// for simple tests.
     #[must_use]
@@ -147,11 +147,8 @@ impl SimLLM {
     pub fn with_latency(mut self, latency_ms: u64) -> Self {
         // Precondition
         assert!(
-            latency_ms >= LLM_LATENCY_MS_MIN && latency_ms <= LLM_LATENCY_MS_MAX,
-            "latency must be in [{}, {}], got {}",
-            LLM_LATENCY_MS_MIN,
-            LLM_LATENCY_MS_MAX,
-            latency_ms
+            (LLM_LATENCY_MS_MIN..=LLM_LATENCY_MS_MAX).contains(&latency_ms),
+            "latency must be in [{LLM_LATENCY_MS_MIN}, {LLM_LATENCY_MS_MAX}], got {latency_ms}"
         );
 
         self.base_latency_ms = latency_ms;
@@ -203,7 +200,7 @@ impl SimLLM {
         let response = self.complete(prompt).await?;
 
         serde_json::from_str(&response)
-            .map_err(|e| LLMError::JsonError(format!("Failed to parse JSON: {}", e)))
+            .map_err(|e| LLMError::JsonError(format!("Failed to parse JSON: {e}")))
     }
 
     /// Route prompt to the appropriate generator based on content.
@@ -287,12 +284,11 @@ impl SimLLM {
         let query = prompt
             .lines()
             .find(|line| line.trim().starts_with("Query:") || line.trim().starts_with("query:"))
-            .map(|line| {
+            .map_or(&prompt[..50.min(prompt.len())], |line| {
                 line.trim_start_matches("Query:")
                     .trim_start_matches("query:")
                     .trim()
-            })
-            .unwrap_or(&prompt[..50.min(prompt.len())]);
+            });
 
         // Generate variations
         let num_rewrites = rng.next_usize(2, LLM_QUERY_REWRITES_COUNT_MAX);
@@ -309,7 +305,7 @@ impl SimLLM {
         for _ in 0..num_rewrites - 1 {
             let prefix = prefixes[rng.next_usize(0, prefixes.len() - 1)];
             let suffix = suffixes[rng.next_usize(0, suffixes.len() - 1)];
-            rewrites.push(format!("{} {}{}", prefix, query, suffix));
+            rewrites.push(format!("{prefix} {query}{suffix}"));
         }
 
         serde_json::to_string(&json!({
@@ -688,9 +684,7 @@ mod tests {
         // Clock should have advanced (we advanced by 600ms)
         assert!(
             end >= start + 500,
-            "Expected clock to advance at least 500ms, start={}, end={}",
-            start,
-            end
+            "Expected clock to advance at least 500ms, start={start}, end={end}"
         );
     }
 

@@ -1,6 +1,6 @@
 //! Simulation - DST Test Harness
 //!
-//! TigerStyle: Simulation harness that provides deterministic environment.
+//! `TigerStyle`: Simulation harness that provides deterministic environment.
 
 use std::future::Future;
 use std::sync::Arc;
@@ -15,7 +15,7 @@ use super::storage::SimStorage;
 
 /// Environment provided to simulation tests.
 ///
-/// TigerStyle: All simulation resources in one place.
+/// `TigerStyle`: All simulation resources in one place.
 pub struct SimEnvironment {
     /// Simulation configuration
     pub config: SimConfig,
@@ -58,7 +58,7 @@ impl SimEnvironment {
 
 /// DST simulation harness.
 ///
-/// TigerStyle:
+/// `TigerStyle`:
 /// - Single seed controls all randomness
 /// - Faults are registered explicitly
 /// - Environment is provided to test closure
@@ -99,7 +99,7 @@ impl Simulation {
 
     /// Register a fault to inject during simulation.
     ///
-    /// TigerStyle: Fluent API for fault registration.
+    /// `TigerStyle`: Fluent API for fault registration.
     #[must_use]
     pub fn with_fault(mut self, fault_config: FaultConfig) -> Self {
         self.fault_configs.push(fault_config);
@@ -108,7 +108,7 @@ impl Simulation {
 
     /// Add common storage faults.
     ///
-    /// TigerStyle: Convenience method for common fault patterns.
+    /// `TigerStyle`: Convenience method for common fault patterns.
     #[must_use]
     pub fn with_storage_faults(self, probability: f64) -> Self {
         use super::fault::FaultType;
@@ -137,7 +137,7 @@ impl Simulation {
 
     /// Run the simulation with the given test function.
     ///
-    /// TigerStyle: Test function receives environment and returns Result.
+    /// `TigerStyle`: Test function receives environment and returns Result.
     ///
     /// # Errors
     /// Returns any error from the test function.
@@ -237,7 +237,7 @@ impl Simulation {
 
 /// Create a simulation with optional seed.
 ///
-/// TigerStyle: Factory function for common case.
+/// `TigerStyle`: Factory function for common case.
 #[must_use]
 pub fn create_simulation(seed: Option<u64>) -> Simulation {
     let config = match seed {
