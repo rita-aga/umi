@@ -435,6 +435,53 @@ Trajectories don't just improve agents—they improve the entire stack:
 - **Skills** - Discover gaps, deprecate underused tools
 - **MCP** - Behavioral tool recommendations from history
 
+### LLM-Extracted Decisions and Entities
+
+Decisions and entities are **extracted post-hoc by LLMs**, not captured at runtime:
+
+```
+Raw Trajectory → LLM Extraction → Enriched Trajectory
+                                  ├── decisions: [{type, reasoning, alternatives}]
+                                  └── entities: [{name, type, importance}]
+```
+
+This enables:
+- Working on any agent's trajectories (not just your own)
+- Re-extracting with better prompts
+- Inferring implicit decisions
+
+### GRPO Variants with Per-Step Rewards
+
+| Variant | Per-Step? | Source |
+|---------|-----------|--------|
+| Vanilla GRPO | No | DeepSeek |
+| GRPO + LightningRL | Yes | Microsoft |
+| GSPO | Yes | Qwen/Alibaba |
+| GRPO + PRM | Yes | OpenAI-style |
+
+### Tinker (Thinking Machines Lab)
+
+Token-level training primitives from Mira Murati's new company:
+
+```python
+tinker.forward_backward(tokens, rewards)  # Token-level
+tinker.sample(prompt)                      # Generate
+tinker.update()                            # Update weights
+```
+
+Best used with Agent Lightning for credit assignment.
+
+### How Decisions/Entities Flow Through Training
+
+```
+Decisions/Entities → Better Rewards → GRPO Training
+                   → Better Grouping →
+                   → Better Credit Assignment →
+
+The structure doesn't enter gradients directly,
+but it COMPUTES the rewards that drive gradients.
+```
+
 See `docs/trajectories-continual-learning.md` for full analysis.
 
 ---
@@ -455,4 +502,5 @@ See `docs/trajectories-continual-learning.md` for full analysis.
 - [Fireworks RFT](https://fireworks.ai/blog/fireworks-rft)
 - [Unsloth RL Guide](https://unsloth.ai/docs/get-started/reinforcement-learning-rl-guide)
 - [OpenPipe ART](https://github.com/OpenPipe/ART)
+- [Tinker - Thinking Machines Lab](https://thinkingmachines.ai/tinker/)
 - [MemGPT Paper](https://arxiv.org/abs/2310.08560)
