@@ -20,11 +20,12 @@
 //! use umi_core::retrieval::{DualRetriever, SearchOptions};
 //! use umi_core::llm::SimLLMProvider;
 //! use umi_core::storage::SimStorageBackend;
+//! use umi_core::dst::SimConfig;
 //!
 //! #[tokio::main]
 //! async fn main() {
 //!     let llm = SimLLMProvider::with_seed(42);
-//!     let storage = SimStorageBackend::new();
+//!     let storage = SimStorageBackend::new(SimConfig::with_seed(42));
 //!     let retriever = DualRetriever::new(llm, storage);
 //!
 //!     let result = retriever.search("Who works at Acme?", SearchOptions::default()).await.unwrap();
@@ -113,11 +114,12 @@ impl From<crate::storage::StorageError> for RetrievalError {
 /// use umi_core::retrieval::{DualRetriever, SearchOptions};
 /// use umi_core::llm::SimLLMProvider;
 /// use umi_core::storage::SimStorageBackend;
+/// use umi_core::dst::SimConfig;
 ///
 /// #[tokio::main]
 /// async fn main() {
 ///     let llm = SimLLMProvider::with_seed(42);
-///     let storage = SimStorageBackend::new();
+///     let storage = SimStorageBackend::new(SimConfig::with_seed(42));
 ///     let retriever = DualRetriever::new(llm, storage);
 ///
 ///     // Deep search with query rewriting

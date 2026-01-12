@@ -70,7 +70,7 @@ pub const ENTITY_TAGS_COUNT_MAX: usize = 100;
 pub const ENTITY_TAG_BYTES_MAX: usize = 256;
 
 // =============================================================================
-// Evolution Limits (ADR-006)
+// Evolution Limits (ADR-006, ADR-016)
 // =============================================================================
 
 /// Maximum length of evolution relation reason
@@ -78,6 +78,18 @@ pub const EVOLUTION_REASON_BYTES_MAX: usize = 1024;
 
 /// Maximum number of evolution relations per entity
 pub const EVOLUTION_RELATIONS_PER_ENTITY_COUNT_MAX: usize = 100;
+
+/// Maximum existing entities to compare against in detection
+pub const EVOLUTION_EXISTING_ENTITIES_COUNT_MAX: usize = 10;
+
+/// Default confidence threshold for evolution detection
+pub const EVOLUTION_CONFIDENCE_THRESHOLD_DEFAULT: f64 = 0.3;
+
+/// Minimum confidence for evolution detection
+pub const EVOLUTION_CONFIDENCE_MIN: f64 = 0.0;
+
+/// Maximum confidence for evolution detection
+pub const EVOLUTION_CONFIDENCE_MAX: f64 = 1.0;
 
 // =============================================================================
 // Search Limits

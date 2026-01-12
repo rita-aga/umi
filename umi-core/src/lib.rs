@@ -52,6 +52,7 @@
 
 pub mod constants;
 pub mod dst;
+pub mod evolution;
 pub mod extraction;
 pub mod llm;
 pub mod memory;
@@ -112,3 +113,6 @@ pub use extraction::{
 
 // Retrieval exports
 pub use retrieval::{DualRetriever, RetrievalError, SearchOptions, SearchResult};
+
+// Evolution exports
+pub use evolution::{DetectionOptions, DetectionResult, EvolutionError, EvolutionTracker};

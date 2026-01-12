@@ -165,7 +165,12 @@ Phase R1: Port Python Layer to Rust (IN PROGRESS)
 │   ├── needs_deep_search() heuristic routing
 │   ├── rewrite_query() via LLM with graceful degradation
 │   └── merge_rrf() Reciprocal Rank Fusion
-├── [ ] EvolutionTracker (comparison + scoring)
+├── [✅] EvolutionTracker (ADR-016)
+│   ├── EvolutionTracker<L: LLMProvider, S: StorageBackend>
+│   ├── DetectionOptions, DetectionResult
+│   ├── Uses existing EvolutionType, EvolutionRelation from storage
+│   ├── Graceful degradation (returns None on LLM failure)
+│   └── Confidence threshold filtering
 └── [ ] Memory class (orchestrates all components)
 
 Phase R2: Storage Backends in Rust
@@ -187,6 +192,7 @@ Phase R3: Publish to crates.io
 | 2026-01-11 | R1 | LLM Provider Trait | 263 → 263 |
 | 2026-01-11 | R1 | EntityExtractor | 263 → 301 |
 | 2026-01-11 | R1 | DualRetriever | 301 → 334 |
+| 2026-01-11 | R1 | EvolutionTracker | 334 → 371 |
 
 ### When to Choose Full Rust
 
