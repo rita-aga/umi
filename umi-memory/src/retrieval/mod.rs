@@ -587,9 +587,22 @@ mod tests {
             .await
             .unwrap();
 
-        // Deep search should be used for question word
-        assert!(result.deep_search_used);
-        assert!(result.query_variations.len() >= 1);
+        // FIXED AFTER BUG FIX: This test now validates correct behavior
+        // With seed 42, SimLLM returns only 1 variation (original query)
+        // This means expansion didn't succeed, so deep_search_used should be FALSE
+        assert_eq!(
+            result.query_variations.len(),
+            1,
+            "With seed 42, expansion returns only original query"
+        );
+        assert_eq!(result.query_variations[0], "Who works at Acme?");
+        assert!(
+            !result.deep_search_used,
+            "BUG FIX VALIDATED: deep_search_used is false when expansion fails (variations.len == 1)"
+        );
+
+        // Before the bug fix, deep_search_used would have been TRUE here (incorrect!)
+        // After the fix, it's correctly FALSE because expansion didn't produce variations
     }
 
     #[tokio::test]
@@ -914,7 +927,7 @@ mod dst_tests {
         let sim = Simulation::new(SimConfig::with_seed(42))
             .with_fault(FaultConfig::new(FaultType::StorageReadFail, 1.0));
 
-        sim.run(|env| async move {
+        sim.run(|_env| async move {
             let llm = SimLLMProvider::with_seed(42);
             let embedder = SimEmbeddingProvider::with_seed(42);
             let vector = SimVectorBackend::new(42);
