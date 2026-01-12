@@ -452,9 +452,6 @@ mod tests {
         let hash1 = provider1.hash_text("test");
         let hash2 = provider2.hash_text("test");
 
-        assert_ne!(
-            hash1, hash2,
-            "different seed must produce different hashes"
-        );
+        assert_ne!(hash1, hash2, "different seed must produce different hashes");
     }
 }

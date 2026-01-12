@@ -201,8 +201,11 @@ fn bench_lance_store_entity(c: &mut Criterion) {
                 || {
                     // Setup: Create fresh Lance storage for each iteration
                     let temp_dir = tempfile::tempdir().unwrap();
-                    let storage =
-                        rt.block_on(LanceStorageBackend::connect(temp_dir.path().to_str().unwrap())).unwrap();
+                    let storage = rt
+                        .block_on(LanceStorageBackend::connect(
+                            temp_dir.path().to_str().unwrap(),
+                        ))
+                        .unwrap();
                     (storage, temp_dir)
                 },
                 |(storage, _temp_dir)| async move {
@@ -226,7 +229,11 @@ fn bench_lance_get_entity(c: &mut Criterion) {
             let rt = tokio::runtime::Runtime::new().unwrap();
             let entities = create_test_entities(size);
             let temp_dir = tempfile::tempdir().unwrap();
-            let storage = rt.block_on(LanceStorageBackend::connect(temp_dir.path().to_str().unwrap())).unwrap();
+            let storage = rt
+                .block_on(LanceStorageBackend::connect(
+                    temp_dir.path().to_str().unwrap(),
+                ))
+                .unwrap();
 
             // Pre-populate storage
             rt.block_on(async {
@@ -255,7 +262,11 @@ fn bench_lance_search(c: &mut Criterion) {
             let rt = tokio::runtime::Runtime::new().unwrap();
             let entities = create_test_entities(size);
             let temp_dir = tempfile::tempdir().unwrap();
-            let storage = rt.block_on(LanceStorageBackend::connect(temp_dir.path().to_str().unwrap())).unwrap();
+            let storage = rt
+                .block_on(LanceStorageBackend::connect(
+                    temp_dir.path().to_str().unwrap(),
+                ))
+                .unwrap();
 
             // Pre-populate storage
             rt.block_on(async {
@@ -282,7 +293,11 @@ fn bench_lance_count_entities(c: &mut Criterion) {
             let rt = tokio::runtime::Runtime::new().unwrap();
             let entities = create_test_entities(size);
             let temp_dir = tempfile::tempdir().unwrap();
-            let storage = rt.block_on(LanceStorageBackend::connect(temp_dir.path().to_str().unwrap())).unwrap();
+            let storage = rt
+                .block_on(LanceStorageBackend::connect(
+                    temp_dir.path().to_str().unwrap(),
+                ))
+                .unwrap();
 
             // Pre-populate storage
             rt.block_on(async {

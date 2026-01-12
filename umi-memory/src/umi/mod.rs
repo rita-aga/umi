@@ -333,7 +333,12 @@ impl RememberResult {
 /// memory.remember("Alice works at Acme", RememberOptions::default()).await?;
 /// let results = memory.recall("Alice", RecallOptions::default()).await?;
 /// ```
-pub struct Memory<L: LLMProvider, E: EmbeddingProvider, S: StorageBackend, V: crate::storage::VectorBackend> {
+pub struct Memory<
+    L: LLMProvider,
+    E: EmbeddingProvider,
+    S: StorageBackend,
+    V: crate::storage::VectorBackend,
+> {
     storage: S,
     extractor: EntityExtractor<L>,
     retriever: DualRetriever<L, E, V, S>,
@@ -342,7 +347,13 @@ pub struct Memory<L: LLMProvider, E: EmbeddingProvider, S: StorageBackend, V: cr
     vector: V,
 }
 
-impl<L: LLMProvider + Clone, E: EmbeddingProvider + Clone, S: StorageBackend + Clone, V: crate::storage::VectorBackend + Clone> Memory<L, E, S, V> {
+impl<
+        L: LLMProvider + Clone,
+        E: EmbeddingProvider + Clone,
+        S: StorageBackend + Clone,
+        V: crate::storage::VectorBackend + Clone,
+    > Memory<L, E, S, V>
+{
     /// Create a new Memory with all components.
     ///
     /// # Arguments
@@ -353,7 +364,12 @@ impl<L: LLMProvider + Clone, E: EmbeddingProvider + Clone, S: StorageBackend + C
     #[must_use]
     pub fn new(llm: L, embedder: E, vector: V, storage: S) -> Self {
         let extractor = EntityExtractor::new(llm.clone());
-        let retriever = DualRetriever::new(llm.clone(), embedder.clone(), vector.clone(), storage.clone());
+        let retriever = DualRetriever::new(
+            llm.clone(),
+            embedder.clone(),
+            vector.clone(),
+            storage.clone(),
+        );
         let evolution = EvolutionTracker::new(llm);
 
         Self {
@@ -455,7 +471,10 @@ impl<L: LLMProvider + Clone, E: EmbeddingProvider + Clone, S: StorageBackend + C
                 }
                 Err(e) => {
                     // Graceful degradation: log warning, continue without embeddings
-                    tracing::warn!("Failed to generate embeddings: {}. Continuing without embeddings.", e);
+                    tracing::warn!(
+                        "Failed to generate embeddings: {}. Continuing without embeddings.",
+                        e
+                    );
                 }
             }
         }
@@ -638,7 +657,9 @@ mod tests {
     use crate::storage::{SimStorageBackend, SimVectorBackend};
 
     /// Helper to create a Memory with deterministic seed.
-    fn create_memory(seed: u64) -> Memory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend> {
+    fn create_memory(
+        seed: u64,
+    ) -> Memory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend> {
         let llm = SimLLMProvider::with_seed(seed);
         let embedder = SimEmbeddingProvider::with_seed(seed);
         let vector = SimVectorBackend::new(seed);
@@ -800,10 +821,15 @@ mod tests {
         let mut memory = create_memory(42);
         let long_text = "a".repeat(MEMORY_TEXT_BYTES_MAX + 1);
 
-        let result = memory.remember(&long_text, RememberOptions::default()).await;
+        let result = memory
+            .remember(&long_text, RememberOptions::default())
+            .await;
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), MemoryError::TextTooLong { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            MemoryError::TextTooLong { .. }
+        ));
     }
 
     // =========================================================================
@@ -869,10 +895,7 @@ mod tests {
         let mut memory = create_memory(42);
 
         let result = memory
-            .remember(
-                "Test entity",
-                RememberOptions::new().without_extraction(),
-            )
+            .remember("Test entity", RememberOptions::new().without_extraction())
             .await
             .unwrap();
 
@@ -897,10 +920,7 @@ mod tests {
         let mut memory = create_memory(42);
 
         let result = memory
-            .remember(
-                "Test entity",
-                RememberOptions::new().without_extraction(),
-            )
+            .remember("Test entity", RememberOptions::new().without_extraction())
             .await
             .unwrap();
 
@@ -928,20 +948,14 @@ mod tests {
         assert_eq!(memory.count().await.unwrap(), 0);
 
         memory
-            .remember(
-                "First item",
-                RememberOptions::new().without_extraction(),
-            )
+            .remember("First item", RememberOptions::new().without_extraction())
             .await
             .unwrap();
 
         assert_eq!(memory.count().await.unwrap(), 1);
 
         memory
-            .remember(
-                "Second item",
-                RememberOptions::new().without_extraction(),
-            )
+            .remember("Second item", RememberOptions::new().without_extraction())
             .await
             .unwrap();
 
@@ -1229,11 +1243,10 @@ mod dst_tests {
     #[tokio::test]
     async fn test_remember_with_service_unavailable() {
         // Test graceful degradation with service unavailable
-        let sim = Simulation::new(SimConfig::with_seed(42))
-            .with_fault(FaultConfig::new(
-                FaultType::EmbeddingServiceUnavailable,
-                1.0,
-            ));
+        let sim = Simulation::new(SimConfig::with_seed(42)).with_fault(FaultConfig::new(
+            FaultType::EmbeddingServiceUnavailable,
+            1.0,
+        ));
 
         sim.run(|env| async move {
             let embedder = SimEmbeddingProvider::with_faults(42, env.faults.clone());
@@ -1282,7 +1295,9 @@ mod dst_tests {
                 .await?;
 
             // Recall should use vector search
-            let result = memory.recall("Who works at Acme?", RecallOptions::default()).await?;
+            let result = memory
+                .recall("Who works at Acme?", RecallOptions::default())
+                .await?;
 
             // Should find relevant results
             assert!(!result.is_empty());
@@ -1340,11 +1355,32 @@ mod dst_tests {
         let storage = SimStorageBackend::new(SimConfig::with_seed(seed));
         let mut memory1 = Memory::new(llm, embedder, vector, storage);
 
-        memory1.remember("Alice works at Acme Corp", RememberOptions::default().without_extraction()).await.unwrap();
-        memory1.remember("Bob works at TechCo", RememberOptions::default().without_extraction()).await.unwrap();
-        memory1.remember("Charlie works at DataInc", RememberOptions::default().without_extraction()).await.unwrap();
+        memory1
+            .remember(
+                "Alice works at Acme Corp",
+                RememberOptions::default().without_extraction(),
+            )
+            .await
+            .unwrap();
+        memory1
+            .remember(
+                "Bob works at TechCo",
+                RememberOptions::default().without_extraction(),
+            )
+            .await
+            .unwrap();
+        memory1
+            .remember(
+                "Charlie works at DataInc",
+                RememberOptions::default().without_extraction(),
+            )
+            .await
+            .unwrap();
 
-        let result1 = memory1.recall("works", RecallOptions::default().fast_only()).await.unwrap();
+        let result1 = memory1
+            .recall("works", RecallOptions::default().fast_only())
+            .await
+            .unwrap();
         let names1: Vec<String> = result1.iter().map(|e| e.name.clone()).collect();
 
         // Second run with same seed
@@ -1354,11 +1390,32 @@ mod dst_tests {
         let storage2 = SimStorageBackend::new(SimConfig::with_seed(seed));
         let mut memory2 = Memory::new(llm2, embedder2, vector2, storage2);
 
-        memory2.remember("Alice works at Acme Corp", RememberOptions::default().without_extraction()).await.unwrap();
-        memory2.remember("Bob works at TechCo", RememberOptions::default().without_extraction()).await.unwrap();
-        memory2.remember("Charlie works at DataInc", RememberOptions::default().without_extraction()).await.unwrap();
+        memory2
+            .remember(
+                "Alice works at Acme Corp",
+                RememberOptions::default().without_extraction(),
+            )
+            .await
+            .unwrap();
+        memory2
+            .remember(
+                "Bob works at TechCo",
+                RememberOptions::default().without_extraction(),
+            )
+            .await
+            .unwrap();
+        memory2
+            .remember(
+                "Charlie works at DataInc",
+                RememberOptions::default().without_extraction(),
+            )
+            .await
+            .unwrap();
 
-        let result2 = memory2.recall("works", RecallOptions::default().fast_only()).await.unwrap();
+        let result2 = memory2
+            .recall("works", RecallOptions::default().fast_only())
+            .await
+            .unwrap();
         let names2: Vec<String> = result2.iter().map(|e| e.name.clone()).collect();
 
         // Same seed = same ordering
@@ -1394,7 +1451,10 @@ mod dst_tests {
             assert!(result.is_ok());
             let entities = result.unwrap();
             // Should find entities via text search fallback
-            assert!(!entities.is_empty(), "Should find entities even with vector storage failures");
+            assert!(
+                !entities.is_empty(),
+                "Should find entities even with vector storage failures"
+            );
 
             Ok::<(), MemoryError>(())
         })

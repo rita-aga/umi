@@ -407,8 +407,8 @@ mod tests {
 
     #[test]
     fn test_openai_provider_with_model() {
-        let provider = OpenAIEmbeddingProvider::new("test-key")
-            .with_model("text-embedding-3-large", 3072);
+        let provider =
+            OpenAIEmbeddingProvider::new("test-key").with_model("text-embedding-3-large", 3072);
 
         assert_eq!(provider.model(), "text-embedding-3-large");
         assert_eq!(provider.dimensions(), 3072);
@@ -464,10 +464,8 @@ mod tests {
 
     #[test]
     fn test_parse_error_timeout() {
-        let error = OpenAIEmbeddingProvider::parse_error(
-            reqwest::StatusCode::REQUEST_TIMEOUT,
-            "Timeout",
-        );
+        let error =
+            OpenAIEmbeddingProvider::parse_error(reqwest::StatusCode::REQUEST_TIMEOUT, "Timeout");
 
         assert!(matches!(error, EmbeddingError::Timeout));
         assert!(error.is_retryable());

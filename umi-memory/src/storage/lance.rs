@@ -13,8 +13,8 @@
 use std::sync::Arc;
 
 use arrow_array::{
-    Array, ArrayRef, Float32Array, Int64Array, RecordBatch, RecordBatchIterator, StringArray,
-    FixedSizeListArray,
+    Array, ArrayRef, FixedSizeListArray, Float32Array, Int64Array, RecordBatch,
+    RecordBatchIterator, StringArray,
 };
 use arrow_schema::{DataType, Field, Schema};
 use async_trait::async_trait;
@@ -175,13 +175,16 @@ impl LanceStorageBackend {
             None,
         );
 
-        let created_at_ms: Int64Array =
-            vec![Some(entity.created_at.timestamp_millis())].into_iter().collect();
-        let updated_at_ms: Int64Array =
-            vec![Some(entity.updated_at.timestamp_millis())].into_iter().collect();
-        let document_time_ms: Int64Array = vec![entity.document_time.map(|dt| dt.timestamp_millis())]
+        let created_at_ms: Int64Array = vec![Some(entity.created_at.timestamp_millis())]
             .into_iter()
             .collect();
+        let updated_at_ms: Int64Array = vec![Some(entity.updated_at.timestamp_millis())]
+            .into_iter()
+            .collect();
+        let document_time_ms: Int64Array =
+            vec![entity.document_time.map(|dt| dt.timestamp_millis())]
+                .into_iter()
+                .collect();
         let event_time_ms: Int64Array = vec![entity.event_time.map(|dt| dt.timestamp_millis())]
             .into_iter()
             .collect();
@@ -231,8 +234,9 @@ impl LanceStorageBackend {
             .downcast_ref::<StringArray>()
             .ok_or_else(|| StorageError::DeserializationError("entity_type column".to_string()))?
             .value(row);
-        let entity_type = EntityType::from_str(entity_type_str)
-            .ok_or_else(|| StorageError::DeserializationError(format!("unknown entity type: {entity_type_str}")))?;
+        let entity_type = EntityType::from_str(entity_type_str).ok_or_else(|| {
+            StorageError::DeserializationError(format!("unknown entity type: {entity_type_str}"))
+        })?;
 
         let name = batch
             .column(2)
@@ -266,7 +270,9 @@ impl LanceStorageBackend {
                 .column(5)
                 .as_any()
                 .downcast_ref::<arrow_array::FixedSizeListArray>()
-                .ok_or_else(|| StorageError::DeserializationError("embedding column".to_string()))?;
+                .ok_or_else(|| {
+                    StorageError::DeserializationError("embedding column".to_string())
+                })?;
 
             if !embedding_col.is_null(row) {
                 let values = embedding_col
@@ -288,8 +294,10 @@ impl LanceStorageBackend {
             .downcast_ref::<Int64Array>()
             .ok_or_else(|| StorageError::DeserializationError("created_at_ms column".to_string()))?
             .value(row);
-        let created_at = chrono::DateTime::from_timestamp_millis(created_at_ms)
-            .ok_or_else(|| StorageError::DeserializationError("invalid created_at timestamp".to_string()))?;
+        let created_at =
+            chrono::DateTime::from_timestamp_millis(created_at_ms).ok_or_else(|| {
+                StorageError::DeserializationError("invalid created_at timestamp".to_string())
+            })?;
 
         let updated_at_ms = batch
             .column(7)
@@ -297,14 +305,18 @@ impl LanceStorageBackend {
             .downcast_ref::<Int64Array>()
             .ok_or_else(|| StorageError::DeserializationError("updated_at_ms column".to_string()))?
             .value(row);
-        let updated_at = chrono::DateTime::from_timestamp_millis(updated_at_ms)
-            .ok_or_else(|| StorageError::DeserializationError("invalid updated_at timestamp".to_string()))?;
+        let updated_at =
+            chrono::DateTime::from_timestamp_millis(updated_at_ms).ok_or_else(|| {
+                StorageError::DeserializationError("invalid updated_at timestamp".to_string())
+            })?;
 
         let document_time_ms_col = batch
             .column(8)
             .as_any()
             .downcast_ref::<Int64Array>()
-            .ok_or_else(|| StorageError::DeserializationError("document_time_ms column".to_string()))?;
+            .ok_or_else(|| {
+                StorageError::DeserializationError("document_time_ms column".to_string())
+            })?;
         let document_time = if document_time_ms_col.is_null(row) {
             None
         } else {
@@ -315,7 +327,9 @@ impl LanceStorageBackend {
             .column(9)
             .as_any()
             .downcast_ref::<Int64Array>()
-            .ok_or_else(|| StorageError::DeserializationError("event_time_ms column".to_string()))?;
+            .ok_or_else(|| {
+                StorageError::DeserializationError("event_time_ms column".to_string())
+            })?;
         let event_time = if event_time_ms_col.is_null(row) {
             None
         } else {
@@ -328,7 +342,9 @@ impl LanceStorageBackend {
                 .column(10)
                 .as_any()
                 .downcast_ref::<StringArray>()
-                .ok_or_else(|| StorageError::DeserializationError("source_ref_json column".to_string()))?;
+                .ok_or_else(|| {
+                    StorageError::DeserializationError("source_ref_json column".to_string())
+                })?;
 
             if source_ref_col.is_null(row) {
                 None
@@ -381,9 +397,7 @@ impl StorageBackend for LanceStorageBackend {
         let table = self.get_table().await?;
 
         // Delete existing entity with same ID (upsert behavior)
-        let _ = table
-            .delete(&format!("id = '{}'", entity.id))
-            .await;
+        let _ = table.delete(&format!("id = '{}'", entity.id)).await;
 
         // Insert new entity
         let batch = Self::entity_to_batch(entity)?;
@@ -455,9 +469,7 @@ impl StorageBackend for LanceStorageBackend {
 
         // Text search via filter on name and content
         // LanceDB doesn't have built-in full-text search, so we use LIKE
-        let filter = format!(
-            "name LIKE '%{query}%' OR content LIKE '%{query}%'"
-        );
+        let filter = format!("name LIKE '%{query}%' OR content LIKE '%{query}%'");
 
         let results: Vec<RecordBatch> = table
             .query()
@@ -572,8 +584,8 @@ impl StorageBackend for LanceStorageBackend {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::entity::SourceRef;
+    use super::*;
     use tempfile::tempdir;
 
     async fn create_test_storage() -> (LanceStorageBackend, tempfile::TempDir) {
@@ -691,7 +703,10 @@ mod tests {
 
         assert_eq!(storage.count_entities(None).await.unwrap(), 2);
         assert_eq!(
-            storage.count_entities(Some(EntityType::Person)).await.unwrap(),
+            storage
+                .count_entities(Some(EntityType::Person))
+                .await
+                .unwrap(),
             1
         );
     }

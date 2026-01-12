@@ -17,10 +17,7 @@ fn bench_core_memory_set_block(c: &mut Criterion) {
         let content = "This is a test block with some content that simulates real usage.";
 
         b.iter(|| {
-            black_box(
-                core.set_block(MemoryBlockType::Human, content)
-                    .unwrap()
-            );
+            black_box(core.set_block(MemoryBlockType::Human, content).unwrap());
         });
     });
 }
@@ -167,7 +164,11 @@ fn bench_working_memory_cleanup(c: &mut Criterion) {
                         let mut working = WorkingMemory::new();
                         for i in 0..entry_count {
                             working
-                                .set(&format!("key_{}", i), format!("value_{}", i).as_bytes(), None)
+                                .set(
+                                    &format!("key_{}", i),
+                                    format!("value_{}", i).as_bytes(),
+                                    None,
+                                )
                                 .unwrap();
                         }
                         working
@@ -201,7 +202,11 @@ fn bench_working_memory_bulk_operations(c: &mut Criterion) {
                         for i in 0..count {
                             black_box(
                                 working
-                                    .set(&format!("key_{}", i), format!("value_{}", i).as_bytes(), None)
+                                    .set(
+                                        &format!("key_{}", i),
+                                        format!("value_{}", i).as_bytes(),
+                                        None,
+                                    )
                                     .unwrap(),
                             );
                         }
@@ -219,7 +224,11 @@ fn bench_working_memory_count(c: &mut Criterion) {
         let mut working = WorkingMemory::new();
         for i in 0..100 {
             working
-                .set(&format!("key_{}", i), format!("value_{}", i).as_bytes(), None)
+                .set(
+                    &format!("key_{}", i),
+                    format!("value_{}", i).as_bytes(),
+                    None,
+                )
                 .unwrap();
         }
 
