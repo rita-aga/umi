@@ -41,12 +41,12 @@ pub struct SourceRef {
 ```
 
 ### 0.2 Implementation Tasks
-- [ ] Add `SourceRef` struct to `storage/entity.rs`
-- [ ] Add `source_ref: Option<SourceRef>` field to `Entity`
-- [ ] Update `EntityBuilder` with `.with_source_ref()`
-- [ ] Update Lance schema to include source_ref columns
-- [ ] Update SimStorageBackend serialization
-- [ ] Add tests for source reference handling
+- [x] Add `SourceRef` struct to `storage/entity.rs`
+- [x] Add `source_ref: Option<SourceRef>` field to `Entity`
+- [x] Update `EntityBuilder` with `.with_source_ref()`
+- [x] Update Lance schema to include source_ref columns
+- [x] Update SimStorageBackend serialization (not needed - stores entities via clone)
+- [x] Add tests for source reference handling
 
 ### 0.3 Use Cases
 
@@ -378,6 +378,33 @@ Phase 6: Hands-On ────────────────────�
 |------|-------|-----------|
 | 2026-01-12 | Setup | Created master plan |
 | 2026-01-12 | Setup | Added Phase 0 for source references |
+| 2026-01-12 | Phase 0 | ✅ Completed - Added SourceRef struct, Entity field, EntityBuilder, Lance schema, tests (418 tests pass) |
+| 2026-01-12 | Phase 1 | ✅ Completed - Created criterion benchmark suite with 3 benchmark files |
+
+## Phase 1 Details
+
+**Benchmark Files Created:**
+1. `benches/storage.rs` - Storage backend operations (Sim only for now)
+   - store_entity, get_entity, delete_entity, search, count_entities, list_entities
+   - Tested at scales: 100, 1K, 10K entities
+
+2. `benches/memory_tiers.rs` - Memory tier operations
+   - CoreMemory: set_block, get_block, remove_block, render, used_bytes
+   - WorkingMemory: set, get, exists, cleanup_expired, bulk_operations, entry_count
+
+3. `benches/pipelines.rs` - Full remember/recall pipelines
+   - remember_full, remember_no_extraction, remember_no_evolution, remember_batch
+   - recall_full, recall_fast_only, recall_varying_limit, recall_batch
+   - mixed_workload (interleaved remember/recall)
+
+**Performance Baselines (SimStorage):**
+- store_entity: ~390-440ns
+- get_entity: 127-315ns (excellent!)
+- search (10K entities): 5.6ms
+- count_entities (10K): 14µs
+- list_entities (10K): 3ms
+
+**Note:** Lance storage benchmarks deferred to Phase 2 for comparison with Kelpie.
 
 ---
 

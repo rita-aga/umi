@@ -81,6 +81,107 @@ impl std::fmt::Display for EntityType {
 }
 
 // =============================================================================
+// Source Reference (for multimedia content)
+// =============================================================================
+
+/// Reference to source content (URL, file path, S3 URI, etc.)
+///
+/// Used when an entity was extracted from multimedia content (images, audio,
+/// video, PDFs, web pages). The entity stores the extracted text/summary,
+/// while SourceRef points to the original content.
+///
+/// # Example
+///
+/// ```
+/// use umi_memory::storage::SourceRef;
+///
+/// // Image that was analyzed
+/// let image_ref = SourceRef::new("file:///photos/meeting.jpg".to_string())
+///     .with_mime_type("image/jpeg".to_string())
+///     .with_size_bytes(1024 * 500);
+///
+/// // PDF that was extracted
+/// let pdf_ref = SourceRef::new("s3://docs/report.pdf".to_string())
+///     .with_mime_type("application/pdf".to_string())
+///     .with_checksum("sha256:abc123...".to_string());
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceRef {
+    /// URI to the source (file://, https://, s3://, etc.)
+    pub uri: String,
+    /// MIME type of the source (image/png, audio/mp3, application/pdf, etc.)
+    pub mime_type: Option<String>,
+    /// Size in bytes (if known)
+    pub size_bytes: Option<u64>,
+    /// Checksum for integrity verification (e.g., "sha256:abc123...")
+    pub checksum: Option<String>,
+}
+
+impl SourceRef {
+    /// Create a new source reference with just the URI.
+    #[must_use]
+    pub fn new(uri: String) -> Self {
+        Self {
+            uri,
+            mime_type: None,
+            size_bytes: None,
+            checksum: None,
+        }
+    }
+
+    /// Set the MIME type.
+    #[must_use]
+    pub fn with_mime_type(mut self, mime_type: String) -> Self {
+        self.mime_type = Some(mime_type);
+        self
+    }
+
+    /// Set the size in bytes.
+    #[must_use]
+    pub fn with_size_bytes(mut self, size_bytes: u64) -> Self {
+        self.size_bytes = Some(size_bytes);
+        self
+    }
+
+    /// Set the checksum.
+    #[must_use]
+    pub fn with_checksum(mut self, checksum: String) -> Self {
+        self.checksum = Some(checksum);
+        self
+    }
+
+    /// Check if this is a local file reference.
+    #[must_use]
+    pub fn is_local(&self) -> bool {
+        self.uri.starts_with("file://")
+    }
+
+    /// Check if this is a remote URL.
+    #[must_use]
+    pub fn is_remote(&self) -> bool {
+        self.uri.starts_with("http://") || self.uri.starts_with("https://")
+    }
+
+    /// Check if this is an S3 reference.
+    #[must_use]
+    pub fn is_s3(&self) -> bool {
+        self.uri.starts_with("s3://")
+    }
+
+    /// Get the file extension from the URI (if any).
+    #[must_use]
+    pub fn extension(&self) -> Option<&str> {
+        self.uri.rsplit('.').next().filter(|ext| !ext.contains('/'))
+    }
+}
+
+impl std::fmt::Display for SourceRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.uri)
+    }
+}
+
+// =============================================================================
 // Entity
 // =============================================================================
 
@@ -118,6 +219,8 @@ pub struct Entity {
     pub document_time: Option<DateTime<Utc>>,
     /// When event actually occurred (e.g., "last Tuesday")
     pub event_time: Option<DateTime<Utc>>,
+    /// Reference to source content (for multimedia workflows)
+    pub source_ref: Option<SourceRef>,
 }
 
 impl Entity {
@@ -153,6 +256,7 @@ impl Entity {
             updated_at: now,
             document_time: None,
             event_time: None,
+            source_ref: None,
         }
     }
 
@@ -221,6 +325,24 @@ impl Entity {
     pub fn has_temporal_metadata(&self) -> bool {
         self.document_time.is_some() || self.event_time.is_some()
     }
+
+    /// Set source reference (for multimedia content).
+    pub fn set_source_ref(&mut self, source_ref: SourceRef) {
+        self.source_ref = Some(source_ref);
+        self.updated_at = Utc::now();
+    }
+
+    /// Get source reference.
+    #[must_use]
+    pub fn source_ref(&self) -> Option<&SourceRef> {
+        self.source_ref.as_ref()
+    }
+
+    /// Check if entity has a source reference.
+    #[must_use]
+    pub fn has_source_ref(&self) -> bool {
+        self.source_ref.is_some()
+    }
 }
 
 // =============================================================================
@@ -240,6 +362,7 @@ pub struct EntityBuilder {
     updated_at: Option<DateTime<Utc>>,
     document_time: Option<DateTime<Utc>>,
     event_time: Option<DateTime<Utc>>,
+    source_ref: Option<SourceRef>,
 }
 
 impl EntityBuilder {
@@ -257,6 +380,7 @@ impl EntityBuilder {
             updated_at: None,
             document_time: None,
             event_time: None,
+            source_ref: None,
         }
     }
 
@@ -309,6 +433,13 @@ impl EntityBuilder {
         self
     }
 
+    /// Set source reference (for multimedia content).
+    #[must_use]
+    pub fn with_source_ref(mut self, source_ref: SourceRef) -> Self {
+        self.source_ref = Some(source_ref);
+        self
+    }
+
     /// Build the entity.
     ///
     /// # Panics
@@ -341,6 +472,7 @@ impl EntityBuilder {
             updated_at: self.updated_at.unwrap_or(now),
             document_time: self.document_time,
             event_time: self.event_time,
+            source_ref: self.source_ref,
         }
     }
 }
@@ -542,5 +674,147 @@ mod tests {
 
         // Setting temporal metadata should update the timestamp
         assert!(entity.updated_at > original_updated);
+    }
+
+    // =========================================================================
+    // Source Reference Tests (Multimedia Support)
+    // =========================================================================
+
+    #[test]
+    fn test_source_ref_new() {
+        let source_ref = SourceRef::new("file:///photos/meeting.jpg".to_string());
+
+        assert_eq!(source_ref.uri, "file:///photos/meeting.jpg");
+        assert!(source_ref.mime_type.is_none());
+        assert!(source_ref.size_bytes.is_none());
+        assert!(source_ref.checksum.is_none());
+    }
+
+    #[test]
+    fn test_source_ref_builder_pattern() {
+        let source_ref = SourceRef::new("s3://bucket/report.pdf".to_string())
+            .with_mime_type("application/pdf".to_string())
+            .with_size_bytes(1024 * 1024)
+            .with_checksum("sha256:abc123".to_string());
+
+        assert_eq!(source_ref.uri, "s3://bucket/report.pdf");
+        assert_eq!(source_ref.mime_type, Some("application/pdf".to_string()));
+        assert_eq!(source_ref.size_bytes, Some(1024 * 1024));
+        assert_eq!(source_ref.checksum, Some("sha256:abc123".to_string()));
+    }
+
+    #[test]
+    fn test_source_ref_is_local() {
+        let local = SourceRef::new("file:///home/user/doc.pdf".to_string());
+        let remote = SourceRef::new("https://example.com/doc.pdf".to_string());
+        let s3 = SourceRef::new("s3://bucket/doc.pdf".to_string());
+
+        assert!(local.is_local());
+        assert!(!remote.is_local());
+        assert!(!s3.is_local());
+    }
+
+    #[test]
+    fn test_source_ref_is_remote() {
+        let http = SourceRef::new("http://example.com/doc.pdf".to_string());
+        let https = SourceRef::new("https://example.com/doc.pdf".to_string());
+        let local = SourceRef::new("file:///home/user/doc.pdf".to_string());
+
+        assert!(http.is_remote());
+        assert!(https.is_remote());
+        assert!(!local.is_remote());
+    }
+
+    #[test]
+    fn test_source_ref_is_s3() {
+        let s3 = SourceRef::new("s3://my-bucket/path/to/file.pdf".to_string());
+        let local = SourceRef::new("file:///home/user/doc.pdf".to_string());
+
+        assert!(s3.is_s3());
+        assert!(!local.is_s3());
+    }
+
+    #[test]
+    fn test_source_ref_extension() {
+        let pdf = SourceRef::new("file:///docs/report.pdf".to_string());
+        let jpg = SourceRef::new("https://example.com/image.jpg".to_string());
+        let no_ext = SourceRef::new("s3://bucket/file".to_string());
+
+        assert_eq!(pdf.extension(), Some("pdf"));
+        assert_eq!(jpg.extension(), Some("jpg"));
+        assert_eq!(no_ext.extension(), None);
+    }
+
+    #[test]
+    fn test_entity_new_has_no_source_ref() {
+        let entity = Entity::new(EntityType::Note, "Test".to_string(), "Content".to_string());
+
+        assert!(entity.source_ref.is_none());
+        assert!(!entity.has_source_ref());
+    }
+
+    #[test]
+    fn test_entity_set_source_ref() {
+        let mut entity = Entity::new(
+            EntityType::Note,
+            "Image Analysis".to_string(),
+            "A photo of a whiteboard with meeting notes".to_string(),
+        );
+
+        let source_ref = SourceRef::new("file:///photos/whiteboard.jpg".to_string())
+            .with_mime_type("image/jpeg".to_string());
+
+        entity.set_source_ref(source_ref);
+
+        assert!(entity.has_source_ref());
+        assert_eq!(
+            entity.source_ref().unwrap().uri,
+            "file:///photos/whiteboard.jpg"
+        );
+        assert_eq!(
+            entity.source_ref().unwrap().mime_type,
+            Some("image/jpeg".to_string())
+        );
+    }
+
+    #[test]
+    fn test_entity_builder_with_source_ref() {
+        let source_ref = SourceRef::new("https://storage.example.com/audio/memo.mp3".to_string())
+            .with_mime_type("audio/mpeg".to_string())
+            .with_size_bytes(5 * 1024 * 1024);
+
+        let entity = Entity::builder(
+            EntityType::Note,
+            "Voice Memo".to_string(),
+            "Discussed Q4 planning with the team".to_string(),
+        )
+        .with_source_ref(source_ref)
+        .build();
+
+        assert!(entity.has_source_ref());
+        let ref_data = entity.source_ref().unwrap();
+        assert_eq!(ref_data.uri, "https://storage.example.com/audio/memo.mp3");
+        assert_eq!(ref_data.mime_type, Some("audio/mpeg".to_string()));
+        assert_eq!(ref_data.size_bytes, Some(5 * 1024 * 1024));
+    }
+
+    #[test]
+    fn test_source_ref_updates_timestamp() {
+        let mut entity = Entity::new(EntityType::Note, "Test".to_string(), "Content".to_string());
+        let original_updated = entity.updated_at;
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        let source_ref = SourceRef::new("file:///test.pdf".to_string());
+        entity.set_source_ref(source_ref);
+
+        // Setting source ref should update the timestamp
+        assert!(entity.updated_at > original_updated);
+    }
+
+    #[test]
+    fn test_source_ref_display() {
+        let source_ref = SourceRef::new("file:///photos/image.png".to_string());
+        assert_eq!(format!("{}", source_ref), "file:///photos/image.png");
     }
 }

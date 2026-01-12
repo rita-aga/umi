@@ -138,6 +138,8 @@ impl LanceStorageBackend {
             Field::new("updated_at_ms", DataType::Int64, false),
             Field::new("document_time_ms", DataType::Int64, true),
             Field::new("event_time_ms", DataType::Int64, true),
+            // Source reference for multimedia content (JSON serialized)
+            Field::new("source_ref_json", DataType::Utf8, true),
         ]))
     }
 
@@ -184,6 +186,16 @@ impl LanceStorageBackend {
             .into_iter()
             .collect();
 
+        // Serialize source_ref as JSON (None becomes null)
+        let source_ref_json: StringArray = vec![entity
+            .source_ref
+            .as_ref()
+            .map(|sr| serde_json::to_string(sr))
+            .transpose()
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?]
+        .into_iter()
+        .collect();
+
         RecordBatch::try_new(
             schema,
             vec![
@@ -197,6 +209,7 @@ impl LanceStorageBackend {
                 Arc::new(updated_at_ms),
                 Arc::new(document_time_ms),
                 Arc::new(event_time_ms),
+                Arc::new(source_ref_json),
             ],
         )
         .map_err(|e| StorageError::SerializationError(e.to_string()))
@@ -309,6 +322,29 @@ impl LanceStorageBackend {
             chrono::DateTime::from_timestamp_millis(event_time_ms_col.value(row))
         };
 
+        // Deserialize source_ref from JSON (null becomes None)
+        let source_ref = {
+            let source_ref_col = batch
+                .column(10)
+                .as_any()
+                .downcast_ref::<StringArray>()
+                .ok_or_else(|| StorageError::DeserializationError("source_ref_json column".to_string()))?;
+
+            if source_ref_col.is_null(row) {
+                None
+            } else {
+                let json_str = source_ref_col.value(row);
+                if json_str.is_empty() {
+                    None
+                } else {
+                    Some(
+                        serde_json::from_str(json_str)
+                            .map_err(|e| StorageError::DeserializationError(e.to_string()))?,
+                    )
+                }
+            }
+        };
+
         Ok(Entity {
             id,
             entity_type,
@@ -320,6 +356,7 @@ impl LanceStorageBackend {
             updated_at,
             document_time,
             event_time,
+            source_ref,
         })
     }
 
@@ -536,6 +573,7 @@ impl StorageBackend for LanceStorageBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::entity::SourceRef;
     use tempfile::tempdir;
 
     async fn create_test_storage() -> (LanceStorageBackend, tempfile::TempDir) {
@@ -739,5 +777,56 @@ mod tests {
 
         let results = storage.list_entities(None, 2, 2).await.unwrap();
         assert_eq!(results.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_source_ref_roundtrip() {
+        let (storage, _dir) = create_test_storage().await;
+
+        // Create entity with source reference
+        let source_ref = SourceRef::new("file:///photos/meeting.jpg".to_string())
+            .with_mime_type("image/jpeg".to_string())
+            .with_size_bytes(1024)
+            .with_checksum("sha256:abc123".to_string());
+
+        let mut entity = Entity::new(
+            EntityType::Note,
+            "Meeting Notes".to_string(),
+            "Summary of the meeting from the photo".to_string(),
+        );
+        entity.set_source_ref(source_ref);
+        let id = entity.id.clone();
+
+        storage.store_entity(&entity).await.unwrap();
+
+        // Retrieve and verify source_ref is preserved
+        let retrieved = storage.get_entity(&id).await.unwrap().unwrap();
+        assert!(retrieved.has_source_ref());
+
+        let sr = retrieved.source_ref().unwrap();
+        assert_eq!(sr.uri, "file:///photos/meeting.jpg");
+        assert_eq!(sr.mime_type, Some("image/jpeg".to_string()));
+        assert_eq!(sr.size_bytes, Some(1024));
+        assert_eq!(sr.checksum, Some("sha256:abc123".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_source_ref_none_roundtrip() {
+        let (storage, _dir) = create_test_storage().await;
+
+        // Create entity without source reference
+        let entity = Entity::new(
+            EntityType::Person,
+            "Alice".to_string(),
+            "Friend Alice".to_string(),
+        );
+        let id = entity.id.clone();
+
+        storage.store_entity(&entity).await.unwrap();
+
+        // Retrieve and verify source_ref is None
+        let retrieved = storage.get_entity(&id).await.unwrap().unwrap();
+        assert!(!retrieved.has_source_ref());
+        assert!(retrieved.source_ref().is_none());
     }
 }

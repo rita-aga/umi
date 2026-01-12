@@ -35,7 +35,7 @@ mod postgres;
 mod lance;
 
 pub use backend::StorageBackend;
-pub use entity::{Entity, EntityBuilder, EntityType};
+pub use entity::{Entity, EntityBuilder, EntityType, SourceRef};
 pub use error::{StorageError, StorageResult};
 pub use evolution::{EvolutionRelation, EvolutionRelationBuilder, EvolutionType};
 pub use sim::SimStorageBackend;

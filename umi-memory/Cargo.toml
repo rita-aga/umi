@@ -34,6 +34,7 @@ reqwest = { workspace = true, optional = true }
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3"
+criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
 
 [features]
 default = []
@@ -48,3 +49,15 @@ openai = ["dep:reqwest"]
 
 # Convenience feature for all LLM providers
 llm-providers = ["anthropic", "openai"]
+
+[[bench]]
+name = "storage"
+harness = false
+
+[[bench]]
+name = "memory_tiers"
+harness = false
+
+[[bench]]
+name = "pipelines"
+harness = false
