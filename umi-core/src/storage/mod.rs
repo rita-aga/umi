@@ -8,12 +8,12 @@
 //! ┌─────────────────────────────────────────────────────────────┐
 //! │                    StorageBackend Trait                      │
 //! └─────────────────────────────────────────────────────────────┘
-//!          ↑                              ↑
-//!          │                              │
-//! ┌────────┴────────┐           ┌────────┴────────┐
-//! │SimStorageBackend│           │ PostgresBackend │
-//! │   (testing)     │           │  (production)   │
-//! └─────────────────┘           └─────────────────┘
+//!          ↑                    ↑                    ↑
+//!          │                    │                    │
+//! ┌────────┴────────┐  ┌────────┴────────┐  ┌───────┴────────┐
+//! │SimStorageBackend│  │LanceStorageBack │  │ PostgresBackend│
+//! │   (testing)     │  │   (embedded)    │  │   (server)     │
+//! └─────────────────┘  └─────────────────┘  └────────────────┘
 //! ```
 //!
 //! # Simulation-First
@@ -31,6 +31,9 @@ mod vector;
 #[cfg(feature = "postgres")]
 mod postgres;
 
+#[cfg(feature = "lance")]
+mod lance;
+
 pub use backend::StorageBackend;
 pub use entity::{Entity, EntityBuilder, EntityType};
 pub use error::{StorageError, StorageResult};
@@ -40,3 +43,6 @@ pub use vector::{SimVectorBackend, VectorBackend, VectorSearchResult};
 
 #[cfg(feature = "postgres")]
 pub use postgres::PostgresBackend;
+
+#[cfg(feature = "lance")]
+pub use lance::LanceStorageBackend;

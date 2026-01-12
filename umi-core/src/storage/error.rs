@@ -62,6 +62,26 @@ pub enum StorageError {
         /// Error message
         message: String,
     },
+
+    /// Connection failed
+    #[error("connection failed: {0}")]
+    ConnectionFailed(String),
+
+    /// Write failed
+    #[error("write failed: {0}")]
+    WriteFailed(String),
+
+    /// Read failed
+    #[error("read failed: {0}")]
+    ReadFailed(String),
+
+    /// Serialization error
+    #[error("serialization error: {0}")]
+    SerializationError(String),
+
+    /// Deserialization error
+    #[error("deserialization error: {0}")]
+    DeserializationError(String),
 }
 
 impl StorageError {

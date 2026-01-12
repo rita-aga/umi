@@ -95,6 +95,9 @@ pub use storage::{Entity, EntityBuilder, EntityType, SimStorageBackend, StorageB
 // Note: storage::StorageError not re-exported to avoid conflict with dst::StorageError
 // Use `umi_core::storage::StorageError` explicitly if needed
 
+#[cfg(feature = "lance")]
+pub use storage::LanceStorageBackend;
+
 // LLM Provider exports
 pub use llm::{CompletionRequest, LLMProvider, ProviderError, SimLLMProvider};
 

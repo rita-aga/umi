@@ -22,15 +22,25 @@ tracing = { workspace = true }
 # Optional database support
 sqlx = { workspace = true, optional = true }
 
+# Optional LanceDB support (via vectordb crate)
+vectordb = { workspace = true, optional = true }
+arrow-array = { workspace = true, optional = true }
+arrow-schema = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+
 # Optional HTTP client for LLM providers
 reqwest = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4"
+tempfile = "3"
 
 [features]
 default = []
 postgres = ["dep:sqlx"]
+
+# LanceDB storage backend (via vectordb crate)
+lance = ["dep:vectordb", "dep:arrow-array", "dep:arrow-schema", "dep:futures"]
 
 # LLM provider features
 anthropic = ["dep:reqwest"]
