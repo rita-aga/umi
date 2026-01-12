@@ -395,6 +395,7 @@ pub struct Memory<
     evolution: EvolutionTracker<L, S>,
     embedder: E,
     vector: V,
+    config: MemoryConfig,
 }
 
 impl<
@@ -429,6 +430,37 @@ impl<
             evolution,
             embedder,
             vector,
+            config: MemoryConfig::default(),
+        }
+    }
+
+    /// Create a new Memory with custom configuration.
+    ///
+    /// # Arguments
+    /// - `llm` - LLM provider (cloned for each component)
+    /// - `embedder` - Embedding provider (cloned for retriever)
+    /// - `vector` - Vector backend for similarity search
+    /// - `storage` - Storage backend (cloned for retriever)
+    /// - `config` - Memory configuration
+    #[must_use]
+    pub fn with_config(llm: L, embedder: E, vector: V, storage: S, config: MemoryConfig) -> Self {
+        let extractor = EntityExtractor::new(llm.clone());
+        let retriever = DualRetriever::new(
+            llm.clone(),
+            embedder.clone(),
+            vector.clone(),
+            storage.clone(),
+        );
+        let evolution = EvolutionTracker::new(llm);
+
+        Self {
+            storage,
+            extractor,
+            retriever,
+            evolution,
+            embedder,
+            vector,
+            config,
         }
     }
 
@@ -618,11 +650,19 @@ impl<
             });
         }
 
+        // Use config's default_recall_limit if options uses the default value
+        // This allows config to override the hardcoded default (10)
+        let effective_limit = if options.limit == MEMORY_RECALL_LIMIT_DEFAULT {
+            self.config.default_recall_limit
+        } else {
+            options.limit
+        };
+
         // Build search options
         let mut search_options = SearchOptions::new()
-            .with_limit(options.limit)
+            .with_limit(effective_limit)
             .map_err(|_e| MemoryError::InvalidLimit {
-                value: options.limit,
+                value: effective_limit,
                 max: MEMORY_RECALL_LIMIT_MAX,
             })?;
 
@@ -647,10 +687,10 @@ impl<
 
         // Postcondition (TigerStyle)
         debug_assert!(
-            result.len() <= options.limit,
+            result.len() <= effective_limit,
             "results exceed limit: {} > {}",
             result.len(),
-            options.limit
+            effective_limit
         );
 
         Ok(result.entities)
@@ -1156,20 +1196,18 @@ impl Memory<
     /// let memory = Memory::sim_with_config(42, config);
     /// ```
     #[must_use]
-    pub fn sim_with_config(_seed: u64, _config: MemoryConfig) -> Self {
+    pub fn sim_with_config(seed: u64, config: MemoryConfig) -> Self {
         use crate::dst::SimConfig;
         use crate::embedding::SimEmbeddingProvider;
         use crate::llm::SimLLMProvider;
         use crate::storage::{SimStorageBackend, SimVectorBackend};
 
-        // TODO: Wire config through to components
-        // For now, just create with seed (config not yet fully integrated)
-        let llm = SimLLMProvider::with_seed(_seed);
-        let embedder = SimEmbeddingProvider::with_seed(_seed);
-        let vector = SimVectorBackend::new(_seed);
-        let storage = SimStorageBackend::new(SimConfig::with_seed(_seed));
+        let llm = SimLLMProvider::with_seed(seed);
+        let embedder = SimEmbeddingProvider::with_seed(seed);
+        let vector = SimVectorBackend::new(seed);
+        let storage = SimStorageBackend::new(SimConfig::with_seed(seed));
 
-        Self::new(llm, embedder, vector, storage)
+        Self::with_config(llm, embedder, vector, storage, config)
     }
 }
 

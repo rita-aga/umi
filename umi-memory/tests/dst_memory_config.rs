@@ -76,10 +76,8 @@ async fn test_memory_builder_with_config() {
 }
 
 #[tokio::test]
-#[ignore = "TODO: Wire config.default_recall_limit through Memory.recall()"]
 async fn test_memory_respects_recall_limit_from_config() {
     // Test that Memory uses config's default_recall_limit
-    // NOTE: This test currently fails because config is not yet fully wired through Memory
     let config = MemoryConfig::default().with_recall_limit(3);
 
     let mut memory = Memory::sim_with_config(42, config);
