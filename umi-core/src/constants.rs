@@ -201,6 +201,25 @@ pub const EXTRACTION_ENTITY_NAME_BYTES_MAX: usize = 256;
 pub const EXTRACTION_ENTITY_CONTENT_BYTES_MAX: usize = 1000;
 
 // =============================================================================
+// Retrieval Limits (ADR-015)
+// =============================================================================
+
+/// Maximum number of search results
+pub const RETRIEVAL_RESULTS_COUNT_MAX: usize = 100;
+
+/// Default number of search results
+pub const RETRIEVAL_RESULTS_COUNT_DEFAULT: usize = 10;
+
+/// Maximum length of search query
+pub const RETRIEVAL_QUERY_BYTES_MAX: usize = 10_000;
+
+/// Maximum number of query rewrites from LLM
+pub const RETRIEVAL_QUERY_REWRITE_COUNT_MAX: usize = 3;
+
+/// RRF constant (standard value from literature)
+pub const RETRIEVAL_RRF_K: usize = 60;
+
+// =============================================================================
 // Time Constants
 // =============================================================================
 

@@ -159,7 +159,12 @@ Phase R1: Port Python Layer to Rust (IN PROGRESS)
 │   ├── ExtractionResult, ExtractedEntity, ExtractedRelation
 │   ├── Graceful degradation (fallback on LLM failure)
 │   └── Type-safe EntityType and RelationType enums
-├── [ ] DualRetriever (string matching + HTTP)
+├── [✅] DualRetriever (ADR-015)
+│   ├── DualRetriever<L: LLMProvider, S: StorageBackend>
+│   ├── SearchOptions, SearchResult
+│   ├── needs_deep_search() heuristic routing
+│   ├── rewrite_query() via LLM with graceful degradation
+│   └── merge_rrf() Reciprocal Rank Fusion
 ├── [ ] EvolutionTracker (comparison + scoring)
 └── [ ] Memory class (orchestrates all components)
 
@@ -181,6 +186,7 @@ Phase R3: Publish to crates.io
 | 2026-01-11 | R0 | SimLLM with DST | 232 → 263 |
 | 2026-01-11 | R1 | LLM Provider Trait | 263 → 263 |
 | 2026-01-11 | R1 | EntityExtractor | 263 → 301 |
+| 2026-01-11 | R1 | DualRetriever | 301 → 334 |
 
 ### When to Choose Full Rust
 

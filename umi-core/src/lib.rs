@@ -55,6 +55,7 @@ pub mod dst;
 pub mod extraction;
 pub mod llm;
 pub mod memory;
+pub mod retrieval;
 pub mod storage;
 
 // Re-export common types
@@ -108,3 +109,6 @@ pub use extraction::{
 };
 // Note: extraction::EntityType and extraction::RelationType not re-exported
 // to avoid conflict with storage::EntityType. Use explicit paths if needed.
+
+// Retrieval exports
+pub use retrieval::{DualRetriever, RetrievalError, SearchOptions, SearchResult};
