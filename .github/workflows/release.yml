@@ -1,0 +1,192 @@
+# Automated Release Workflow
+# Publishes to crates.io when a version tag (v*) is pushed
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Validate before publishing
+  pre-release-checks:
+    name: Pre-Release Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/v}
+          echo "version=$TAG" >> $GITHUB_OUTPUT
+          echo "Publishing version: $TAG"
+
+      - name: Verify Cargo.toml version matches tag
+        run: |
+          CARGO_VERSION=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          if [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
+            echo "ERROR: Cargo.toml version ($CARGO_VERSION) does not match tag ($TAG_VERSION)"
+            exit 1
+          fi
+          echo "✓ Version match confirmed: $CARGO_VERSION"
+
+      - name: Run full test suite
+        run: cargo test --all-features --verbose
+
+      - name: Run clippy
+        run: cargo clippy --all-features -- -D warnings
+
+      - name: Check documentation builds
+        run: cargo doc --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+      - name: Dry run publish
+        run: cargo publish -p umi-memory --dry-run --allow-dirty
+
+  # Publish to crates.io
+  publish-crate:
+    name: Publish to crates.io
+    needs: pre-release-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Publish to crates.io
+        run: cargo publish -p umi-memory --allow-dirty
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/v}
+          echo "version=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Wait for crates.io indexing
+        run: |
+          echo "Waiting 30 seconds for crates.io to index the new version..."
+          sleep 30
+
+  # Create GitHub Release
+  create-github-release:
+    name: Create GitHub Release
+    needs: publish-crate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for changelog generation
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/v}
+          echo "version=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get commits since last tag
+          PREVIOUS_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            # First release - get all commits
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            # Get commits since previous tag
+            COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+
+          # Save changelog to file
+          cat > release_notes.md << EOF
+          # umi-memory v${{ steps.version.outputs.version }}
+
+          ## Installation
+
+          \`\`\`bash
+          cargo add umi-memory
+          \`\`\`
+
+          ## What's Changed
+
+          ${COMMITS}
+
+          ## Links
+
+          - [Crates.io](https://crates.io/crates/umi-memory/${{ steps.version.outputs.version }})
+          - [Documentation](https://docs.rs/umi-memory/${{ steps.version.outputs.version }})
+          - [Full Changelog](https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG}...v${{ steps.version.outputs.version }})
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Success notification
+  notify-success:
+    name: Notify Success
+    needs: [pre-release-checks, publish-crate, create-github-release]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/v}
+          echo "version=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Success message
+        run: |
+          echo "✅ Successfully published umi-memory v${{ steps.version.outputs.version }} to crates.io!"
+          echo "📦 Crates.io: https://crates.io/crates/umi-memory/${{ steps.version.outputs.version }}"
+          echo "📚 Docs.rs: https://docs.rs/umi-memory/${{ steps.version.outputs.version }}"
+          echo "🎉 GitHub Release: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }}"
+
+  # Failure notification
+  notify-failure:
+    name: Notify Failure
+    needs: [pre-release-checks, publish-crate, create-github-release]
+    runs-on: ubuntu-latest
+    if: failure()
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/v}
+          echo "version=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Failure message
+        run: |
+          echo "❌ Failed to publish umi-memory v${{ steps.version.outputs.version }}"
+          echo "Check the workflow logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          exit 1
