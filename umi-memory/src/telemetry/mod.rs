@@ -46,19 +46,33 @@ use thiserror::Error;
 /// Telemetry configuration errors
 #[derive(Error, Debug)]
 pub enum TelemetryError {
+    /// Telemetry initialization failed
     #[error("telemetry initialization failed: {reason}")]
-    InitFailed { reason: String },
+    InitFailed {
+        /// The reason for the failure
+        reason: String
+    },
 
+    /// Invalid sampling rate provided
     #[error("invalid sampling rate: {rate} (must be in [0.0, 1.0])")]
-    InvalidSamplingRate { rate: f64 },
+    InvalidSamplingRate {
+        /// The invalid sampling rate value
+        rate: f64
+    },
 
+    /// Invalid endpoint configuration
     #[error("invalid endpoint: {endpoint}")]
-    InvalidEndpoint { endpoint: String },
+    InvalidEndpoint {
+        /// The invalid endpoint string
+        endpoint: String
+    },
 
+    /// OpenTelemetry feature is not enabled
     #[error("opentelemetry feature not enabled")]
     FeatureNotEnabled,
 }
 
+/// Result type for telemetry operations
 pub type Result<T> = std::result::Result<T, TelemetryError>;
 
 /// Configuration for OpenTelemetry integration
@@ -146,32 +160,44 @@ pub struct TelemetryConfigBuilder {
 }
 
 impl TelemetryConfigBuilder {
+    /// Set the service name for telemetry
+    #[must_use]
     pub fn service_name(mut self, name: impl Into<String>) -> Self {
         self.service_name = Some(name.into());
         self
     }
 
+    /// Set the OTLP exporter endpoint
+    #[must_use]
     pub fn endpoint(mut self, endpoint: impl Into<String>) -> Self {
         self.endpoint = Some(endpoint.into());
         self
     }
 
-    #[must_use] pub fn sampling_rate(mut self, rate: f64) -> Self {
+    /// Set the sampling rate (0.0 to 1.0)
+    #[must_use]
+    pub fn sampling_rate(mut self, rate: f64) -> Self {
         self.sampling_rate = Some(rate);
         self
     }
 
-    #[must_use] pub fn export_timeout_ms(mut self, timeout_ms: u64) -> Self {
+    /// Set the export timeout in milliseconds
+    #[must_use]
+    pub fn export_timeout_ms(mut self, timeout_ms: u64) -> Self {
         self.export_timeout_ms = Some(timeout_ms);
         self
     }
 
-    #[must_use] pub fn batch_size_max(mut self, size: usize) -> Self {
+    /// Set the maximum batch size for span export
+    #[must_use]
+    pub fn batch_size_max(mut self, size: usize) -> Self {
         self.batch_size_max = Some(size);
         self
     }
 
-    #[must_use] pub fn build(self) -> TelemetryConfig {
+    /// Build the `TelemetryConfig`
+    #[must_use]
+    pub fn build(self) -> TelemetryConfig {
         let default = TelemetryConfig::default();
         TelemetryConfig {
             service_name: self.service_name.unwrap_or(default.service_name),
