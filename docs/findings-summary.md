@@ -1,19 +1,20 @@
 # Umi Rust Ecosystem Feasibility: Complete Findings
 
-**Date:** 2026-01-11
+**Date:** 2026-01-12
 **Status:** Research Complete
 
 ---
 
 ## Overview
 
-This document summarizes the feasibility analysis for building a full Rust AI agent ecosystem using Umi as the memory foundation. The analysis covers three key questions:
+This document summarizes the feasibility analysis for building a full Rust AI agent ecosystem using Umi as the memory foundation. The analysis covers four key questions:
 
 1. Can Umi be fully implemented in Rust?
 2. Can Letta (stateful agent framework) be rewritten in Rust and use Umi?
 3. Can an aidnn-like system (multi-agent data analytics with continual learning) be built in Rust?
+4. How does Kelpie fit in, and what's the optimal stack?
 
-**Bottom line:** Yes to all three, with a recommended hybrid approach where Rust handles runtime and Python handles RL training.
+**Bottom line:** Yes to all—Kelpie provides the agent runtime, Umi provides rich memory features, trajectories enable learning, and GRPO provides training.
 
 ---
 
@@ -486,16 +487,84 @@ See `docs/trajectories-continual-learning.md` for full analysis.
 
 ---
 
+## Part 9: Kelpie - The Missing Runtime
+
+### What is Kelpie?
+
+[Kelpie](https://github.com/nerdsane/kelpie) is a distributed virtual actor system for AI agents—essentially "Letta in Rust":
+
+| Feature | Kelpie |
+|---------|--------|
+| Language | Rust (92.3%) |
+| Memory | 3-tier (Core/Working/Archival) |
+| Actor model | Virtual actors with linearizability |
+| Sandbox | Firecracker microVM isolation |
+| Scaling | Cluster coordination |
+| DST | Comprehensive fault injection |
+| API | Letta-compatible REST |
+| MCP | Native integration |
+
+### Kelpie vs Umi: Complementary, Not Competing
+
+```
+Kelpie = Agent RUNTIME (execution, tools, scaling)
+Umi    = Memory LIBRARY (entities, evolution, retrieval)
+```
+
+**Overlap:** Both have 3-tier memory, DST, TigerStyle
+
+**Difference:**
+- Kelpie is a complete runtime (deploy as server)
+- Umi is an embeddable library (import into any agent)
+
+### Integration Options
+
+| Option | Description | Best For |
+|--------|-------------|----------|
+| **Kelpie Only** | Use Kelpie's built-in memory | Simple memory needs |
+| **Kelpie + Umi** | Swap Umi for Kelpie's memory | Rich memory (entity extraction, evolution) |
+| **Custom + Umi** | Build custom runtime with Umi | Novel architectures |
+
+### Why Kelpie + Umi for aidnn?
+
+For Isotopes.ai replication, use both:
+
+- **Kelpie provides:** Agent runtime, virtual actors, sandbox, MCP tools, scaling
+- **Umi provides:** Entity extraction (learning from expertise), evolution tracking, dual retrieval
+
+### The Complete Stack
+
+```
+Kelpie (runtime) + Umi (memory) + Trajectories (learning) + GRPO (training)
+                      ↓
+              Rust aidnn = Isotopes.ai
+```
+
+| aidnn Need | Stack Component |
+|------------|-----------------|
+| Multi-agent | Kelpie virtual actors |
+| Data tools | Kelpie MCP integration |
+| Learning from expertise | Umi entity extraction + evolution |
+| Continuous improvement | Trajectories + GRPO |
+| Scaling | Kelpie cluster coordination |
+| Safety | Kelpie sandbox (Firecracker) |
+
+See `docs/kelpie-ecosystem-integration.md` for full analysis.
+
+---
+
 ## Related Documents
 
 - `docs/letta-rust-feasibility.md` - Detailed Letta analysis
 - `docs/isotopes-rust-replication.md` - aidnn replication analysis
 - `docs/trajectories-continual-learning.md` - Trajectory primitive and training frameworks
+- `docs/kelpie-ecosystem-integration.md` - Kelpie integration and complete stack analysis
 - `.vision/umi-vision.md` - Umi core principles
 - `.progress/001_*_umi-standalone-roadmap.md` - Implementation roadmap
 
 ## Sources
 
+- [Kelpie GitHub](https://github.com/nerdsane/kelpie)
 - [Letta GitHub](https://github.com/letta-ai/letta)
 - [Isotopes AI](https://isotopes.ai/)
 - [Microsoft Agent Lightning](https://github.com/microsoft/agent-lightning)
