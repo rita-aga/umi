@@ -132,6 +132,31 @@ pub const DST_TIME_ADVANCE_MS_MAX: u64 = 86_400_000; // 24 hours
 pub const DST_LATENCY_MS_MAX: u64 = 10_000; // 10 seconds
 
 // =============================================================================
+// LLM Simulation Limits
+// =============================================================================
+
+/// Maximum size of LLM prompt
+pub const LLM_PROMPT_BYTES_MAX: usize = 100_000; // 100KB
+
+/// Maximum size of LLM response
+pub const LLM_RESPONSE_BYTES_MAX: usize = 50_000; // 50KB
+
+/// Minimum simulated latency for LLM calls
+pub const LLM_LATENCY_MS_MIN: u64 = 50;
+
+/// Maximum simulated latency for LLM calls
+pub const LLM_LATENCY_MS_MAX: u64 = 2000;
+
+/// Default simulated latency for LLM calls
+pub const LLM_LATENCY_MS_DEFAULT: u64 = 100;
+
+/// Maximum number of entities in extraction response
+pub const LLM_ENTITIES_COUNT_MAX: usize = 50;
+
+/// Maximum number of query rewrites
+pub const LLM_QUERY_REWRITES_COUNT_MAX: usize = 5;
+
+// =============================================================================
 // Network Simulation Limits
 // =============================================================================
 

@@ -8,6 +8,7 @@ use std::sync::Arc;
 use super::clock::SimClock;
 use super::config::SimConfig;
 use super::fault::{FaultConfig, FaultInjector, FaultInjectorBuilder};
+use super::llm::SimLLM;
 use super::network::SimNetwork;
 use super::rng::DeterministicRng;
 use super::storage::SimStorage;
@@ -22,12 +23,14 @@ pub struct SimEnvironment {
     pub clock: SimClock,
     /// Deterministic RNG
     pub rng: DeterministicRng,
-    /// Fault injector (shared via Arc with storage and network)
+    /// Fault injector (shared via Arc with storage, network, and llm)
     pub faults: Arc<FaultInjector>,
     /// Simulated storage
     pub storage: SimStorage,
     /// Simulated network
     pub network: SimNetwork,
+    /// Simulated LLM
+    pub llm: SimLLM,
 }
 
 impl SimEnvironment {
@@ -169,6 +172,13 @@ impl Simulation {
             Arc::clone(&faults), // Network SHARES the fault injector
         );
 
+        // Create LLM with SHARED fault injector
+        let llm = SimLLM::new(
+            clock.clone(),
+            rng.fork(),
+            Arc::clone(&faults), // LLM SHARES the fault injector
+        );
+
         let env = SimEnvironment {
             config: self.config,
             clock,
@@ -176,6 +186,7 @@ impl Simulation {
             faults,
             storage,
             network,
+            llm,
         };
 
         // Run the test
@@ -209,6 +220,9 @@ impl Simulation {
         // Create network with SHARED fault injector
         let network = SimNetwork::new(clock.clone(), rng.fork(), Arc::clone(&faults));
 
+        // Create LLM with SHARED fault injector
+        let llm = SimLLM::new(clock.clone(), rng.fork(), Arc::clone(&faults));
+
         SimEnvironment {
             config: self.config,
             clock,
@@ -216,6 +230,7 @@ impl Simulation {
             faults,
             storage,
             network,
+            llm,
         }
     }
 }

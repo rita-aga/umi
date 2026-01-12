@@ -34,6 +34,7 @@
 mod clock;
 mod config;
 mod fault;
+mod llm;
 mod network;
 mod property;
 mod rng;
@@ -43,6 +44,7 @@ mod storage;
 pub use clock::SimClock;
 pub use config::SimConfig;
 pub use fault::{FaultConfig, FaultInjector, FaultInjectorBuilder, FaultType};
+pub use llm::{LLMError, SimLLM};
 pub use network::{NetworkError, NetworkMessage, SimNetwork};
 pub use property::{
     run_property_tests, test_seeds, PropertyTest, PropertyTestFailure, PropertyTestResult,
