@@ -1,49 +1,109 @@
-//! Umi Core - Memory System with DST
+//! # Umi Memory
 //!
-//! TigerStyle simulation-first memory system inspired by TigerBeetle/FoundationDB.
+//! A production-ready memory library for AI agents with deterministic simulation testing.
 //!
-//! # Philosophy
+//! ## Features
+//!
+//! - **🧠 Smart Memory Management**: Core, working, and archival memory tiers with automatic eviction
+//! - **🔍 Dual Retrieval**: Fast vector search + LLM-powered semantic query expansion
+//! - **🔄 Evolution Tracking**: Automatically detect updates, contradictions, and derived insights
+//! - **✅ Graceful Degradation**: System continues operating even when LLM/storage components fail
+//! - **🎯 Deterministic Testing**: Full DST (Deterministic Simulation Testing) for reproducible fault injection
+//! - **🚀 Production Backends**: LanceDB for embedded vectors, Postgres for persistence
+//!
+//! ## Quick Start
+//!
+//! ```rust
+//! use umi_memory::umi::{Memory, RememberOptions, RecallOptions};
+//!
+//! # #[tokio::main]
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! // Create memory with simulation providers (deterministic, seed 42)
+//! let mut memory = Memory::sim(42);
+//!
+//! // Remember information
+//! memory.remember(
+//!     "Alice is a software engineer at Acme Corp",
+//!     RememberOptions::default()
+//! ).await?;
+//!
+//! // Recall information
+//! let results = memory.recall("Who works at Acme?", RecallOptions::default()).await?;
+//!
+//! for entity in results {
+//!     println!("Found: {} - {}", entity.name, entity.content);
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Architecture
+//!
+//! ```text
+//! ┌─────────────────────────────────────────────────────────┐
+//! │                    Memory Orchestrator                   │
+//! ├─────────────────────────────────────────────────────────┤
+//! │  EntityExtractor  │ DualRetriever  │ EvolutionTracker   │
+//! ├─────────────────────────────────────────────────────────┤
+//! │  Core Memory (32KB)      │ Always loaded, persistent   │
+//! │  Working Memory (1MB)    │ TTL-based eviction, cache   │
+//! │  Archival Memory         │ Vector search + storage     │
+//! ├─────────────────────────────────────────────────────────┤
+//! │  DST Framework           │ Fault injection + simulation│
+//! └─────────────────────────────────────────────────────────┘
+//! ```
+//!
+//! ## Core Components
+//!
+//! - [`Memory`](umi::Memory) - Main orchestrator, coordinates all components
+//! - [`EntityExtractor`](extraction::EntityExtractor) - Extracts structured entities from text
+//! - [`DualRetriever`](retrieval::DualRetriever) - Fast + semantic search with RRF merging
+//! - [`EvolutionTracker`](evolution::EvolutionTracker) - Detects memory evolution patterns
+//!
+//! ## Simulation-First Philosophy
 //!
 //! > "If you're not testing with fault injection, you're not testing."
 //!
-//! Umi is built simulation-first:
-//! 1. Build the test harness BEFORE the production code
-//! 2. Every component must be testable under simulation
-//! 3. All I/O goes through injectable interfaces
-//! 4. Seeds are logged for reproducibility
-//!
-//! # Architecture
-//!
-//! ```text
-//! ┌─────────────────────────────────────────────┐
-//! │               Umi Core                       │
-//! ├─────────────────────────────────────────────┤
-//! │  Core Memory (32KB)     │ Always in context │
-//! │  Working Memory (1MB)   │ KV with TTL       │
-//! │  Archival Memory        │ Postgres/vectors  │
-//! ├─────────────────────────────────────────────┤
-//! │  DST Framework          │ Fault injection   │
-//! └─────────────────────────────────────────────┘
-//! ```
-//!
-//! # Usage
+//! Every component has a deterministic simulation implementation:
 //!
 //! ```rust
 //! use umi_memory::dst::{Simulation, SimConfig, FaultConfig, FaultType};
 //!
-//! #[tokio::test]
-//! async fn test_memory_survives_faults() {
-//!     let sim = Simulation::new(SimConfig::with_seed(42))
-//!         .with_storage_faults(0.1);
+//! # #[tokio::test]
+//! # async fn test_example() {
+//! let sim = Simulation::new(SimConfig::with_seed(42))
+//!     .with_fault(FaultConfig::new(FaultType::LlmTimeout, 0.1));
 //!
-//!     sim.run(|mut env| async move {
-//!         env.storage.write("key", b"value").await?;
-//!         let result = env.storage.read("key").await?;
-//!         assert_eq!(result, Some(b"value".to_vec()));
-//!         Ok(())
-//!     }).await.unwrap();
-//! }
+//! sim.run(|env| async move {
+//!     // Test code with deterministic fault injection
+//!     // Same seed = same faults = reproducible bugs
+//!     Ok::<_, anyhow::Error>(())
+//! }).await.unwrap();
+//! # }
 //! ```
+//!
+//! ## Feature Flags
+//!
+//! - `lance` - LanceDB storage backend
+//! - `postgres` - PostgreSQL storage backend
+//! - `anthropic` - Anthropic LLM provider (Claude)
+//! - `openai` - OpenAI LLM provider (GPT, embeddings)
+//! - `llm-providers` - All LLM providers
+//! - `embedding-providers` - All embedding providers
+//!
+//! ## Examples
+//!
+//! See the [examples directory](https://github.com/rita-aga/umi/tree/main/umi-memory/examples) for:
+//!
+//! - `quick_start.rs` - Basic remember/recall workflow
+//! - `production_setup.rs` - Production configuration
+//! - `configuration.rs` - Custom memory settings
+//!
+//! ## Documentation
+//!
+//! - [GitHub Repository](https://github.com/rita-aga/umi)
+//! - [Architecture Decision Records](https://github.com/rita-aga/umi/tree/main/docs/adr)
+//! - [Development Guide](https://github.com/rita-aga/umi/blob/main/CLAUDE.md)
 
 #![warn(missing_docs)]
 #![warn(clippy::all)]
