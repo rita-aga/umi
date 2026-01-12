@@ -4,8 +4,7 @@
 //!
 //! See ADR-012 for design rationale.
 
-use std::cell::RefCell;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use serde::de::DeserializeOwned;
 use serde_json::json;
@@ -82,7 +81,7 @@ const COMMON_ORGS: &[&str] = &[
 /// - Deterministic responses via seeded RNG
 /// - Prompt routing to domain-specific generators
 /// - Fault injection integration
-/// - Interior mutability for `Arc` sharing
+/// - Thread-safe via `Mutex` for use in async contexts
 ///
 /// # Example
 ///
@@ -101,8 +100,8 @@ const COMMON_ORGS: &[&str] = &[
 pub struct SimLLM {
     /// Simulated clock for latency
     clock: SimClock,
-    /// RNG with interior mutability (allows &self methods)
-    rng: RefCell<DeterministicRng>,
+    /// RNG with thread-safe interior mutability
+    rng: Mutex<DeterministicRng>,
     /// Shared fault injector
     fault_injector: Arc<FaultInjector>,
     /// Base latency for simulated responses
@@ -122,7 +121,7 @@ impl SimLLM {
     pub fn new(clock: SimClock, rng: DeterministicRng, fault_injector: Arc<FaultInjector>) -> Self {
         Self {
             clock,
-            rng: RefCell::new(rng),
+            rng: Mutex::new(rng),
             fault_injector,
             base_latency_ms: LLM_LATENCY_MS_DEFAULT,
             simulate_latency_enabled: true,
@@ -229,7 +228,7 @@ impl SimLLM {
     /// Simulate entity extraction response.
     fn sim_entity_extraction(&self, prompt: &str) -> String {
         let mut entities = Vec::new();
-        let mut rng = self.rng.borrow_mut();
+        let mut rng = self.rng.lock().unwrap();
 
         // Detect common names in prompt
         for name in COMMON_NAMES {
@@ -282,20 +281,29 @@ impl SimLLM {
 
     /// Simulate query rewrite response.
     fn sim_query_rewrite(&self, prompt: &str) -> String {
-        let mut rng = self.rng.borrow_mut();
+        let mut rng = self.rng.lock().unwrap();
 
         // Extract the actual query from the prompt (simple heuristic)
         let query = prompt
             .lines()
             .find(|line| line.trim().starts_with("Query:") || line.trim().starts_with("query:"))
-            .map(|line| line.trim_start_matches("Query:").trim_start_matches("query:").trim())
+            .map(|line| {
+                line.trim_start_matches("Query:")
+                    .trim_start_matches("query:")
+                    .trim()
+            })
             .unwrap_or(&prompt[..50.min(prompt.len())]);
 
         // Generate variations
         let num_rewrites = rng.next_usize(2, LLM_QUERY_REWRITES_COUNT_MAX);
         let mut rewrites = vec![query.to_string()];
 
-        let prefixes = ["What is", "Tell me about", "Information on", "Details about"];
+        let prefixes = [
+            "What is",
+            "Tell me about",
+            "Information on",
+            "Details about",
+        ];
         let suffixes = ["?", " please", " in detail", ""];
 
         for _ in 0..num_rewrites - 1 {
@@ -312,7 +320,7 @@ impl SimLLM {
 
     /// Simulate evolution detection response.
     fn sim_evolution_detection(&self, prompt: &str) -> String {
-        let mut rng = self.rng.borrow_mut();
+        let mut rng = self.rng.lock().unwrap();
 
         // Weighted evolution types (update most common)
         let evolution_types = [
@@ -388,7 +396,7 @@ impl SimLLM {
 
     /// Simulate relation detection response.
     fn sim_relation_detection(&self, prompt: &str) -> String {
-        let mut rng = self.rng.borrow_mut();
+        let mut rng = self.rng.lock().unwrap();
 
         // Sometimes no relation detected
         if rng.next_bool(0.4) {
@@ -430,7 +438,7 @@ impl SimLLM {
     /// Generic response for unrecognized prompts.
     fn sim_generic(&self, prompt: &str) -> String {
         let hash = self.prompt_hash(prompt);
-        let mut rng = self.rng.borrow_mut();
+        let mut rng = self.rng.lock().unwrap();
 
         let responses = [
             "Acknowledged.",
@@ -468,7 +476,7 @@ impl SimLLM {
         }
 
         let jitter = {
-            let mut rng = self.rng.borrow_mut();
+            let mut rng = self.rng.lock().unwrap();
             rng.next_usize(0, 50) as u64
         };
         let latency = self.base_latency_ms + jitter;
@@ -497,7 +505,7 @@ impl SimLLM {
     /// Get the current seed (for debugging).
     #[must_use]
     pub fn seed(&self) -> u64 {
-        self.rng.borrow().seed()
+        self.rng.lock().unwrap().seed()
     }
 }
 
@@ -527,7 +535,10 @@ mod tests {
         let response1 = llm1.complete(prompt).await.unwrap();
         let response2 = llm2.complete(prompt).await.unwrap();
 
-        assert_eq!(response1, response2, "Same seed should produce same response");
+        assert_eq!(
+            response1, response2,
+            "Same seed should produce same response"
+        );
     }
 
     #[tokio::test]
@@ -561,7 +572,8 @@ mod tests {
     async fn test_query_rewrite_routing() {
         let llm = create_test_llm(42);
 
-        let prompt = "Rewrite the following query for better search:\nQuery: what is rust programming";
+        let prompt =
+            "Rewrite the following query for better search:\nQuery: what is rust programming";
         let response = llm.complete(prompt).await.unwrap();
 
         assert!(response.contains("queries"));

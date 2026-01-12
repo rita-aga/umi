@@ -22,9 +22,19 @@ tracing = { workspace = true }
 # Optional database support
 sqlx = { workspace = true, optional = true }
 
+# Optional HTTP client for LLM providers
+reqwest = { workspace = true, optional = true }
+
 [dev-dependencies]
 tokio-test = "0.4"
 
 [features]
 default = []
 postgres = ["dep:sqlx"]
+
+# LLM provider features
+anthropic = ["dep:reqwest"]
+openai = ["dep:reqwest"]
+
+# Convenience feature for all LLM providers
+llm-providers = ["anthropic", "openai"]

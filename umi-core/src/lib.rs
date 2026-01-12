@@ -52,6 +52,7 @@
 
 pub mod constants;
 pub mod dst;
+pub mod llm;
 pub mod memory;
 pub mod storage;
 
@@ -89,3 +90,12 @@ pub use memory::{
 pub use storage::{Entity, EntityBuilder, EntityType, SimStorageBackend, StorageBackend};
 // Note: storage::StorageError not re-exported to avoid conflict with dst::StorageError
 // Use `umi_core::storage::StorageError` explicitly if needed
+
+// LLM Provider exports
+pub use llm::{CompletionRequest, LLMProvider, ProviderError, SimLLMProvider};
+
+#[cfg(feature = "anthropic")]
+pub use llm::AnthropicProvider;
+
+#[cfg(feature = "openai")]
+pub use llm::OpenAIProvider;
