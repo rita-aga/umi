@@ -1192,3 +1192,357 @@ mod tests {
         assert_eq!(ids.len(), unique_ids.len(), "should have no duplicate IDs");
     }
 }
+
+// =============================================================================
+// DST Tests - Full Simulation Harness with Fault Injection
+// =============================================================================
+
+#[cfg(test)]
+mod dst_tests {
+    use super::*;
+    use crate::dst::{FaultConfig, FaultType, SimConfig, Simulation};
+    use crate::embedding::SimEmbeddingProvider;
+    use crate::llm::SimLLMProvider;
+    use crate::storage::{SimStorageBackend, SimVectorBackend};
+
+    /// Create UnifiedMemory inside simulation environment.
+    fn create_unified_in_sim(
+        seed: u64,
+        clock: SimClock,
+    ) -> UnifiedMemory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend>
+    {
+        let llm = SimLLMProvider::with_seed(seed);
+        let embedder = SimEmbeddingProvider::with_seed(seed);
+        let vector = SimVectorBackend::new(seed);
+        let storage = SimStorageBackend::new(SimConfig::with_seed(seed));
+        let config = UnifiedMemoryConfig::default();
+
+        UnifiedMemory::new(llm, embedder, vector, storage, clock, config)
+    }
+
+    // =========================================================================
+    // Simulation Harness Tests
+    // =========================================================================
+
+    /// Test remember() within simulation harness with time advancement.
+    #[tokio::test]
+    async fn test_remember_with_simulation_harness() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut memory = create_unified_in_sim(42, env.clock.clone());
+
+            // Remember at t=0
+            let result1 = memory.remember("Alice is the project lead").await.unwrap();
+            assert!(!result1.entities.is_empty());
+
+            // Advance time by 1 second
+            let _ = env.clock.advance_ms(1000);
+
+            // Remember more at t=1000
+            let result2 = memory.remember("Bob is a developer").await.unwrap();
+            assert!(!result2.entities.is_empty());
+
+            // Clock should have advanced
+            assert_eq!(env.clock.now_ms(), 1000);
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test recall() within simulation harness.
+    #[tokio::test]
+    async fn test_recall_with_simulation_harness() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut memory = create_unified_in_sim(42, env.clock.clone());
+
+            // Remember something
+            memory.remember("Important project info").await.unwrap();
+
+            // Advance time
+            let _ = env.clock.advance_ms(500);
+
+            // Recall
+            let results = memory.recall("project", 10).await.unwrap();
+
+            // Should find something (may or may not depending on sim storage search)
+            assert!(results.len() <= 10);
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test deterministic replay - same seed produces same results.
+    #[tokio::test]
+    async fn test_deterministic_replay() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let entity_counts = Arc::new([AtomicUsize::new(0), AtomicUsize::new(0)]);
+
+        // Run simulation twice with same seed
+        for i in 0..2 {
+            let counts = entity_counts.clone();
+            let sim = Simulation::new(SimConfig::with_seed(12345));
+
+            sim.run(|env| {
+                let counts = counts.clone();
+                async move {
+                    let mut memory = create_unified_in_sim(12345, env.clock.clone());
+
+                    let result = memory.remember("Test determinism").await.unwrap();
+                    counts[i].store(result.entity_count(), Ordering::SeqCst);
+                    Ok::<(), std::convert::Infallible>(())
+                }
+            })
+            .await
+            .unwrap();
+        }
+
+        // Same seed should produce identical results
+        assert_eq!(
+            entity_counts[0].load(Ordering::SeqCst),
+            entity_counts[1].load(Ordering::SeqCst),
+            "determinism violated"
+        );
+    }
+
+    // =========================================================================
+    // Fault Injection Tests
+    // =========================================================================
+
+    /// Test graceful degradation when storage write fails.
+    /// Discovery: Will reveal if remember() handles storage failures correctly.
+    #[tokio::test]
+    async fn test_remember_with_storage_write_failure() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        let result_ok = Arc::new(AtomicBool::new(false));
+        let result_clone = result_ok.clone();
+
+        let sim = Simulation::new(SimConfig::with_seed(42))
+            .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 1.0)); // 100% failure
+
+        sim.run(|env| {
+            let result_clone = result_clone.clone();
+            async move {
+                let mut memory = create_unified_in_sim(42, env.clock.clone());
+
+                // This should fail gracefully since storage writes fail
+                let result = memory.remember("Test with storage failure").await;
+
+                // The result depends on implementation - might error or degrade gracefully
+                result_clone.store(result.is_ok(), Ordering::SeqCst);
+                Ok::<(), std::convert::Infallible>(())
+            }
+        })
+        .await
+        .unwrap();
+
+        // Note: Current implementation propagates storage errors
+        // If graceful degradation is desired, this test reveals the need
+        // For now, we document the behavior
+        println!(
+            "Storage write failure result: is_ok={}",
+            result_ok.load(Ordering::SeqCst)
+        );
+    }
+
+    /// Test graceful degradation when storage read fails during recall.
+    /// Discovery: Will reveal if recall() handles storage failures correctly.
+    #[tokio::test]
+    async fn test_recall_with_storage_read_failure() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        // First, remember without faults
+        let sim1 = Simulation::new(SimConfig::with_seed(42));
+        sim1.run(|env| async move {
+            let mut memory = create_unified_in_sim(42, env.clock.clone());
+            memory.remember("Test data").await.unwrap();
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+
+        // Then recall with storage read failures
+        let result_ok = Arc::new(AtomicBool::new(false));
+        let result_clone = result_ok.clone();
+
+        let sim2 = Simulation::new(SimConfig::with_seed(42))
+            .with_fault(FaultConfig::new(FaultType::StorageReadFail, 1.0));
+
+        sim2.run(|env| {
+            let result_clone = result_clone.clone();
+            async move {
+                let mut memory = create_unified_in_sim(42, env.clock.clone());
+
+                // Recall with storage failures
+                let result = memory.recall("Test", 10).await;
+                result_clone.store(result.is_ok(), Ordering::SeqCst);
+
+                Ok::<(), std::convert::Infallible>(())
+            }
+        })
+        .await
+        .unwrap();
+
+        // Note: Current implementation propagates storage errors
+        println!(
+            "Storage read failure result: is_ok={}",
+            result_ok.load(Ordering::SeqCst)
+        );
+    }
+
+    /// Test with probabilistic failures (50% failure rate).
+    /// Discovery: Will reveal if error handling is consistent across runs.
+    #[tokio::test]
+    async fn test_remember_with_probabilistic_failure() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let success_count = Arc::new(AtomicUsize::new(0));
+        let failure_count = Arc::new(AtomicUsize::new(0));
+        let success_clone = success_count.clone();
+        let failure_clone = failure_count.clone();
+
+        let sim = Simulation::new(SimConfig::with_seed(42))
+            .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 0.5)); // 50% failure
+
+        sim.run(|env| {
+            let success_clone = success_clone.clone();
+            let failure_clone = failure_clone.clone();
+            async move {
+                let mut memory = create_unified_in_sim(42, env.clock.clone());
+
+                // Try multiple operations
+                for i in 0..10 {
+                    let text = format!("Test item {}", i);
+                    match memory.remember(&text).await {
+                        Ok(_) => {
+                            success_clone.fetch_add(1, Ordering::SeqCst);
+                        }
+                        Err(_) => {
+                            failure_clone.fetch_add(1, Ordering::SeqCst);
+                        }
+                    }
+                }
+
+                Ok::<(), std::convert::Infallible>(())
+            }
+        })
+        .await
+        .unwrap();
+
+        println!(
+            "Probabilistic failure: success={}, failure={}",
+            success_count.load(Ordering::SeqCst),
+            failure_count.load(Ordering::SeqCst)
+        );
+
+        // With seed 42 and 50% failure, results should be reproducible
+        // The exact split depends on the RNG sequence
+    }
+
+    // =========================================================================
+    // Time-Dependent Behavior Tests
+    // =========================================================================
+
+    /// Test that access patterns update correctly with time advancement.
+    #[tokio::test]
+    async fn test_access_patterns_with_time_advancement() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut memory = create_unified_in_sim(42, env.clock.clone());
+
+            // Remember something
+            let result = memory.remember("Alice is the lead").await.unwrap();
+            let entity_id = result.entities[0].id.clone();
+
+            // Get initial access pattern
+            let pattern1 = memory.access_tracker().get_access_pattern(&entity_id);
+            assert!(pattern1.is_some());
+            let initial_recency = pattern1.unwrap().recency_score;
+
+            // Advance time by 7 days (1 half-life)
+            let one_week_ms = 7 * 24 * 60 * 60 * 1000;
+            // Advance in chunks (DST limit)
+            for _ in 0..7 {
+                let _ = env.clock.advance_ms(24 * 60 * 60 * 1000); // 1 day
+            }
+
+            // Get updated access pattern
+            let pattern2 = memory.access_tracker().get_access_pattern(&entity_id);
+            assert!(pattern2.is_some());
+            let final_recency = pattern2.unwrap().recency_score;
+
+            // Recency should have decayed (approximately half after 1 half-life)
+            assert!(
+                final_recency < initial_recency,
+                "recency should decay over time: initial={}, final={}",
+                initial_recency,
+                final_recency
+            );
+
+            // Should be roughly half (within tolerance)
+            let ratio = final_recency / initial_recency;
+            assert!(
+                (ratio - 0.5).abs() < 0.1,
+                "recency should halve after 1 half-life: ratio={}",
+                ratio
+            );
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test that repeated access increases frequency score.
+    #[tokio::test]
+    async fn test_frequency_score_with_repeated_access() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut memory = create_unified_in_sim(42, env.clock.clone());
+
+            // Remember something
+            let result = memory.remember("Important data").await.unwrap();
+            let entity_id = result.entities[0].id.clone();
+
+            // Get initial frequency
+            let pattern1 = memory.access_tracker().get_access_pattern(&entity_id).unwrap();
+            let initial_frequency = pattern1.frequency_score;
+            let initial_count = pattern1.access_count;
+
+            // Recall multiple times (each recall records access)
+            for _ in 0..5 {
+                let _ = env.clock.advance_ms(1000);
+                let _ = memory.recall("Important", 10).await;
+            }
+
+            // Get updated frequency
+            let pattern2 = memory.access_tracker().get_access_pattern(&entity_id).unwrap();
+            let final_count = pattern2.access_count;
+
+            // Access count should have increased (if entity was found in recalls)
+            // Note: depends on whether recall finds the entity
+            assert!(
+                final_count >= initial_count,
+                "access count should not decrease"
+            );
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+}

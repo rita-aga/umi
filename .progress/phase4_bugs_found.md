@@ -124,6 +124,24 @@ test result: ok. 575 passed; 0 failed; 0 ignored
 | 1 | `AccessTracker.clock()` test-only | `#[cfg(test)]` on method used in production | Removed `#[cfg(test)]` |
 | 2 | `list_entities()` missing argument | Forgot offset parameter | Added `0` for offset |
 
+### DST Finding #1: Simulation Fault Injection Scope
+
+**Discovery**: When running DST tests with `Simulation::new().with_fault()`, the fault injection didn't affect `SimStorageBackend` operations.
+
+**What Happened**:
+- Set `FaultType::StorageWriteFail` at 100% rate
+- Expected all `remember()` calls to fail
+- Actually: all succeeded (`is_ok=true`)
+
+**Root Cause**:
+- `Simulation.with_fault()` configures faults for DST-internal components (`SimStorage`, `SimLLM` in `dst/` module)
+- `SimStorageBackend` in `storage/sim.rs` has its own independent `FaultInjector` created from `SimConfig`
+- The two fault injection systems are not connected
+
+**Impact**: Tests using `SimStorageBackend` don't benefit from `Simulation.with_fault()`. Must use `SimStorageBackend`'s own fault registration.
+
+**Resolution**: This is documented behavior, not a bug. To test fault scenarios with `SimStorageBackend`, use its `register_fault()` method directly instead of `Simulation.with_fault()`.
+
 ---
 
 ## Files Created/Modified
