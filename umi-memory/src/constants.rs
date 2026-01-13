@@ -306,6 +306,72 @@ pub const TELEMETRY_OTLP_PORT_DEFAULT: u16 = 4317;
 /// Maximum scheduled delay for batch export in milliseconds
 pub const TELEMETRY_BATCH_DELAY_MS_MAX: u64 = 30_000; // 30 seconds
 
+// =============================================================================
+// Access Tracking (Phase 1: Orchestration)
+// =============================================================================
+
+/// Halflife for access recency decay (7 days)
+pub const ACCESS_TRACKER_DECAY_HALFLIFE_MS: u64 = 7 * 24 * 60 * 60 * 1000;
+
+/// Minimum importance score
+pub const ACCESS_TRACKER_MIN_IMPORTANCE: f64 = 0.0;
+
+/// Maximum importance score
+pub const ACCESS_TRACKER_MAX_IMPORTANCE: f64 = 1.0;
+
+/// Threshold for pruning old access records (90 days)
+pub const ACCESS_TRACKER_PRUNE_THRESHOLD_MS: u64 = 90 * 24 * 60 * 60 * 1000;
+
+/// Maximum batch size for recording accesses
+pub const ACCESS_TRACKER_BATCH_SIZE_MAX: usize = 1000;
+
+// =============================================================================
+// Promotion Policy (Phase 2: Orchestration)
+// =============================================================================
+
+/// Default importance threshold for promotion
+pub const PROMOTION_IMPORTANCE_THRESHOLD_DEFAULT: f64 = 0.7;
+
+/// Default score threshold for hybrid promotion
+pub const PROMOTION_SCORE_THRESHOLD_DEFAULT: f64 = 0.75;
+
+/// Maximum entities in core memory
+pub const PROMOTION_CORE_MEMORY_ENTITIES_MAX: usize = 50;
+
+/// Hybrid policy weight for base importance
+pub const PROMOTION_WEIGHT_IMPORTANCE: f64 = 0.4;
+
+/// Hybrid policy weight for recency score
+pub const PROMOTION_WEIGHT_RECENCY: f64 = 0.3;
+
+/// Hybrid policy weight for frequency score
+pub const PROMOTION_WEIGHT_FREQUENCY: f64 = 0.2;
+
+/// Hybrid policy weight for entity type priority
+pub const PROMOTION_WEIGHT_TYPE_PRIORITY: f64 = 0.1;
+
+/// Entity type priority for Self_ (highest)
+pub const ENTITY_TYPE_PRIORITY_SELF: f64 = 1.0;
+
+/// Entity type priority for Project
+pub const ENTITY_TYPE_PRIORITY_PROJECT: f64 = 0.9;
+
+/// Entity type priority for Task
+pub const ENTITY_TYPE_PRIORITY_TASK: f64 = 0.85;
+
+/// Entity type priority for Person
+pub const ENTITY_TYPE_PRIORITY_PERSON: f64 = 0.7;
+
+/// Entity type priority for Topic
+pub const ENTITY_TYPE_PRIORITY_TOPIC: f64 = 0.6;
+
+/// Entity type priority for Note (lowest)
+pub const ENTITY_TYPE_PRIORITY_NOTE: f64 = 0.4;
+
+// =============================================================================
+// Tests
+// =============================================================================
+
 #[cfg(test)]
 mod tests {
     use super::*;

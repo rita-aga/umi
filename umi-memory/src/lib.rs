@@ -123,6 +123,7 @@ pub mod evolution;
 pub mod extraction;
 pub mod llm;
 pub mod memory;
+pub mod orchestration;
 pub mod retrieval;
 pub mod storage;
 pub mod telemetry;
