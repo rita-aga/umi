@@ -7,7 +7,11 @@
 //! based on access patterns and importance scores.
 
 pub mod access_tracker;
+pub mod eviction;
 pub mod promotion;
 
 pub use access_tracker::{AccessPattern, AccessTracker};
+pub use eviction::{
+    EvictionPolicy, HybridEvictionPolicy, ImportanceEvictionPolicy, LRUEvictionPolicy,
+};
 pub use promotion::{HybridPolicy, ImportanceBasedPolicy, PromotionPolicy};

@@ -369,6 +369,31 @@ pub const ENTITY_TYPE_PRIORITY_TOPIC: f64 = 0.6;
 pub const ENTITY_TYPE_PRIORITY_NOTE: f64 = 0.4;
 
 // =============================================================================
+// Eviction Policy (Phase 3: Orchestration)
+// =============================================================================
+
+/// Maximum size of core memory before eviction triggers
+pub const EVICTION_CORE_MEMORY_SIZE_BYTES_MAX: usize = 32 * 1024; // 32KB
+
+/// Maximum entities in core memory before eviction triggers
+pub const EVICTION_CORE_MEMORY_ENTITIES_MAX: usize = 50;
+
+/// Number of entities to evict in a single batch
+pub const EVICTION_BATCH_SIZE: usize = 10;
+
+/// Minimum importance threshold (never evict above this)
+pub const EVICTION_IMPORTANCE_THRESHOLD_MIN: f64 = 0.5;
+
+/// Time threshold for LRU eviction (30 days without access)
+pub const EVICTION_LAST_ACCESS_THRESHOLD_MS: u64 = 30 * 24 * 60 * 60 * 1000;
+
+/// Hybrid eviction weight for importance score
+pub const EVICTION_WEIGHT_IMPORTANCE: f64 = 0.6;
+
+/// Hybrid eviction weight for recency score
+pub const EVICTION_WEIGHT_RECENCY: f64 = 0.4;
+
+// =============================================================================
 // Tests
 // =============================================================================
 
