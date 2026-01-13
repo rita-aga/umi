@@ -49,6 +49,7 @@ use crate::memory::{CoreMemory, MemoryBlockType, WorkingMemory};
 use crate::storage::{Entity, EntityType, StorageBackend, VectorBackend};
 
 use super::access_tracker::AccessTracker;
+use super::category_evolution::{CategoryEvolver, EvolutionAnalysis, EvolutionSuggestion};
 use super::eviction::{EvictionPolicy, HybridEvictionPolicy};
 use super::promotion::{HybridPolicy, PromotionPolicy};
 
@@ -290,6 +291,9 @@ pub struct UnifiedMemory<
 
     // Entity tracking in core (entity_id -> block_type mapping)
     core_entities: std::collections::HashMap<String, MemoryBlockType>,
+
+    // Self-evolution (Phase 5)
+    category_evolver: CategoryEvolver,
 }
 
 impl<
@@ -344,6 +348,9 @@ impl<
         let eviction_policy: Box<dyn EvictionPolicy + Send + Sync> =
             Box::new(HybridEvictionPolicy::new());
 
+        // Create category evolver (Phase 5)
+        let category_evolver = CategoryEvolver::new(clock.clone());
+
         let current_time = clock.now_ms();
 
         Self {
@@ -363,6 +370,7 @@ impl<
             last_promotion_ms: current_time,
             last_eviction_ms: current_time,
             core_entities: std::collections::HashMap::new(),
+            category_evolver,
         }
     }
 
@@ -525,6 +533,12 @@ impl<
         let mut stored_entities = Vec::new();
         for entity in to_store.drain(..) {
             let _stored_id = self.storage.store_entity(&entity).await?;
+
+            // Track entity access for category evolution (Phase 5)
+            let block_type = entity_type_to_block_type(&entity.entity_type);
+            self.category_evolver
+                .track_access(entity.entity_type.clone(), block_type);
+
             stored_entities.push(entity);
         }
 
@@ -638,8 +652,13 @@ impl<
         let core_results = self.search_core(query);
         for entity in core_results {
             // Record access for the entities we're retrieving
-            self.access_tracker
-                .record_access(&entity.id, 0.5);
+            self.access_tracker.record_access(&entity.id, 0.5);
+
+            // Track entity access for category evolution (Phase 5)
+            let block_type = entity_type_to_block_type(&entity.entity_type);
+            self.category_evolver
+                .track_access(entity.entity_type.clone(), block_type);
+
             results.push(entity);
         }
 
@@ -652,6 +671,12 @@ impl<
             for entity in archival_results {
                 if !results.iter().any(|e| e.id == entity.id) {
                     self.access_tracker.record_access(&entity.id, 0.5);
+
+                    // Track entity access for category evolution (Phase 5)
+                    let block_type = entity_type_to_block_type(&entity.entity_type);
+                    self.category_evolver
+                        .track_access(entity.entity_type.clone(), block_type);
+
                     results.push(entity);
                 }
             }
@@ -728,6 +753,64 @@ impl<
         }
 
         Ok(evicted_count)
+    }
+
+    // =========================================================================
+    // Category Evolution (Phase 5)
+    // =========================================================================
+
+    /// Analyze usage patterns and get evolution suggestions.
+    ///
+    /// Returns `None` if not enough data or too soon since last analysis.
+    /// Use `analyze_evolution_force()` to bypass the time check.
+    #[must_use]
+    pub fn analyze_evolution(&mut self) -> Option<EvolutionAnalysis> {
+        self.category_evolver.analyze()
+    }
+
+    /// Force evolution analysis (bypasses time check).
+    ///
+    /// Returns `None` if not enough samples for analysis.
+    #[must_use]
+    pub fn analyze_evolution_force(&mut self) -> Option<EvolutionAnalysis> {
+        self.category_evolver.analyze_force()
+    }
+
+    /// Get evolution suggestions from the most recent analysis.
+    ///
+    /// Convenience method that forces analysis and returns suggestions.
+    /// Returns empty vec if not enough data.
+    #[must_use]
+    pub fn get_evolution_suggestions(&mut self) -> Vec<EvolutionSuggestion> {
+        self.category_evolver
+            .analyze_force()
+            .map(|a| a.suggestions)
+            .unwrap_or_default()
+    }
+
+    /// Get co-occurrence score between two entity types.
+    ///
+    /// Returns 0.0-1.0 indicating how often these types are accessed together.
+    #[must_use]
+    pub fn entity_co_occurrence(&self, type1: &EntityType, type2: &EntityType) -> f64 {
+        self.category_evolver.co_occurrence_score(type1, type2)
+    }
+
+    /// Get block usage score (fraction of total accesses).
+    #[must_use]
+    pub fn block_usage(&self, block_type: MemoryBlockType) -> f64 {
+        self.category_evolver.block_usage_score(block_type)
+    }
+
+    /// Get reference to category evolver for advanced usage.
+    #[must_use]
+    pub fn category_evolver(&self) -> &CategoryEvolver {
+        &self.category_evolver
+    }
+
+    /// Get mutable reference to category evolver.
+    pub fn category_evolver_mut(&mut self) -> &mut CategoryEvolver {
+        &mut self.category_evolver
     }
 }
 
