@@ -54,6 +54,43 @@ impl SimEnvironment {
     pub async fn sleep_ms(&self, ms: u64) {
         self.clock.sleep_ms(ms).await;
     }
+
+    /// Create a Memory instance with providers connected to this simulation's fault injector.
+    ///
+    /// This method was discovered through DST-first testing (see `.progress/015_DST_FIRST_DEMO.md`).
+    /// The test revealed that `Memory::sim()` creates isolated providers not connected to
+    /// the Simulation's FaultInjector, making fault injection tests ineffective.
+    ///
+    /// **DST-First Discovery Process**:
+    /// 1. Wrote test expecting faults to be injected into Memory operations
+    /// 2. Test FAILED - faults weren't being applied
+    /// 3. Investigated and discovered `Memory::sim()` creates isolated providers
+    /// 4. Implemented this solution
+    /// 5. Test now PASSES - faults are properly injected
+    ///
+    /// `TigerStyle`: Providers share the simulation's fault injector for deterministic testing.
+    #[must_use]
+    pub fn create_memory(&self) -> crate::umi::Memory<
+        crate::llm::SimLLMProvider,
+        crate::embedding::SimEmbeddingProvider,
+        crate::storage::SimStorageBackend,
+        crate::storage::SimVectorBackend,
+    > {
+        use crate::embedding::SimEmbeddingProvider;
+        use crate::llm::SimLLMProvider;
+        use crate::storage::{SimStorageBackend, SimVectorBackend};
+        use crate::umi::Memory;
+
+        let seed = self.config.seed();
+
+        // Create all providers with the shared fault injector (DST-First fix!)
+        let llm = SimLLMProvider::with_faults(seed, Arc::clone(&self.faults));
+        let embedder = SimEmbeddingProvider::with_faults(seed, Arc::clone(&self.faults));
+        let vector = SimVectorBackend::with_faults(seed, Arc::clone(&self.faults));
+        let storage = SimStorageBackend::with_fault_injector(self.config, Arc::clone(&self.faults));
+
+        Memory::new(llm, embedder, vector, storage)
+    }
 }
 
 /// DST simulation harness.
@@ -367,5 +404,51 @@ mod tests {
         // Both env.faults and storage.faults should point to the same FaultInjector
         // After a fault is injected, stats should be visible via env.faults
         assert_eq!(env.faults.total_injections(), 0);
+    }
+
+    // =============================================================================
+    // DST-First Discovery Test: Memory Fault Injection
+    // =============================================================================
+
+    /// DISCOVERY TEST: Does fault injection work with Memory?
+    ///
+    /// This test is written BEFORE implementing any solution, to discover whether
+    /// the existing API properly connects Memory to the Simulation's FaultInjector.
+    ///
+    /// **Hypothesis**: When we register a fault in Simulation and create a Memory
+    /// instance, the fault should affect Memory operations.
+    ///
+    /// **Expected**: With 100% StorageWriteFail, the remember() should FAIL.
+    ///
+    /// **What we'll discover**: Whether Memory::sim() properly connects to faults.
+    #[tokio::test]
+    async fn test_dst_discovery_memory_fault_injection() {
+        use crate::umi::{Memory, RememberOptions};
+
+        // Register 100% storage write failure - should ALWAYS fail
+        let sim = Simulation::new(SimConfig::with_seed(42))
+            .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 1.0));
+
+        let result = sim
+            .run(|env| async move {
+                // NOW FIXED: Use env.create_memory() to get a properly connected Memory
+                let mut memory = env.create_memory();
+
+                // Try to remember something - with 100% fault rate, this should FAIL
+                memory
+                    .remember("Alice works at Acme", RememberOptions::default())
+                    .await?;
+
+                Ok::<(), crate::umi::MemoryError>(())
+            })
+            .await;
+
+        // With 100% fault rate, we EXPECT this to fail
+        // NOW THIS SHOULD PASS - faults are properly connected!
+        assert!(
+            result.is_err(),
+            "SUCCESS: With 100% StorageWriteFail and env.create_memory(), \
+             remember() should fail. The fault is now properly injected!"
+        );
     }
 }

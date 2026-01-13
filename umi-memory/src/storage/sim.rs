@@ -58,6 +58,26 @@ impl SimStorageBackend {
         }
     }
 
+    /// Create a new `SimStorageBackend` with a shared fault injector.
+    ///
+    /// This constructor accepts an external `FaultInjector` (typically shared
+    /// from a `Simulation`), allowing fault injection tests to work correctly.
+    ///
+    /// **DST-First Discovery**: This method was added after discovering that
+    /// `Memory::sim()` created isolated providers not connected to the Simulation's
+    /// FaultInjector. See `.progress/015_DST_FIRST_DEMO.md` for the discovery process.
+    #[must_use]
+    pub fn with_fault_injector(config: SimConfig, fault_injector: Arc<FaultInjector>) -> Self {
+        let rng = DeterministicRng::new(config.seed());
+
+        Self {
+            storage: Arc::new(RwLock::new(HashMap::new())),
+            fault_injector,  // Use the provided one
+            clock: SimClock::new(),
+            rng: Arc::new(RwLock::new(rng)),
+        }
+    }
+
     /// Add fault configuration.
     ///
     /// Note: Creates a new backend with the fault registered.
