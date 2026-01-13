@@ -394,6 +394,25 @@ pub const EVICTION_WEIGHT_IMPORTANCE: f64 = 0.6;
 pub const EVICTION_WEIGHT_RECENCY: f64 = 0.4;
 
 // =============================================================================
+// Unified Memory Orchestrator (Phase 4: Orchestration)
+// =============================================================================
+
+/// Default interval for automatic promotion checks (milliseconds)
+pub const UNIFIED_MEMORY_PROMOTION_INTERVAL_MS: u64 = 60 * 1000; // 1 minute
+
+/// Default interval for automatic eviction checks (milliseconds)
+pub const UNIFIED_MEMORY_EVICTION_INTERVAL_MS: u64 = 5 * 60 * 1000; // 5 minutes
+
+/// Maximum size of core memory snapshot for LLM context
+pub const UNIFIED_MEMORY_CORE_SNAPSHOT_BYTES_MAX: usize = 32 * 1024; // 32KB
+
+/// Maximum entities to check for promotion per cycle
+pub const UNIFIED_MEMORY_PROMOTION_CANDIDATES_MAX: usize = 100;
+
+/// Minimum importance for considering promotion
+pub const UNIFIED_MEMORY_PROMOTION_MIN_IMPORTANCE: f64 = 0.5;
+
+// =============================================================================
 // Tests
 // =============================================================================
 
