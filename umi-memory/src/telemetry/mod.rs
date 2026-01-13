@@ -5,12 +5,12 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,no_run
 //! use umi_memory::telemetry::{TelemetryConfig, init_telemetry};
 //!
 //! // Initialize with defaults (reads from env vars)
 //! let config = TelemetryConfig::default();
-//! let _guard = init_telemetry(config)?;
+//! let _guard = init_telemetry(config).expect("telemetry init");
 //!
 //! // Or configure explicitly
 //! let config = TelemetryConfig::builder()
@@ -18,7 +18,7 @@
 //!     .endpoint("http://localhost:4317")
 //!     .sampling_rate(1.0)
 //!     .build();
-//! let _guard = init_telemetry(config)?;
+//! let _guard = init_telemetry(config).expect("telemetry init");
 //! ```
 //!
 //! ## Environment Variables

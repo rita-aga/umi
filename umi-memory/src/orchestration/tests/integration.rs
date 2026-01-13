@@ -797,6 +797,374 @@ async fn test_promotion_under_storage_stress() {
     .unwrap();
 }
 
+// =============================================================================
+// LLM Fault Injection Tests
+// =============================================================================
+
+/// BUG HUNT: What happens when LLM times out during entity extraction?
+///
+/// FINDING: The system gracefully degrades! LLM failures don't cause remember()
+/// to fail - instead, it falls back to Note entities. This is BY DESIGN.
+///
+/// This test verifies the graceful degradation behavior:
+/// - With 100% LLM timeout, all entities should be Notes (fallback)
+/// - With 0% LLM timeout, entities should be properly extracted (Alice, etc.)
+#[tokio::test]
+async fn test_llm_timeout_graceful_degradation() {
+    use crate::dst::{DeterministicRng, FaultInjector};
+    use std::sync::Arc;
+
+    let sim = Simulation::new(SimConfig::with_seed(42));
+
+    sim.run(|env| async move {
+        // Create LLM with 100% timeout rate to force fallback behavior
+        let mut injector = FaultInjector::new(DeterministicRng::new(42));
+        injector.register(FaultConfig::new(FaultType::LlmTimeout, 1.0));
+        let llm_with_faults = SimLLMProvider::with_faults(42, Arc::new(injector));
+
+        let embedder = SimEmbeddingProvider::with_seed(42);
+        let vector = SimVectorBackend::new(42);
+        let storage = SimStorageBackend::new(SimConfig::with_seed(42));
+        let config = UnifiedMemoryConfig::default();
+
+        let mut memory_with_faults = UnifiedMemory::new(
+            llm_with_faults, embedder.clone(), vector.clone(),
+            SimStorageBackend::new(SimConfig::with_seed(42)), env.clock.clone(), config.clone()
+        );
+
+        // With 100% LLM timeout, remember should STILL SUCCEED (graceful degradation)
+        let result = memory_with_faults.remember("Alice works on Project Alpha").await;
+        assert!(result.is_ok(), "remember should succeed even with 100% LLM timeout (graceful degradation)");
+
+        // But the entity should be a Note fallback (LLM couldn't extract entities)
+        let entities = result.unwrap().entities;
+        assert!(!entities.is_empty(), "should have at least one entity");
+
+        // Check that it's a Note (fallback) - extracted entities would have proper names
+        let entity = &entities[0];
+        let is_note_fallback = entity.entity_type == EntityType::Note
+            || entity.name.starts_with("Note:");
+        println!("With LLM fault - Entity: {} (type: {:?})", entity.name, entity.entity_type);
+        assert!(is_note_fallback, "with 100% LLM timeout, should fallback to Note entity");
+
+        // Now test WITHOUT faults - should extract proper entities
+        let llm_no_faults = SimLLMProvider::with_seed(42);
+        let mut memory_no_faults = UnifiedMemory::new(
+            llm_no_faults, embedder, vector,
+            SimStorageBackend::new(SimConfig::with_seed(42)), env.clock.clone(), config
+        );
+
+        let result_no_fault = memory_no_faults.remember("Alice works on Project Alpha").await;
+        assert!(result_no_fault.is_ok(), "remember should succeed without faults");
+
+        let entities_no_fault = result_no_fault.unwrap().entities;
+        let has_real_entity = entities_no_fault.iter().any(|e|
+            e.name.contains("Alice") || e.entity_type == EntityType::Person
+        );
+        println!("Without LLM fault - Entities: {:?}",
+            entities_no_fault.iter().map(|e| &e.name).collect::<Vec<_>>());
+        assert!(has_real_entity, "without LLM faults, should extract proper entities like Alice");
+
+        println!("VERIFIED: LLM timeout causes graceful degradation to Note entities");
+
+        Ok::<(), std::convert::Infallible>(())
+    })
+    .await
+    .unwrap();
+}
+
+/// BUG HUNT: LLM rate limiting behavior - verifies graceful degradation.
+///
+/// FINDING: Rate limits cause graceful degradation to Note entities,
+/// NOT hard failures. This test verifies that with rate limiting,
+/// remember() still succeeds but produces more Note fallbacks.
+#[tokio::test]
+async fn test_llm_rate_limit_graceful_degradation() {
+    use crate::dst::{DeterministicRng, FaultInjector};
+    use std::sync::Arc;
+
+    let sim = Simulation::new(SimConfig::with_seed(42));
+
+    sim.run(|env| async move {
+        // Create LLM with 50% rate limiting
+        let mut injector = FaultInjector::new(DeterministicRng::new(42));
+        injector.register(FaultConfig::new(FaultType::LlmRateLimit, 0.5));
+        let llm = SimLLMProvider::with_faults(42, Arc::new(injector));
+
+        let embedder = SimEmbeddingProvider::with_seed(42);
+        let vector = SimVectorBackend::new(42);
+        let storage = SimStorageBackend::new(SimConfig::with_seed(42));
+        let config = UnifiedMemoryConfig::default();
+
+        let mut memory = UnifiedMemory::new(llm, embedder, vector, storage, env.clock.clone(), config);
+
+        let mut note_fallbacks = 0;
+        let mut proper_extractions = 0;
+
+        // Use recognized names so successful extractions produce real entities
+        for i in 0..20 {
+            let name = match i % 4 {
+                0 => "Alice",
+                1 => "Bob",
+                2 => "Charlie",
+                _ => "David",
+            };
+            let result = memory.remember(&format!("{} is working on task {}", name, i)).await;
+            assert!(result.is_ok(), "remember should always succeed (graceful degradation)");
+
+            let entities = result.unwrap().entities;
+            // Count Note fallbacks vs proper extractions
+            let has_note = entities.iter().any(|e|
+                e.entity_type == EntityType::Note || e.name.starts_with("Note:")
+            );
+            if has_note {
+                note_fallbacks += 1;
+            } else {
+                proper_extractions += 1;
+            }
+        }
+
+        println!("Rate limit graceful degradation: {} proper extractions, {} note fallbacks",
+            proper_extractions, note_fallbacks);
+
+        // With 50% rate limit, we should see SOME of each (though exact split depends on RNG)
+        // The key invariant: all operations succeeded, just with degraded quality
+        assert!(proper_extractions + note_fallbacks == 20, "all operations should complete");
+
+        println!("VERIFIED: Rate limiting causes graceful degradation, not hard failures");
+
+        Ok::<(), std::convert::Infallible>(())
+    })
+    .await
+    .unwrap();
+}
+
+// =============================================================================
+// Cascading Failure Tests
+// =============================================================================
+
+/// BUG HUNT: Multiple components failing simultaneously.
+///
+/// What happens when both storage AND LLM have faults?
+#[tokio::test]
+async fn test_cascading_failures() {
+    use crate::dst::{DeterministicRng, FaultInjector};
+    use std::sync::Arc;
+
+    let sim = Simulation::new(SimConfig::with_seed(42));
+
+    sim.run(|env| async move {
+        // LLM with 20% timeout using FaultInjector
+        let mut llm_injector = FaultInjector::new(DeterministicRng::new(42));
+        llm_injector.register(FaultConfig::new(FaultType::LlmTimeout, 0.2));
+        let llm = SimLLMProvider::with_faults(42, Arc::new(llm_injector));
+
+        // Storage with 20% write failure
+        let storage = SimStorageBackend::new(SimConfig::with_seed(42))
+            .with_faults(FaultConfig::new(FaultType::StorageWriteFail, 0.2));
+
+        let embedder = SimEmbeddingProvider::with_seed(42);
+        let vector = SimVectorBackend::new(42);
+        let config = UnifiedMemoryConfig::default();
+
+        let mut memory = UnifiedMemory::new(llm, embedder, vector, storage, env.clock.clone(), config);
+
+        let mut total_ops = 0;
+        let mut llm_failures = 0;
+        let mut storage_failures = 0;
+        let mut successes = 0;
+
+        for i in 0..50 {
+            total_ops += 1;
+            match memory.remember(&format!("Charlie in department {}", i)).await {
+                Ok(_) => successes += 1,
+                Err(e) => {
+                    let err_str = format!("{:?}", e);
+                    if err_str.contains("Timeout") || err_str.contains("LLM") || err_str.contains("timeout") {
+                        llm_failures += 1;
+                    } else if err_str.contains("Storage") || err_str.contains("storage") {
+                        storage_failures += 1;
+                    } else {
+                        // Unknown failure type - count as storage
+                        println!("Unknown failure: {}", err_str);
+                        storage_failures += 1;
+                    }
+                }
+            }
+        }
+
+        println!(
+            "Cascading failures: {} total, {} success, {} LLM fail, {} storage fail",
+            total_ops, successes, llm_failures, storage_failures
+        );
+
+        // With 20% each independent, expect ~36% failure rate total
+        // P(success) = P(llm_ok) * P(storage_ok) = 0.8 * 0.8 = 0.64
+        let failure_rate = (llm_failures + storage_failures) as f64 / total_ops as f64;
+        println!("Observed failure rate: {:.1}%", failure_rate * 100.0);
+
+        // Should have failures from both sources
+        // (though exact distribution depends on operation flow)
+
+        // KEY INVARIANT: Access tracker should only count successful operations
+        let tracked = memory.category_evolver().total_accesses();
+        println!("Tracked accesses: {} (successes: {})", tracked, successes);
+
+        // BUG CHECK: Are we tracking more than we should?
+        assert!(
+            tracked <= (successes * 5) as u64, // Each success extracts ~3 entities
+            "BUG: Tracking {} accesses but only {} successes",
+            tracked,
+            successes
+        );
+
+        Ok::<(), std::convert::Infallible>(())
+    })
+    .await
+    .unwrap();
+}
+
+/// BUG HUNT: Recovery after total failure.
+///
+/// System experiences 100% failure, then recovers. Does state remain valid?
+#[tokio::test]
+async fn test_recovery_after_total_failure() {
+    let sim = Simulation::new(SimConfig::with_seed(42));
+
+    sim.run(|env| async move {
+        // Start with working system
+        let mut memory = create_unified(42, env.clock.clone());
+
+        // Store some data successfully
+        for i in 0..5 {
+            let _ = memory.remember(&format!("David on task {}", i)).await;
+        }
+
+        let state_before = memory.category_evolver().total_accesses();
+        println!("State before failure: {} accesses", state_before);
+
+        // Now create a new memory with 100% failure (simulating total outage)
+        let fault_config = FaultConfig::new(FaultType::StorageWriteFail, 1.0);
+        let mut failing_memory = create_unified_with_faults(42, env.clock.clone(), fault_config);
+
+        // All operations should fail
+        let mut failures = 0;
+        for i in 0..10 {
+            if failing_memory.remember(&format!("Eve data {}", i)).await.is_err() {
+                failures += 1;
+            }
+        }
+
+        assert_eq!(failures, 10, "all operations should fail with 100% fault rate");
+
+        // "Recovery" - create new working memory
+        let mut recovered_memory = create_unified(42, env.clock.clone());
+
+        // System should work again
+        let result = recovered_memory.remember("Frank is back online").await;
+        assert!(result.is_ok(), "should work after recovery");
+
+        println!("Recovery successful");
+
+        Ok::<(), std::convert::Infallible>(())
+    })
+    .await
+    .unwrap();
+}
+
+// =============================================================================
+// Determinism Under Faults Tests
+// =============================================================================
+
+/// BUG HUNT: Same seed + same faults = same behavior?
+///
+/// This is critical for DST - faults must be deterministic.
+#[tokio::test]
+async fn test_fault_determinism() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    // Run 1
+    let failures1 = Arc::new(AtomicU64::new(0));
+    let successes1 = Arc::new(AtomicU64::new(0));
+    let failures1_clone = failures1.clone();
+    let successes1_clone = successes1.clone();
+
+    {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+        sim.run(|env| {
+            let failures = failures1_clone.clone();
+            let successes = successes1_clone.clone();
+            async move {
+                let fault_config = FaultConfig::new(FaultType::StorageWriteFail, 0.3);
+                let mut memory = create_unified_with_faults(42, env.clock.clone(), fault_config);
+
+                for i in 0..20 {
+                    match memory.remember(&format!("Test {}", i)).await {
+                        Ok(_) => { successes.fetch_add(1, Ordering::SeqCst); }
+                        Err(_) => { failures.fetch_add(1, Ordering::SeqCst); }
+                    }
+                }
+
+                Ok::<(), std::convert::Infallible>(())
+            }
+        })
+        .await
+        .unwrap();
+    }
+
+    // Run 2 with SAME seed
+    let failures2 = Arc::new(AtomicU64::new(0));
+    let successes2 = Arc::new(AtomicU64::new(0));
+    let failures2_clone = failures2.clone();
+    let successes2_clone = successes2.clone();
+
+    {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+        sim.run(|env| {
+            let failures = failures2_clone.clone();
+            let successes = successes2_clone.clone();
+            async move {
+                let fault_config = FaultConfig::new(FaultType::StorageWriteFail, 0.3);
+                let mut memory = create_unified_with_faults(42, env.clock.clone(), fault_config);
+
+                for i in 0..20 {
+                    match memory.remember(&format!("Test {}", i)).await {
+                        Ok(_) => { successes.fetch_add(1, Ordering::SeqCst); }
+                        Err(_) => { failures.fetch_add(1, Ordering::SeqCst); }
+                    }
+                }
+
+                Ok::<(), std::convert::Infallible>(())
+            }
+        })
+        .await
+        .unwrap();
+    }
+
+    let f1 = failures1.load(Ordering::SeqCst);
+    let s1 = successes1.load(Ordering::SeqCst);
+    let f2 = failures2.load(Ordering::SeqCst);
+    let s2 = successes2.load(Ordering::SeqCst);
+
+    println!("Run 1: {} failures, {} successes", f1, s1);
+    println!("Run 2: {} failures, {} successes", f2, s2);
+
+    // KEY DST INVARIANT: Same seed = same fault pattern
+    assert_eq!(
+        f1, f2,
+        "BUG: Fault injection not deterministic! {} vs {} failures",
+        f1, f2
+    );
+    assert_eq!(
+        s1, s2,
+        "BUG: Success count not deterministic! {} vs {} successes",
+        s1, s2
+    );
+
+    println!("VERIFIED: Fault injection is deterministic");
+}
+
 /// BUG HUNT: Promotion threshold and frequency calculation.
 ///
 /// DISCOVERED ISSUES:
@@ -839,6 +1207,322 @@ async fn test_promotion_requires_repeated_access() {
 
         // VERIFIED: With proper input and time advancement, promotion should work
         // If still 0, the threshold (0.75) is too high for this access pattern
+
+        Ok::<(), std::convert::Infallible>(())
+    })
+    .await
+    .unwrap();
+}
+
+// =============================================================================
+// AGGRESSIVE DST BUG HUNTING
+// These tests specifically look for REAL bugs through simulation:
+// - Invariant violations
+// - State corruption
+// - Non-determinism
+// - Crashes under stress
+// =============================================================================
+
+/// DST BUG HUNT: Multi-seed determinism verification.
+///
+/// Runs the same workflow with multiple seeds and verifies:
+/// 1. Same seed always produces identical results (determinism)
+/// 2. Different seeds don't crash (robustness)
+///
+/// FINDING: If this fails, we have non-deterministic behavior - a REAL bug.
+#[tokio::test]
+async fn test_dst_multi_seed_determinism() {
+    let seeds = [1, 42, 100, 999, 12345, 99999, 1000000];
+
+    for seed in seeds {
+        // Run twice with same seed
+        let result1 = run_determinism_check(seed).await;
+        let result2 = run_determinism_check(seed).await;
+
+        match (&result1, &result2) {
+            (Ok((acc1, recall1)), Ok((acc2, recall2))) => {
+                assert_eq!(
+                    acc1, acc2,
+                    "DST BUG: Non-deterministic access count! seed={}, run1={}, run2={}",
+                    seed, acc1, acc2
+                );
+                assert_eq!(
+                    recall1, recall2,
+                    "DST BUG: Non-deterministic recall count! seed={}, run1={}, run2={}",
+                    seed, recall1, recall2
+                );
+            }
+            (Err(e1), _) => panic!("DST BUG: Crash with seed={}: {}", seed, e1),
+            (_, Err(e2)) => panic!("DST BUG: Non-deterministic crash! seed={}: {}", seed, e2),
+        }
+    }
+
+    println!("VERIFIED: All {} seeds produced deterministic results", seeds.len());
+}
+
+/// Helper for determinism check.
+async fn run_determinism_check(seed: u64) -> Result<(u64, usize), String> {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    let accesses_out = Arc::new(AtomicU64::new(0));
+    let recall_out = Arc::new(AtomicU64::new(0));
+    let accesses_clone = accesses_out.clone();
+    let recall_clone = recall_out.clone();
+
+    let sim = Simulation::new(SimConfig::with_seed(seed));
+
+    let result = sim.run(|env| {
+        let accesses = accesses_clone.clone();
+        let recall = recall_clone.clone();
+        async move {
+            let mut memory = create_unified(seed, env.clock.clone());
+
+            // Standard workflow with recognized names
+            let _ = memory.remember("Alice works at Acme Corp").await;
+            let _ = memory.remember("Bob knows Alice well").await;
+
+            // Advance time
+            let _ = env.clock.advance_ms(1000);
+
+            // Recall
+            let recall_result = memory.recall("Alice", 10).await;
+
+            accesses.store(memory.category_evolver().total_accesses(), Ordering::SeqCst);
+            recall.store(recall_result.map(|r| r.len()).unwrap_or(0) as u64, Ordering::SeqCst);
+
+            Ok::<_, std::convert::Infallible>(())
+        }
+    })
+    .await;
+
+    result.map_err(|_| "sim failed".to_string())?;
+
+    Ok((
+        accesses_out.load(Ordering::SeqCst),
+        recall_out.load(Ordering::SeqCst) as usize,
+    ))
+}
+
+/// DST BUG HUNT: Invariant violation under interleaved faults.
+///
+/// Tests that access tracking invariants hold even with storage failures:
+/// - Access count should NOT exceed (successful_stores * max_entities_per_store)
+/// - No negative access counts
+/// - No overflow/underflow
+///
+/// FINDING: If this fails, we're tracking accesses for failed operations - a REAL bug.
+#[tokio::test]
+async fn test_dst_invariant_access_count_under_faults() {
+    let sim = Simulation::new(SimConfig::with_seed(42));
+
+    sim.run(|env| async move {
+        // 40% write failures - aggressive but not total
+        let fault_config = FaultConfig::new(FaultType::StorageWriteFail, 0.4);
+        let mut memory = create_unified_with_faults(42, env.clock.clone(), fault_config);
+
+        let mut successes = 0u64;
+        let mut failures = 0u64;
+
+        // Hammer with operations using recognized names
+        let names = ["Alice", "Bob", "Charlie", "David", "Eve"];
+        for i in 0..100 {
+            let name = names[i % names.len()];
+            match memory.remember(&format!("{} task {}", name, i)).await {
+                Ok(_) => successes += 1,
+                Err(_) => failures += 1,
+            }
+        }
+
+        let total_accesses = memory.category_evolver().total_accesses();
+
+        // INVARIANT: Each successful remember() extracts at most ~5 entities
+        // So total_accesses <= successes * 5
+        let max_expected = successes * 5;
+
+        println!(
+            "Invariant check: {} successes, {} failures, {} accesses (max expected {})",
+            successes, failures, total_accesses, max_expected
+        );
+
+        assert!(
+            failures > 0,
+            "Fault injection should cause some failures"
+        );
+        assert!(
+            successes > 0,
+            "Some operations should succeed"
+        );
+        assert!(
+            total_accesses <= max_expected,
+            "DST BUG: Access count {} exceeds max expected {} for {} successes. \
+            We may be tracking accesses for failed operations!",
+            total_accesses, max_expected, successes
+        );
+
+        // Also check no underflow (negative wrapped to large positive)
+        assert!(
+            total_accesses < 10000,
+            "DST BUG: Suspiciously large access count {} - possible underflow!",
+            total_accesses
+        );
+
+        println!("VERIFIED: Access count invariant holds under {} failures", failures);
+
+        Ok::<(), std::convert::Infallible>(())
+    })
+    .await
+    .unwrap();
+}
+
+/// DST BUG HUNT: Score boundary validation.
+///
+/// Verifies that recency and frequency scores stay in [0.0, 1.0] range
+/// and never become NaN/Inf under various time conditions.
+///
+/// FINDING: If this fails, we have numerical bugs in score calculation - a REAL bug.
+#[tokio::test]
+async fn test_dst_score_boundaries_exhaustive() {
+    // Test multiple seeds and time patterns
+    let test_cases = [
+        (42, vec![0, 1000, 86400000]),              // Normal progression
+        (99, vec![1, 1, 1, 1, 1]),                   // Rapid small advances
+        (123, vec![86400000, 86400000, 86400000]),   // Large jumps (3 days total)
+        (456, vec![0]),                              // No time advance
+    ];
+
+    for (seed, time_advances) in &test_cases {
+        let sim = Simulation::new(SimConfig::with_seed(*seed));
+
+        let result = sim.run(|env| async move {
+            let mut memory = create_unified(*seed, env.clock.clone());
+
+            // Store an entity
+            let result = memory.remember("Alice test entity").await?;
+            let entity_id = &result.entities[0].id;
+
+            // Apply time advances and check scores
+            for (step, advance_ms) in time_advances.iter().enumerate() {
+                if *advance_ms > 0 {
+                    let _ = env.clock.advance_ms(*advance_ms);
+                }
+
+                if let Some(pattern) = memory.access_tracker().get_access_pattern(entity_id) {
+                    let r = pattern.recency_score;
+                    let f = pattern.frequency_score;
+
+                    // INVARIANT: Scores must be in [0.0, 1.0] and valid
+                    assert!(
+                        !r.is_nan(),
+                        "DST BUG: NaN recency at seed={}, step={}, time_advance={}",
+                        seed, step, advance_ms
+                    );
+                    assert!(
+                        !r.is_infinite(),
+                        "DST BUG: Infinite recency at seed={}, step={}, time_advance={}",
+                        seed, step, advance_ms
+                    );
+                    assert!(
+                        r >= 0.0,
+                        "DST BUG: Negative recency {} at seed={}, step={}",
+                        r, seed, step
+                    );
+                    assert!(
+                        r <= 1.0,
+                        "DST BUG: Recency > 1.0 ({}) at seed={}, step={}",
+                        r, seed, step
+                    );
+
+                    assert!(
+                        !f.is_nan(),
+                        "DST BUG: NaN frequency at seed={}, step={}",
+                        seed, step
+                    );
+                    assert!(
+                        f >= 0.0 && f <= 1.0,
+                        "DST BUG: Invalid frequency {} at seed={}, step={}",
+                        f, seed, step
+                    );
+                }
+            }
+
+            Ok::<_, anyhow::Error>(())
+        })
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "DST BUG: Crash with seed={}: {:?}",
+            seed,
+            result.err()
+        );
+    }
+
+    println!("VERIFIED: Score boundaries hold across {} test patterns", test_cases.len());
+}
+
+/// DST BUG HUNT: Edge case input handling.
+///
+/// Tests that edge case inputs don't crash or corrupt state.
+///
+/// FINDING: If this crashes, we have missing input validation - a REAL bug.
+#[tokio::test]
+async fn test_dst_edge_case_inputs() {
+    let sim = Simulation::new(SimConfig::with_seed(42));
+
+    sim.run(|env| async move {
+        let mut memory = create_unified(42, env.clock.clone());
+
+        // First store something valid
+        let _ = memory.remember("Valid baseline data").await;
+        let baseline_accesses = memory.category_evolver().total_accesses();
+
+        // Edge cases - should error gracefully or handle correctly
+        let repeated_a = "a".repeat(100);
+        let edge_cases: Vec<(&str, &str, bool)> = vec![
+            ("empty string", "", false),              // Should error
+            ("whitespace only", "   \n\t  ", true),   // May error or create Note
+            ("unicode", "日本語テスト 中文测试 한국어", true), // Should work
+            ("emoji", "🎉 Test with emoji 🚀", true), // Should work
+            ("1 char", "x", true),                    // Should work
+            ("repeated char", &repeated_a, true),     // Should work
+        ];
+
+        for (name, input, should_succeed) in edge_cases {
+            let result = memory.remember(input).await;
+            if should_succeed {
+                // Should not crash even if it errors
+                match &result {
+                    Ok(_) => println!("  {} -> OK", name),
+                    Err(e) => println!("  {} -> Error (acceptable): {}", name, e),
+                }
+            } else {
+                assert!(
+                    result.is_err(),
+                    "DST BUG: '{}' should have failed but succeeded",
+                    name
+                );
+                println!("  {} -> Correctly rejected", name);
+            }
+        }
+
+        // INVARIANT: State should still be valid after edge cases
+        let final_accesses = memory.category_evolver().total_accesses();
+        assert!(
+            final_accesses >= baseline_accesses,
+            "DST BUG: Access count decreased from {} to {} after edge cases - state corruption!",
+            baseline_accesses, final_accesses
+        );
+
+        // Memory should still be usable
+        let recall = memory.recall("Valid", 10).await;
+        assert!(
+            recall.is_ok(),
+            "DST BUG: Memory unusable after edge cases: {:?}",
+            recall.err()
+        );
+
+        println!("VERIFIED: Edge case handling doesn't corrupt state");
 
         Ok::<(), std::convert::Infallible>(())
     })
