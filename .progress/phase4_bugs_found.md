@@ -124,23 +124,40 @@ test result: ok. 575 passed; 0 failed; 0 ignored
 | 1 | `AccessTracker.clock()` test-only | `#[cfg(test)]` on method used in production | Removed `#[cfg(test)]` |
 | 2 | `list_entities()` missing argument | Forgot offset parameter | Added `0` for offset |
 
-### DST Finding #1: Simulation Fault Injection Scope
+### Bug #3 (via DST): Incorrect Fault Injection Method
 
-**Discovery**: When running DST tests with `Simulation::new().with_fault()`, the fault injection didn't affect `SimStorageBackend` operations.
+**Discovery**: When running DST tests with `Simulation::new().with_fault()`, fault injection didn't affect `SimStorageBackend`.
 
-**What Happened**:
-- Set `FaultType::StorageWriteFail` at 100% rate
+**What Happened Initially**:
+- Set `FaultType::StorageWriteFail` at 100% rate via `Simulation.with_fault()`
 - Expected all `remember()` calls to fail
 - Actually: all succeeded (`is_ok=true`)
 
 **Root Cause**:
 - `Simulation.with_fault()` configures faults for DST-internal components (`SimStorage`, `SimLLM` in `dst/` module)
-- `SimStorageBackend` in `storage/sim.rs` has its own independent `FaultInjector` created from `SimConfig`
-- The two fault injection systems are not connected
+- `SimStorageBackend` in `storage/sim.rs` has its own independent `FaultInjector`
+- I was using the wrong fault injection API
 
-**Impact**: Tests using `SimStorageBackend` don't benefit from `Simulation.with_fault()`. Must use `SimStorageBackend`'s own fault registration.
+**Fix**: Use `SimStorageBackend::new().with_faults()` to properly inject faults:
 
-**Resolution**: This is documented behavior, not a bug. To test fault scenarios with `SimStorageBackend`, use its `register_fault()` method directly instead of `Simulation.with_fault()`.
+```rust
+// WRONG: Simulation.with_fault() doesn't affect SimStorageBackend
+let sim = Simulation::new(SimConfig::with_seed(42))
+    .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 1.0));
+
+// CORRECT: Use SimStorageBackend.with_faults()
+let storage = SimStorageBackend::new(SimConfig::with_seed(seed))
+    .with_faults(FaultConfig::new(FaultType::StorageWriteFail, 1.0));
+```
+
+**Result After Fix**:
+- Storage write failure (100%): `is_ok=false` ✅
+- Storage read failure (100%): `is_ok=false` ✅
+- Probabilistic (50%): `success=5, failure=5` ✅
+
+**Files Fixed**: `umi-memory/src/orchestration/unified.rs`
+
+**Lesson**: Read the existing fault injection tests (in `storage/sim.rs`) to understand the correct API. DST has multiple fault injection points - use the right one for each component.
 
 ---
 

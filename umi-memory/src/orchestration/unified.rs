@@ -1220,6 +1220,23 @@ mod dst_tests {
         UnifiedMemory::new(llm, embedder, vector, storage, clock, config)
     }
 
+    /// Create UnifiedMemory with storage fault injection.
+    fn create_unified_with_storage_faults(
+        seed: u64,
+        clock: SimClock,
+        fault_config: FaultConfig,
+    ) -> UnifiedMemory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend>
+    {
+        let llm = SimLLMProvider::with_seed(seed);
+        let embedder = SimEmbeddingProvider::with_seed(seed);
+        let vector = SimVectorBackend::new(seed);
+        // Use .with_faults() to properly inject faults BEFORE sharing
+        let storage = SimStorageBackend::new(SimConfig::with_seed(seed)).with_faults(fault_config);
+        let config = UnifiedMemoryConfig::default();
+
+        UnifiedMemory::new(llm, embedder, vector, storage, clock, config)
+    }
+
     // =========================================================================
     // Simulation Harness Tests
     // =========================================================================
@@ -1327,18 +1344,19 @@ mod dst_tests {
         let result_ok = Arc::new(AtomicBool::new(false));
         let result_clone = result_ok.clone();
 
-        let sim = Simulation::new(SimConfig::with_seed(42))
-            .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 1.0)); // 100% failure
+        let sim = Simulation::new(SimConfig::with_seed(42));
 
         sim.run(|env| {
             let result_clone = result_clone.clone();
             async move {
-                let mut memory = create_unified_in_sim(42, env.clock.clone());
+                // Use proper fault injection via SimStorageBackend.with_faults()
+                let fault_config = FaultConfig::new(FaultType::StorageWriteFail, 1.0);
+                let mut memory =
+                    create_unified_with_storage_faults(42, env.clock.clone(), fault_config);
 
-                // This should fail gracefully since storage writes fail
+                // This should fail since storage writes fail with 100% probability
                 let result = memory.remember("Test with storage failure").await;
 
-                // The result depends on implementation - might error or degrade gracefully
                 result_clone.store(result.is_ok(), Ordering::SeqCst);
                 Ok::<(), std::convert::Infallible>(())
             }
@@ -1346,12 +1364,14 @@ mod dst_tests {
         .await
         .unwrap();
 
-        // Note: Current implementation propagates storage errors
-        // If graceful degradation is desired, this test reveals the need
-        // For now, we document the behavior
-        println!(
-            "Storage write failure result: is_ok={}",
-            result_ok.load(Ordering::SeqCst)
+        // With proper fault injection, remember() should fail
+        let is_ok = result_ok.load(Ordering::SeqCst);
+        println!("Storage write failure result: is_ok={}", is_ok);
+
+        // This should be false - storage write fails, so remember() fails
+        assert!(
+            !is_ok,
+            "remember() should fail when storage writes fail with 100% probability"
         );
     }
 
@@ -1362,29 +1382,21 @@ mod dst_tests {
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::Arc;
 
-        // First, remember without faults
-        let sim1 = Simulation::new(SimConfig::with_seed(42));
-        sim1.run(|env| async move {
-            let mut memory = create_unified_in_sim(42, env.clock.clone());
-            memory.remember("Test data").await.unwrap();
-            Ok::<(), std::convert::Infallible>(())
-        })
-        .await
-        .unwrap();
-
-        // Then recall with storage read failures
         let result_ok = Arc::new(AtomicBool::new(false));
         let result_clone = result_ok.clone();
 
-        let sim2 = Simulation::new(SimConfig::with_seed(42))
-            .with_fault(FaultConfig::new(FaultType::StorageReadFail, 1.0));
+        let sim = Simulation::new(SimConfig::with_seed(42));
 
-        sim2.run(|env| {
+        sim.run(|env| {
             let result_clone = result_clone.clone();
             async move {
-                let mut memory = create_unified_in_sim(42, env.clock.clone());
+                // Use proper fault injection - fails on "search" operation
+                let fault_config =
+                    FaultConfig::new(FaultType::StorageReadFail, 1.0).with_filter("search");
+                let mut memory =
+                    create_unified_with_storage_faults(42, env.clock.clone(), fault_config);
 
-                // Recall with storage failures
+                // Recall uses storage.search() which should fail
                 let result = memory.recall("Test", 10).await;
                 result_clone.store(result.is_ok(), Ordering::SeqCst);
 
@@ -1394,10 +1406,14 @@ mod dst_tests {
         .await
         .unwrap();
 
-        // Note: Current implementation propagates storage errors
-        println!(
-            "Storage read failure result: is_ok={}",
-            result_ok.load(Ordering::SeqCst)
+        // With proper fault injection, recall() should fail
+        let is_ok = result_ok.load(Ordering::SeqCst);
+        println!("Storage read failure result: is_ok={}", is_ok);
+
+        // This should be false - storage search fails, so recall() fails
+        assert!(
+            !is_ok,
+            "recall() should fail when storage search fails with 100% probability"
         );
     }
 
@@ -1413,14 +1429,16 @@ mod dst_tests {
         let success_clone = success_count.clone();
         let failure_clone = failure_count.clone();
 
-        let sim = Simulation::new(SimConfig::with_seed(42))
-            .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 0.5)); // 50% failure
+        let sim = Simulation::new(SimConfig::with_seed(42));
 
         sim.run(|env| {
             let success_clone = success_clone.clone();
             let failure_clone = failure_clone.clone();
             async move {
-                let mut memory = create_unified_in_sim(42, env.clock.clone());
+                // Use proper fault injection via SimStorageBackend.with_faults()
+                let fault_config = FaultConfig::new(FaultType::StorageWriteFail, 0.5);
+                let mut memory =
+                    create_unified_with_storage_faults(42, env.clock.clone(), fault_config);
 
                 // Try multiple operations
                 for i in 0..10 {
@@ -1441,14 +1459,24 @@ mod dst_tests {
         .await
         .unwrap();
 
+        let successes = success_count.load(Ordering::SeqCst);
+        let failures = failure_count.load(Ordering::SeqCst);
+
         println!(
             "Probabilistic failure: success={}, failure={}",
-            success_count.load(Ordering::SeqCst),
-            failure_count.load(Ordering::SeqCst)
+            successes, failures
         );
 
-        // With seed 42 and 50% failure, results should be reproducible
-        // The exact split depends on the RNG sequence
+        // With 50% failure rate, we should see some of each
+        // With seed 42, results are deterministic
+        assert!(
+            failures > 0,
+            "should have at least some failures with 50% rate"
+        );
+        assert!(
+            successes > 0,
+            "should have at least some successes with 50% rate"
+        );
     }
 
     // =========================================================================
