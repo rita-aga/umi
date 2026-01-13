@@ -58,6 +58,44 @@ impl SimStorageBackend {
         }
     }
 
+    /// Create a new `SimStorageBackend` with a shared fault injector.
+    ///
+    /// This constructor accepts an external `FaultInjector` (typically shared
+    /// from a `Simulation`), allowing fault injection tests to work correctly.
+    ///
+    /// # Arguments
+    /// * `config` - Simulation configuration
+    /// * `fault_injector` - Shared fault injector from the simulation environment
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// use umi_memory::dst::{Simulation, SimConfig, FaultConfig, FaultType};
+    /// use umi_memory::storage::SimStorageBackend;
+    ///
+    /// let sim = Simulation::new(SimConfig::with_seed(42))
+    ///     .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 0.1));
+    ///
+    /// sim.run(|env| async move {
+    ///     let storage = SimStorageBackend::with_fault_injector(
+    ///         env.config,
+    ///         Arc::clone(&env.faults)
+    ///     );
+    ///     // Storage operations now have fault injection applied
+    ///     Ok(())
+    /// }).await;
+    /// ```
+    #[must_use]
+    pub fn with_fault_injector(config: SimConfig, fault_injector: Arc<FaultInjector>) -> Self {
+        let rng = DeterministicRng::new(config.seed());
+
+        Self {
+            storage: Arc::new(RwLock::new(HashMap::new())),
+            fault_injector,
+            clock: SimClock::new(),
+            rng: Arc::new(RwLock::new(rng)),
+        }
+    }
+
     /// Add fault configuration.
     ///
     /// Note: Creates a new backend with the fault registered.

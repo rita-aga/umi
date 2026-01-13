@@ -289,6 +289,40 @@ def test_with_fault_injection():
 | **Network** | `NetworkTimeout` | Network call times out |
 | | `NetworkPartition` | Simulated network split |
 
+### Memory Integration with Fault Injection
+
+When testing Memory operations with fault injection, use `SimEnvironment::create_memory()` to create a Memory instance with providers connected to the simulation's fault injector:
+
+```rust
+use umi_memory::dst::{Simulation, SimConfig, FaultConfig, FaultType};
+use umi_memory::umi::RememberOptions;
+
+#[tokio::test]
+async fn test_memory_with_fault_injection() {
+    let sim = Simulation::new(SimConfig::with_seed(42))
+        .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 0.1));
+
+    sim.run(|env| async move {
+        // Create Memory with providers connected to the simulation's FaultInjector
+        let mut memory = env.create_memory();
+
+        // Now all memory operations have fault injection applied
+        match memory.remember("Alice works at Acme", RememberOptions::default()).await {
+            Ok(result) => println!("Stored {} entities", result.entities.len()),
+            Err(e) => println!("Failed due to fault: {}", e),  // May fail due to 10% fault rate
+        }
+
+        Ok::<(), umi_memory::umi::MemoryError>(())
+    }).await.unwrap();
+}
+```
+
+**Important Notes:**
+- Use `env.create_memory()` instead of `Memory::sim(seed)` when you want fault injection
+- `Memory::sim(seed)` still works for simple tests without fault injection (backward compatible)
+- Fault injection is global across all providers - an LLM fault might cause storage operations to fail
+- This is expected behavior since the FaultInjector is shared
+
 ---
 
 ## Code Style

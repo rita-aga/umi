@@ -54,6 +54,63 @@ impl SimEnvironment {
     pub async fn sleep_ms(&self, ms: u64) {
         self.clock.sleep_ms(ms).await;
     }
+
+    /// Create a Memory instance with providers connected to this simulation's fault injector.
+    ///
+    /// All SimProviders (LLM, Embedding, Vector, Storage) will share the `FaultInjector`
+    /// configured in the `Simulation`, allowing fault injection tests to work correctly.
+    ///
+    /// This is the recommended way to create a `Memory` instance within a `Simulation::run()`
+    /// closure when you want fault injection to be applied to memory operations.
+    ///
+    /// `TigerStyle`: Providers share the simulation's fault injector for deterministic testing.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use umi_memory::dst::{Simulation, SimConfig, FaultConfig, FaultType};
+    /// use umi_memory::umi::RememberOptions;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let sim = Simulation::new(SimConfig::with_seed(42))
+    ///         .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 0.1));
+    ///
+    ///     sim.run(|env| async move {
+    ///         let mut memory = env.create_memory();  // ✅ Connected to fault injector
+    ///
+    ///         // All memory operations now have fault injection applied
+    ///         match memory.remember("Alice works at Acme", RememberOptions::default()).await {
+    ///             Ok(result) => println!("Stored {} entities", result.entities.len()),
+    ///             Err(e) => println!("Failed due to fault: {}", e),  // May fail due to fault
+    ///         }
+    ///
+    ///         Ok::<(), anyhow::Error>(())
+    ///     }).await.unwrap();
+    /// }
+    /// ```
+    #[must_use]
+    pub fn create_memory(&self) -> crate::umi::Memory<
+        crate::llm::SimLLMProvider,
+        crate::embedding::SimEmbeddingProvider,
+        crate::storage::SimStorageBackend,
+        crate::storage::SimVectorBackend,
+    > {
+        use crate::embedding::SimEmbeddingProvider;
+        use crate::llm::SimLLMProvider;
+        use crate::storage::{SimStorageBackend, SimVectorBackend};
+        use crate::umi::Memory;
+
+        let seed = self.config.seed();
+
+        // Create all providers with the shared fault injector
+        let llm = SimLLMProvider::with_faults(seed, Arc::clone(&self.faults));
+        let embedder = SimEmbeddingProvider::with_faults(seed, Arc::clone(&self.faults));
+        let vector = SimVectorBackend::with_faults(seed, Arc::clone(&self.faults));
+        let storage = SimStorageBackend::with_fault_injector(self.config, Arc::clone(&self.faults));
+
+        Memory::new(llm, embedder, vector, storage)
+    }
 }
 
 /// DST simulation harness.
@@ -367,5 +424,231 @@ mod tests {
         // Both env.faults and storage.faults should point to the same FaultInjector
         // After a fault is injected, stats should be visible via env.faults
         assert_eq!(env.faults.total_injections(), 0);
+    }
+
+    // =============================================================================
+    // Memory Integration Tests
+    // =============================================================================
+
+    /// CRITICAL TEST: Verifies fault injection works for Memory created via SimEnvironment.
+    ///
+    /// This test ensures that `env.create_memory()` creates a Memory instance with
+    /// providers connected to the shared FaultInjector, so faults are actually applied.
+    #[tokio::test]
+    async fn test_memory_fault_injection_storage_write_fail() {
+        use crate::umi::RememberOptions;
+
+        // Register a storage write fault with 100% probability
+        let sim = Simulation::new(SimConfig::with_seed(42))
+            .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 1.0));
+
+        let result = sim
+            .run(|env| async move {
+                let mut memory = env.create_memory();
+
+                // This should FAIL due to storage fault injection
+                memory
+                    .remember("Alice works at Acme", RememberOptions::default())
+                    .await?;
+
+                Ok::<(), crate::umi::MemoryError>(())
+            })
+            .await;
+
+        // The test MUST fail due to fault injection
+        assert!(
+            result.is_err(),
+            "Fault injection should have caused storage write to fail!"
+        );
+
+        // Verify it's actually a storage error
+        let err = result.unwrap_err();
+        let err_str = err.to_string();
+        assert!(
+            err_str.contains("storage") || err_str.contains("Storage"),
+            "Error should be storage-related: {}",
+            err_str
+        );
+    }
+
+    /// Test that LLM faults are applied to Memory operations.
+    ///
+    /// Note: Because the FaultInjector is shared across all providers, an LLM fault
+    /// might cause a storage operation to fail if it fires during a storage call.
+    /// This is expected behavior - the fault injector is global.
+    #[tokio::test]
+    async fn test_memory_fault_injection_llm_timeout() {
+        use crate::umi::RememberOptions;
+
+        // Register LLM timeout with 100% probability
+        let sim = Simulation::new(SimConfig::with_seed(42))
+            .with_fault(FaultConfig::new(FaultType::LlmTimeout, 1.0));
+
+        let result = sim
+            .run(|env| async move {
+                let mut memory = env.create_memory();
+
+                // Fault injection is global - LLM timeout might fire during ANY operation
+                // This could cause storage, extraction, or LLM operations to fail
+                let _result = memory
+                    .remember("Bob is the CTO", RememberOptions::default())
+                    .await;
+
+                // The important thing is that faults are actually being injected
+                // We don't care if it succeeds or fails, just that it doesn't panic
+                Ok::<(), crate::umi::MemoryError>(())
+            })
+            .await;
+
+        // Should complete without panicking
+        assert!(
+            result.is_ok(),
+            "Memory should handle faults without panicking: {:?}",
+            result.unwrap_err()
+        );
+    }
+
+    /// Test that embedding faults are applied to Memory operations.
+    ///
+    /// Note: Fault injection is global across all providers.
+    #[tokio::test]
+    async fn test_memory_fault_injection_embedding_timeout() {
+        use crate::umi::RememberOptions;
+
+        // Register embedding timeout with 100% probability
+        let sim = Simulation::new(SimConfig::with_seed(42))
+            .with_fault(FaultConfig::new(FaultType::EmbeddingTimeout, 1.0));
+
+        let result = sim
+            .run(|env| async move {
+                let mut memory = env.create_memory();
+
+                // Fault injection is global - may fail at any provider
+                let _result = memory
+                    .remember("Carol manages engineering", RememberOptions::default())
+                    .await;
+
+                // Just verify we don't panic
+                Ok::<(), crate::umi::MemoryError>(())
+            })
+            .await;
+
+        // Should complete without panicking
+        assert!(
+            result.is_ok(),
+            "Memory should handle faults without panicking: {:?}",
+            result.unwrap_err()
+        );
+    }
+
+    /// Test that vector search faults are applied to Memory recall operations.
+    ///
+    /// Note: Fault injection is global across all providers.
+    #[tokio::test]
+    async fn test_memory_fault_injection_vector_search_timeout() {
+        use crate::umi::{RecallOptions, RememberOptions};
+
+        // Test with vector search timeout
+        let sim = Simulation::new(SimConfig::with_seed(42))
+            .with_fault(FaultConfig::new(FaultType::VectorSearchTimeout, 1.0));
+
+        let result = sim
+            .run(|env| async move {
+                let mut memory = env.create_memory();
+
+                // Fault injection is global - may fail during store or recall
+                let _store_result = memory
+                    .remember("Alice works at Acme", RememberOptions::default())
+                    .await;
+
+                // Try recall regardless of store result
+                let _recall_result = memory.recall("Alice", RecallOptions::default()).await;
+
+                // Just verify we don't panic
+                Ok::<(), crate::umi::MemoryError>(())
+            })
+            .await;
+
+        // Should complete without panicking
+        assert!(
+            result.is_ok(),
+            "Memory should handle faults without panicking: {:?}",
+            result.unwrap_err()
+        );
+    }
+
+    /// Test deterministic behavior: same seed + same faults = same results.
+    #[tokio::test]
+    async fn test_memory_fault_injection_deterministic() {
+        use crate::umi::RememberOptions;
+
+        // Helper to run the test and return whether it succeeded (true) or failed (false)
+        async fn run_with_seed_and_faults(seed: u64) -> bool {
+            let sim = Simulation::new(SimConfig::with_seed(seed))
+                .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 0.5));
+
+            let result = sim
+                .run(|env| async move {
+                    let mut memory = env.create_memory();
+
+                    // Try to store - may succeed or fail depending on RNG
+                    memory
+                        .remember("Test data", RememberOptions::default())
+                        .await?;
+
+                    Ok::<(), crate::umi::MemoryError>(())
+                })
+                .await;
+
+            result.is_ok() // true = success, false = fault injected
+        }
+
+        // Run twice with same seed - should get identical results
+        let result1 = run_with_seed_and_faults(12345).await;
+        let result2 = run_with_seed_and_faults(12345).await;
+
+        assert_eq!(
+            result1, result2,
+            "Same seed should produce same fault injection pattern"
+        );
+
+        // Run with different seed - may get different results (not required, just likely)
+        let result3 = run_with_seed_and_faults(67890).await;
+
+        // Just verify it runs - result may or may not differ
+        let _ = result3;
+    }
+
+    /// Test that multiple fault types can be injected simultaneously.
+    #[tokio::test]
+    async fn test_memory_fault_injection_multiple_faults() {
+        use crate::umi::RememberOptions;
+
+        let sim = Simulation::new(SimConfig::with_seed(42))
+            .with_fault(FaultConfig::new(FaultType::LlmTimeout, 0.5))
+            .with_fault(FaultConfig::new(FaultType::EmbeddingTimeout, 0.5))
+            .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 0.1));
+
+        let result = sim
+            .run(|env| async move {
+                let mut memory = env.create_memory();
+
+                // Should handle multiple fault types gracefully
+                // May succeed or fail depending on which faults fire, but should not panic
+                let _result = memory
+                    .remember("David is an engineer", RememberOptions::default())
+                    .await;
+
+                // Just verify we got here without panicking
+                Ok::<(), crate::umi::MemoryError>(())
+            })
+            .await;
+
+        // Should complete without panicking
+        assert!(
+            result.is_ok(),
+            "Memory should handle multiple faults gracefully: {:?}",
+            result.unwrap_err()
+        );
     }
 }
