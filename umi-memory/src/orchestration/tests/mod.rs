@@ -3,3 +3,4 @@
 //! `TigerStyle`: DST-first, full workflow testing, fault injection verification.
 
 mod integration;
+mod performance;
