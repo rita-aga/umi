@@ -14,9 +14,103 @@ This document tracks findings from Phase 7: Performance & Benchmarking using DST
 
 ---
 
+## DST-Found Bugs (Performance Testing)
+
+### Bug #1: recall() Doesn't Gracefully Degrade on Storage Failures ⭐
+**Type:** DST-FOUND
+**Severity:** Medium - Affects availability under faults
+**Location:** `orchestration/unified.rs:recall()` line 667
+
+**How Found:** Running aggressive DST with 90% storage fault rate revealed that `recall()`
+returns errors while `remember()` gracefully degrades.
+
+**Symptom:**
+```
+Test 1: BUG? Recall failed: storage error: simulated fault: StorageWriteFail during search
+```
+
+**Root Cause:** Line 667 propagates storage errors:
+```rust
+let archival_results = self.storage.search(query, remaining).await?;  // Propagates error!
+```
+
+Compare to `remember()` which catches LLM errors and falls back:
+```rust
+let extracted = match self.extractor.extract(...).await {
+    Ok(result) => result.entities,
+    Err(_) => vec![], // Graceful degradation
+};
+```
+
+**Impact:**
+- With storage faults, `recall()` fails completely even if core memory has results
+- Should return core-only results when archival search fails
+- Inconsistent error handling between `remember()` (graceful) and `recall()` (fails)
+
+**Fix (Proposed):**
+```rust
+// Change from:
+let archival_results = self.storage.search(query, remaining).await?;
+
+// To:
+let archival_results = match self.storage.search(query, remaining).await {
+    Ok(results) => results,
+    Err(_) => vec![], // Graceful degradation - return core results only
+};
+```
+
+**Status:** FIXED - recall() now gracefully degrades like remember().
+
+---
+
+### Bug #2: promote_to_core() Doesn't Check core_entity_limit ⭐
+**Type:** DST-FOUND
+**Severity:** High - Core memory can exceed configured limit
+**Location:** `orchestration/unified.rs:promote_to_core()` line 583
+
+**How Found:** Running eviction under memory pressure test with core limit=5 showed
+final core count=6, exceeding the limit.
+
+**Symptom:**
+```
+Eviction test: final_core=6, max_core=6, eviction_triggered=true
+Core count 6 exceeds limit 5
+```
+
+**Root Cause:** The promotion loop never checked if core was at capacity:
+```rust
+for entity in candidates {
+    // BUG: No check for core_entity_limit here!
+    if self.core_entities.contains_key(&entity.id) {
+        continue;
+    }
+    // ... promotes entity
+}
+```
+
+**Impact:**
+- Core memory can grow beyond configured limit
+- Memory usage predictions are incorrect
+- Eviction can never catch up if promotion keeps adding
+
+**Fix Applied:**
+```rust
+for entity in candidates {
+    // TigerStyle: Check core entity limit before promoting
+    if self.core_entities.len() >= self.config.core_entity_limit {
+        break; // Core is at capacity, stop promoting
+    }
+    // ... rest of promotion logic
+}
+```
+
+**Status:** FIXED - promote_to_core() now respects core_entity_limit.
+
+---
+
 ## DST-Found Insights (Performance Testing)
 
-### Finding #1: Compound Fault Probability ⭐
+### Insight #1: Compound Fault Probability ⭐
 **Type:** DST-FOUND
 **Severity:** Design Documentation
 **Location:** `orchestration/tests/performance.rs:test_throughput_under_storage_faults`
@@ -179,8 +273,8 @@ test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured
 - ✅ Phase 4: Unified Memory Orchestrator (37 tests, 3 bugs found)
 - ✅ Phase 5: Self-Evolution CategoryEvolver (22 tests, 2 bugs found)
 - ✅ Phase 6: Integration & Migration Path (27 tests, 6 bugs found)
-- ✅ Phase 7: Performance & Benchmarking (8 tests, 2 DST-found insights)
+- ✅ Phase 7: Performance & Benchmarking (9 tests, 2 bugs fixed + 2 insights)
 - 🔲 Phase 8: Documentation & Examples
 
-**Total Tests:** 139+ tests across all phases
-**Total Bugs/Insights Found:** 24 across 7 phases
+**Total Tests:** 717+ tests across all phases (708 lib + 9 perf)
+**Total Bugs/Insights Found:** 26 across 7 phases (including 2 REAL bugs fixed in Phase 7)

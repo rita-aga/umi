@@ -581,6 +581,12 @@ impl<
         let mut promoted_count = 0;
 
         for entity in candidates {
+            // TigerStyle: Check core entity limit before promoting
+            // DST-FOUND BUG: This check was missing, allowing core to exceed limit
+            if self.core_entities.len() >= self.config.core_entity_limit {
+                break; // Core is at capacity, stop promoting
+            }
+
             // Skip if already in core
             if self.core_entities.contains_key(&entity.id) {
                 continue;
@@ -662,9 +668,13 @@ impl<
         }
 
         // 2. If not enough results, fall back to archival
+        // TigerStyle: Graceful degradation - if archival search fails, return core results only
         if results.len() < limit {
             let remaining = limit.saturating_sub(results.len());
-            let archival_results = self.storage.search(query, remaining).await?;
+            let archival_results = match self.storage.search(query, remaining).await {
+                Ok(entities) => entities,
+                Err(_) => vec![], // Graceful degradation: return core results only
+            };
 
             // Record access and add to results (avoiding duplicates)
             for entity in archival_results {
@@ -1458,7 +1468,8 @@ mod dst_tests {
     }
 
     /// Test graceful degradation when storage read fails during recall.
-    /// Discovery: Will reveal if recall() handles storage failures correctly.
+    /// Discovery: DST revealed that recall() should gracefully degrade like remember(),
+    /// returning core-only results (or empty) when archival storage fails.
     #[tokio::test]
     async fn test_recall_with_storage_read_failure() {
         use std::sync::atomic::{AtomicBool, Ordering};
@@ -1478,7 +1489,7 @@ mod dst_tests {
                 let mut memory =
                     create_unified_with_storage_faults(42, env.clock.clone(), fault_config);
 
-                // Recall uses storage.search() which should fail
+                // Recall uses storage.search() which now gracefully degrades
                 let result = memory.recall("Test", 10).await;
                 result_clone.store(result.is_ok(), Ordering::SeqCst);
 
@@ -1488,14 +1499,15 @@ mod dst_tests {
         .await
         .unwrap();
 
-        // With proper fault injection, recall() should fail
+        // DST-FOUND: recall() should gracefully degrade, not fail
+        // When archival storage fails, return core-only results (or empty)
         let is_ok = result_ok.load(Ordering::SeqCst);
         println!("Storage read failure result: is_ok={}", is_ok);
 
-        // This should be false - storage search fails, so recall() fails
+        // This should be true - recall() gracefully degrades to core-only results
         assert!(
-            !is_ok,
-            "recall() should fail when storage search fails with 100% probability"
+            is_ok,
+            "recall() should gracefully degrade when storage search fails, returning core-only or empty results"
         );
     }
 

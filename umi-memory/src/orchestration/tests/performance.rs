@@ -575,7 +575,81 @@ async fn test_concurrent_access_under_faults() {
 }
 
 // =============================================================================
-// Test 8: Eviction Under Memory Pressure
+// Test 8: Recall Graceful Degradation Under Storage Faults
+// =============================================================================
+
+/// DST BUG FOUND: recall() used to propagate storage errors instead of gracefully degrading.
+///
+/// This test verifies the fix: recall() should return core results (or empty)
+/// when archival storage fails, NOT propagate the error.
+///
+/// BUG FOUND BY: Running 90% storage fault simulation - recall failed completely
+/// FIX: Changed line 667 from `storage.search(...).await?` to `match ... { Err(_) => vec![] }`
+#[tokio::test]
+async fn test_recall_graceful_degradation_under_storage_faults() {
+    let sim = Simulation::new(SimConfig::with_seed(42));
+
+    sim.run(|env| async move {
+        // 90% storage fault rate - extreme conditions
+        let storage = SimStorageBackend::new(SimConfig::with_seed(42))
+            .with_faults(FaultConfig::new(FaultType::StorageWriteFail, 0.9));
+
+        let llm = SimLLMProvider::with_seed(42);
+        let embedder = SimEmbeddingProvider::with_seed(42);
+        let vector = SimVectorBackend::new(42);
+        let config = UnifiedMemoryConfig::default();
+
+        let mut memory = UnifiedMemory::new(llm, embedder, vector, storage, env.clock.clone(), config);
+
+        // Store some data (some will fail, some will succeed)
+        let mut stored = 0;
+        for i in 0..20 {
+            if memory.remember(&format!("Test recall graceful {}", i)).await.is_ok() {
+                stored += 1;
+            }
+            let _ = env.clock.advance_ms(10);
+        }
+
+        println!("Stored {} entities under 90% fault rate", stored);
+
+        // Now test recall - it should gracefully degrade, NOT error
+        let mut recall_successes = 0;
+        let mut recall_errors = 0;
+
+        for _ in 0..10 {
+            match memory.recall("Test", 5).await {
+                Ok(results) => {
+                    recall_successes += 1;
+                    // May return 0 results if storage search failed, but should NOT error
+                    println!("Recall succeeded with {} results", results.len());
+                }
+                Err(e) => {
+                    recall_errors += 1;
+                    println!("Recall errored: {} (this should not happen!)", e);
+                }
+            }
+            let _ = env.clock.advance_ms(10);
+        }
+
+        println!("Recall: {} successes, {} errors", recall_successes, recall_errors);
+
+        // INVARIANT: recall() should NEVER error due to storage faults
+        // It should gracefully degrade to returning empty/core-only results
+        assert_eq!(
+            recall_errors, 0,
+            "recall() should gracefully degrade, not error on storage faults"
+        );
+
+        println!("PASSED: recall() gracefully degrades under storage faults");
+
+        Ok::<(), std::convert::Infallible>(())
+    })
+    .await
+    .unwrap();
+}
+
+// =============================================================================
+// Test 9: Eviction Under Memory Pressure
 // =============================================================================
 
 /// DST BUG HUNT: Does eviction work correctly under memory pressure?
