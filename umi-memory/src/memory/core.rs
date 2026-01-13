@@ -448,6 +448,34 @@ impl CoreMemory {
         output
     }
 
+    /// Render core memory as Markdown for human display.
+    ///
+    /// `TigerStyle`: Deterministic, predictable output format.
+    ///
+    /// # Example Output
+    ///
+    /// ```markdown
+    /// # Core Memory
+    ///
+    /// ## System (importance: 0.95)
+    /// You are a helpful assistant.
+    ///
+    /// ## Human (importance: 0.75)
+    /// User: Alice, software engineer
+    /// ```
+    #[must_use]
+    pub fn render_markdown(&self) -> String {
+        let mut output = String::with_capacity(self.current_bytes + 256);
+        output.push_str("# Core Memory\n\n");
+
+        for block in self.blocks_ordered() {
+            output.push_str(&block.render_markdown());
+            output.push_str("\n\n");
+        }
+
+        output
+    }
+
     /// Get configuration.
     #[must_use]
     pub fn config(&self) -> &CoreMemoryConfig {
@@ -1029,6 +1057,119 @@ mod dst_tests {
         .await
         .unwrap();
     }
+
+    /// Test markdown rendering is deterministic.
+    #[tokio::test]
+    async fn test_render_markdown_deterministic() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut core = CoreMemory::new();
+            core.set_clock_ms(env.clock.now_ms());
+
+            core.set_block(MemoryBlockType::System, "System prompt")
+                .unwrap();
+            core.set_block(MemoryBlockType::Human, "User info").unwrap();
+            core.set_block(MemoryBlockType::Facts, "Key facts").unwrap();
+
+            let rendered = core.render_markdown();
+
+            // Verify structure
+            assert!(rendered.starts_with("# Core Memory\n\n"));
+
+            // Verify order (system before human before facts)
+            let sys_pos = rendered.find("## System").unwrap();
+            let human_pos = rendered.find("## Human").unwrap();
+            let facts_pos = rendered.find("## Facts").unwrap();
+
+            assert!(sys_pos < human_pos);
+            assert!(human_pos < facts_pos);
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test markdown rendering with importance and labels.
+    #[tokio::test]
+    async fn test_render_markdown_with_metadata() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut core = CoreMemory::new();
+            core.set_clock_ms(env.clock.now_ms());
+
+            // Add blocks with different metadata
+            core.set_block(MemoryBlockType::System, "System prompt")
+                .unwrap();
+            core.set_block_importance(MemoryBlockType::System, 0.95)
+                .unwrap();
+
+            core.set_block_with_label(MemoryBlockType::Human, "profile", "User: Alice")
+                .unwrap();
+            core.set_block_importance(MemoryBlockType::Human, 0.75)
+                .unwrap();
+
+            let rendered = core.render_markdown();
+
+            // Verify importance is displayed
+            assert!(rendered.contains("importance: 0.95"));
+            assert!(rendered.contains("importance: 0.75"));
+
+            // Verify label is displayed
+            assert!(rendered.contains("## Human - profile"));
+
+            // Verify content
+            assert!(rendered.contains("System prompt"));
+            assert!(rendered.contains("User: Alice"));
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test markdown and XML rendering produce same ordering.
+    #[tokio::test]
+    async fn test_markdown_xml_order_consistency() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut core = CoreMemory::new();
+            core.set_clock_ms(env.clock.now_ms());
+
+            // Add blocks in random order
+            core.set_block(MemoryBlockType::Scratch, "scratch").unwrap();
+            core.set_block(MemoryBlockType::Goals, "goals").unwrap();
+            core.set_block(MemoryBlockType::System, "system").unwrap();
+            core.set_block(MemoryBlockType::Human, "human").unwrap();
+
+            let xml = core.render();
+            let md = core.render_markdown();
+
+            // Extract positions from XML
+            let xml_system = xml.find("type=\"system\"").unwrap();
+            let xml_human = xml.find("type=\"human\"").unwrap();
+            let xml_goals = xml.find("type=\"goals\"").unwrap();
+            let xml_scratch = xml.find("type=\"scratch\"").unwrap();
+
+            // Extract positions from Markdown
+            let md_system = md.find("## System").unwrap();
+            let md_human = md.find("## Human").unwrap();
+            let md_goals = md.find("## Goals").unwrap();
+            let md_scratch = md.find("## Scratch").unwrap();
+
+            // Verify same ordering
+            assert!(xml_system < xml_human && md_system < md_human);
+            assert!(xml_human < xml_goals && md_human < md_goals);
+            assert!(xml_goals < xml_scratch && md_goals < md_scratch);
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
 }
 
 #[cfg(test)]
@@ -1089,5 +1230,69 @@ mod edge_case_tests {
         core.set_block(MemoryBlockType::Scratch, "   \n\t  ")
             .unwrap();
         assert_eq!(core.used_bytes(), 7);
+    }
+
+    #[test]
+    fn test_render_markdown_empty() {
+        let core = CoreMemory::new();
+        let md = core.render_markdown();
+        assert_eq!(md, "# Core Memory\n\n");
+    }
+
+    #[test]
+    fn test_render_markdown_with_blocks() {
+        let mut core = CoreMemory::new();
+        core.set_block(MemoryBlockType::System, "Be helpful.")
+            .unwrap();
+        core.set_block(MemoryBlockType::Human, "User: Alice").unwrap();
+
+        let md = core.render_markdown();
+        assert!(md.contains("# Core Memory"));
+        assert!(md.contains("## System"));
+        assert!(md.contains("Be helpful."));
+        assert!(md.contains("## Human"));
+        assert!(md.contains("User: Alice"));
+    }
+
+    #[test]
+    fn test_render_markdown_order_matches_xml() {
+        let mut core = CoreMemory::new();
+        core.set_block(MemoryBlockType::Scratch, "5").unwrap();
+        core.set_block(MemoryBlockType::System, "1").unwrap();
+
+        let md = core.render_markdown();
+        let xml = core.render();
+
+        // Both should have System before Scratch
+        let md_sys = md.find("System").unwrap();
+        let md_scratch = md.find("Scratch").unwrap();
+        assert!(md_sys < md_scratch);
+
+        let xml_sys = xml.find("system").unwrap();
+        let xml_scratch = xml.find("scratch").unwrap();
+        assert!(xml_sys < xml_scratch);
+    }
+
+    #[test]
+    fn test_render_markdown_with_importance() {
+        let mut core = CoreMemory::new();
+        core.set_block(MemoryBlockType::System, "System prompt")
+            .unwrap();
+        core.set_block_importance(MemoryBlockType::System, 0.95)
+            .unwrap();
+
+        let md = core.render_markdown();
+        assert!(md.contains("importance: 0.95"));
+    }
+
+    #[test]
+    fn test_render_markdown_with_labels() {
+        let mut core = CoreMemory::new();
+        core.set_block_with_label(MemoryBlockType::Facts, "preferences", "Likes cats")
+            .unwrap();
+
+        let md = core.render_markdown();
+        assert!(md.contains("## Facts - preferences"));
+        assert!(md.contains("Likes cats"));
     }
 }

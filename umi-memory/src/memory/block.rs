@@ -11,6 +11,17 @@ use crate::constants::{
     CORE_MEMORY_BLOCK_SIZE_BYTES_MAX,
 };
 
+/// Capitalize the first letter of a string.
+///
+/// `TigerStyle`: Simple, deterministic string transformation.
+fn capitalize(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+    }
+}
+
 /// Unique identifier for a memory block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MemoryBlockId(Uuid);
@@ -375,6 +386,39 @@ impl MemoryBlock {
             }
         }
     }
+
+    /// Render the block as Markdown for human display.
+    ///
+    /// `TigerStyle`: Deterministic, predictable output format.
+    ///
+    /// # Example Output
+    ///
+    /// ```markdown
+    /// ## System (importance: 0.95)
+    /// You are a helpful assistant.
+    /// ```
+    ///
+    /// Or with a label:
+    ///
+    /// ```markdown
+    /// ## Human - profile (importance: 0.75)
+    /// User: Alice, software engineer
+    /// ```
+    #[must_use]
+    pub fn render_markdown(&self) -> String {
+        let type_name = self.block_type.as_str();
+        let capitalized_type = capitalize(type_name);
+
+        let header = match &self.label {
+            Some(label) => format!(
+                "## {} - {} (importance: {:.2})",
+                capitalized_type, label, self.importance
+            ),
+            None => format!("## {} (importance: {:.2})", capitalized_type, self.importance),
+        };
+
+        format!("{}\n{}", header, self.content)
+    }
 }
 
 #[cfg(test)]
@@ -486,5 +530,39 @@ mod tests {
     fn test_memory_block_label_too_large() {
         let large_label = "x".repeat(CORE_MEMORY_BLOCK_LABEL_BYTES_MAX + 1);
         let _ = MemoryBlock::with_label(MemoryBlockType::System, large_label, "content", 1000);
+    }
+
+    #[test]
+    fn test_memory_block_render_markdown() {
+        let block = MemoryBlock::new(MemoryBlockType::System, "You are helpful.", 1000);
+        let rendered = block.render_markdown();
+
+        // Should contain Markdown header
+        assert!(rendered.contains("## System"));
+        assert!(rendered.contains("importance: 0.50")); // Default importance
+        assert!(rendered.contains("You are helpful."));
+    }
+
+    #[test]
+    fn test_memory_block_render_markdown_with_label() {
+        let block = MemoryBlock::with_label(MemoryBlockType::Human, "profile", "Name: Alice", 1000);
+        let rendered = block.render_markdown();
+
+        // Should contain Markdown header with label
+        assert!(rendered.contains("## Human - profile"));
+        assert!(rendered.contains("importance: 0.50"));
+        assert!(rendered.contains("Name: Alice"));
+    }
+
+    #[test]
+    fn test_memory_block_render_markdown_different_importance() {
+        let mut block = MemoryBlock::new(MemoryBlockType::Facts, "Important fact", 1000);
+        block.set_importance(0.95);
+
+        let rendered = block.render_markdown();
+
+        assert!(rendered.contains("## Facts"));
+        assert!(rendered.contains("importance: 0.95"));
+        assert!(rendered.contains("Important fact"));
     }
 }
