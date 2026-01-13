@@ -9,9 +9,11 @@
 pub mod access_tracker;
 pub mod eviction;
 pub mod promotion;
+pub mod unified;
 
 pub use access_tracker::{AccessPattern, AccessTracker};
 pub use eviction::{
     EvictionPolicy, HybridEvictionPolicy, ImportanceEvictionPolicy, LRUEvictionPolicy,
 };
 pub use promotion::{HybridPolicy, ImportanceBasedPolicy, PromotionPolicy};
+pub use unified::{UnifiedMemory, UnifiedMemoryConfig, UnifiedMemoryError, UnifiedRememberResult};

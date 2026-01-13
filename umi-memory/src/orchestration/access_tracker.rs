@@ -248,8 +248,10 @@ impl AccessTracker {
         self.access_records.len()
     }
 
-    /// Get clock reference (for testing).
-    #[cfg(test)]
+    /// Get clock reference.
+    ///
+    /// Used by eviction policies to get current time for LRU calculations.
+    #[must_use]
     pub fn clock(&self) -> &SimClock {
         &self.clock
     }
