@@ -96,6 +96,7 @@
 //! - `llm-providers` - All LLM providers
 //! - `embedding-providers` - All embedding providers
 //! - `opentelemetry` - OpenTelemetry distributed tracing and metrics
+//! - `unified-memory` - UnifiedMemory orchestration with automatic tier management
 //!
 //! ## Examples
 //!
@@ -202,4 +203,13 @@ pub use umi::{Memory, MemoryError, RecallOptions, RememberOptions, RememberResul
 // Telemetry exports
 pub use telemetry::{
     init_telemetry, TelemetryConfig, TelemetryConfigBuilder, TelemetryError, TelemetryGuard,
+};
+
+// Orchestration exports (unified-memory feature)
+#[cfg(feature = "unified-memory")]
+pub use orchestration::{
+    AccessPattern, AccessTracker, CategoryEvolver, EvictionPolicy, EvolutionAnalysis,
+    EvolutionSuggestion, HybridEvictionPolicy, HybridPolicy, ImportanceBasedPolicy,
+    ImportanceEvictionPolicy, LRUEvictionPolicy, PromotionPolicy, UnifiedMemory,
+    UnifiedMemoryConfig, UnifiedMemoryError, UnifiedRememberResult,
 };

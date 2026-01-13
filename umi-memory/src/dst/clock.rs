@@ -132,7 +132,7 @@ impl SimClock {
         debug_assert!(duration >= Duration::zero(), "cannot go back in time");
 
         let delta_ms = duration.num_milliseconds() as u64;
-        self.advance_ms(delta_ms);
+        let _ = self.advance_ms(delta_ms);
     }
 
     /// Set time to absolute value.

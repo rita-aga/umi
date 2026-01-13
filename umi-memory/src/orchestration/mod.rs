@@ -12,6 +12,9 @@ pub mod eviction;
 pub mod promotion;
 pub mod unified;
 
+#[cfg(test)]
+mod tests;
+
 pub use access_tracker::{AccessPattern, AccessTracker};
 pub use category_evolution::{
     CategoryEvolver, EvolutionAnalysis, EvolutionSuggestion, EVOLUTION_ANALYSIS_INTERVAL_MS,

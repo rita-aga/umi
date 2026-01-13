@@ -324,8 +324,7 @@ impl<
         clock: SimClock,
         config: UnifiedMemoryConfig,
     ) -> Self {
-        // Preconditions
-        assert!(clock.now_ms() >= 0, "clock must be at non-negative time");
+        // TigerStyle: clock.now_ms() is u64, always non-negative
 
         // Create archival layer components
         let extractor = crate::extraction::EntityExtractor::new(llm.clone());

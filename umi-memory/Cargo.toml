@@ -74,6 +74,10 @@ embedding-providers = ["embedding-openai"]
 # OpenTelemetry distributed tracing and metrics
 opentelemetry = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-otlp", "dep:tracing-opentelemetry"]
 
+# UnifiedMemory orchestration with tier management, promotion, eviction, and evolution
+# Enables the orchestration module for automatic memory tier management
+unified-memory = []
+
 [[bench]]
 name = "storage"
 harness = false

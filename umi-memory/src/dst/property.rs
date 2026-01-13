@@ -302,7 +302,7 @@ impl PropertyTest {
                         self.time_config.max_ms as usize,
                     ) as u64
                 };
-                clock.advance_ms(advance);
+                let _ = clock.advance_ms(advance);
             }
 
             // Generate and apply operation

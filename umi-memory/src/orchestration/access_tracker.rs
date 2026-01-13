@@ -53,12 +53,7 @@ impl AccessTracker {
     /// `TigerStyle`: Uses SimClock for deterministic testing.
     #[must_use]
     pub fn new(clock: SimClock) -> Self {
-        // Preconditions
-        assert!(
-            clock.now_ms() >= 0,
-            "clock must start at non-negative time"
-        );
-
+        // TigerStyle: clock.now_ms() is u64, always non-negative
         Self {
             access_records: HashMap::new(),
             clock,
