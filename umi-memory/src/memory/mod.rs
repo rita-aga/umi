@@ -27,9 +27,14 @@
 mod archival;
 mod block;
 mod core;
+mod kelpie_mapping;
 mod working;
+
+#[cfg(test)]
+mod integration_tests;
 
 pub use archival::{ArchivalMemory, ArchivalMemoryConfig};
 pub use block::{MemoryBlock, MemoryBlockId, MemoryBlockType};
 pub use core::{CoreMemory, CoreMemoryConfig, CoreMemoryError};
+pub use kelpie_mapping::KelpieBlockType;
 pub use working::{WorkingMemory, WorkingMemoryConfig, WorkingMemoryError};

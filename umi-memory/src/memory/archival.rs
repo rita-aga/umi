@@ -190,7 +190,8 @@ impl<B: StorageBackend> ArchivalMemory<B> {
 
     /// Get the underlying backend (for testing).
     #[cfg(test)]
-    #[must_use] pub fn backend(&self) -> &B {
+    #[must_use]
+    pub fn backend(&self) -> &B {
         &self.backend
     }
 }

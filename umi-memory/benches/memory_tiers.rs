@@ -202,15 +202,13 @@ fn bench_working_memory_bulk_operations(c: &mut Criterion) {
                     |mut working| {
                         for i in 0..count {
                             working
-                            .set(
-                                &format!("key_{}", i),
-                                format!("value_{}", i).as_bytes(),
-                                None,
-                            )
-                            .unwrap();
-                            black_box(
-                                (),
-                            );
+                                .set(
+                                    &format!("key_{}", i),
+                                    format!("value_{}", i).as_bytes(),
+                                    None,
+                                )
+                                .unwrap();
+                            black_box(());
                         }
                     },
                     criterion::BatchSize::SmallInput,

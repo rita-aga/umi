@@ -619,11 +619,7 @@ mod dst_tests {
         let mut failures = 0;
 
         for i in 0..100 {
-            let entity = Entity::new(
-                EntityType::Note,
-                format!("Test {i}"),
-                "content".to_string(),
-            );
+            let entity = Entity::new(EntityType::Note, format!("Test {i}"), "content".to_string());
             match backend.store_entity(&entity).await {
                 Ok(_) => successes += 1,
                 Err(_) => failures += 1,
@@ -754,7 +750,9 @@ mod property_tests {
                 match op {
                     StorageOp::Store { entity_type, name } => {
                         let entity = Entity::new(*entity_type, name.clone(), "content".to_string());
-                        if self.backend.store_entity(&entity).await.is_ok() && !self.known_ids.contains(&entity.id) {
+                        if self.backend.store_entity(&entity).await.is_ok()
+                            && !self.known_ids.contains(&entity.id)
+                        {
                             self.known_ids.push(entity.id);
                         }
                     }

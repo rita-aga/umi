@@ -135,7 +135,10 @@ fn bench_recall_semantic_query(c: &mut Criterion) {
         // Benchmark: semantic search
         b.to_async(&rt).iter(|| async {
             memory
-                .recall(black_box("Who are the programmers?"), RecallOptions::default())
+                .recall(
+                    black_box("Who are the programmers?"),
+                    RecallOptions::default(),
+                )
                 .await
                 .unwrap()
         });
@@ -251,10 +254,7 @@ fn bench_remember_without_embeddings(c: &mut Criterion) {
             let mut memory = Memory::sim(42);
             rt.block_on(async {
                 memory
-                    .remember(
-                        black_box("Test entity"),
-                        RememberOptions::default(),
-                    )
+                    .remember(black_box("Test entity"), RememberOptions::default())
                     .await
                     .unwrap()
             })
@@ -268,10 +268,7 @@ fn bench_remember_without_embeddings(c: &mut Criterion) {
             let mut memory = Memory::sim_with_config(42, config);
             rt.block_on(async {
                 memory
-                    .remember(
-                        black_box("Test entity"),
-                        RememberOptions::default(),
-                    )
+                    .remember(black_box("Test entity"), RememberOptions::default())
                     .await
                     .unwrap()
             })

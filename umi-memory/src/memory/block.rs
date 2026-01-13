@@ -5,7 +5,11 @@
 use std::fmt;
 use uuid::Uuid;
 
-use crate::constants::{CORE_MEMORY_BLOCK_LABEL_BYTES_MAX, CORE_MEMORY_BLOCK_SIZE_BYTES_MAX};
+use crate::constants::{
+    CORE_MEMORY_BLOCK_IMPORTANCE_DEFAULT, CORE_MEMORY_BLOCK_IMPORTANCE_MAX,
+    CORE_MEMORY_BLOCK_IMPORTANCE_MIN, CORE_MEMORY_BLOCK_LABEL_BYTES_MAX,
+    CORE_MEMORY_BLOCK_SIZE_BYTES_MAX,
+};
 
 /// Unique identifier for a memory block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -135,6 +139,8 @@ pub struct MemoryBlock {
     content: String,
     /// Cached content size in bytes
     size_bytes: usize,
+    /// Importance score (0.0 to 1.0)
+    importance: f64,
     /// Creation timestamp (milliseconds since epoch)
     created_at_ms: u64,
     /// Last modification timestamp (milliseconds since epoch)
@@ -169,6 +175,7 @@ impl MemoryBlock {
             label: None,
             content,
             size_bytes,
+            importance: CORE_MEMORY_BLOCK_IMPORTANCE_DEFAULT,
             created_at_ms: now_ms,
             modified_at_ms: now_ms,
         };
@@ -177,6 +184,11 @@ impl MemoryBlock {
             result.size_bytes,
             result.content.len(),
             "size must match content"
+        );
+        assert!(
+            result.importance >= CORE_MEMORY_BLOCK_IMPORTANCE_MIN
+                && result.importance <= CORE_MEMORY_BLOCK_IMPORTANCE_MAX,
+            "importance must be in range"
         );
 
         result
@@ -214,15 +226,25 @@ impl MemoryBlock {
         let size_bytes = content.len();
         let id = MemoryBlockId::new();
 
-        Self {
+        let result = Self {
             id,
             block_type,
             label: Some(label),
             content,
             size_bytes,
+            importance: CORE_MEMORY_BLOCK_IMPORTANCE_DEFAULT,
             created_at_ms: now_ms,
             modified_at_ms: now_ms,
-        }
+        };
+
+        // Postconditions
+        assert!(
+            result.importance >= CORE_MEMORY_BLOCK_IMPORTANCE_MIN
+                && result.importance <= CORE_MEMORY_BLOCK_IMPORTANCE_MAX,
+            "importance must be in range"
+        );
+
+        result
     }
 
     /// Get the block ID.
@@ -267,6 +289,36 @@ impl MemoryBlock {
         self.modified_at_ms
     }
 
+    /// Get importance score.
+    #[must_use]
+    pub fn importance(&self) -> f64 {
+        self.importance
+    }
+
+    /// Set importance score.
+    ///
+    /// # Panics
+    /// Panics if importance is outside [0.0, 1.0] range.
+    pub fn set_importance(&mut self, importance: f64) {
+        // Precondition
+        assert!(
+            importance >= CORE_MEMORY_BLOCK_IMPORTANCE_MIN
+                && importance <= CORE_MEMORY_BLOCK_IMPORTANCE_MAX,
+            "importance {importance} outside valid range [{}, {}]",
+            CORE_MEMORY_BLOCK_IMPORTANCE_MIN,
+            CORE_MEMORY_BLOCK_IMPORTANCE_MAX
+        );
+
+        self.importance = importance;
+
+        // Postcondition
+        assert!(
+            self.importance >= CORE_MEMORY_BLOCK_IMPORTANCE_MIN
+                && self.importance <= CORE_MEMORY_BLOCK_IMPORTANCE_MAX,
+            "importance must be in valid range after setting"
+        );
+    }
+
     /// Update the content.
     ///
     /// # Panics
@@ -294,21 +346,32 @@ impl MemoryBlock {
         );
     }
 
-    /// Render the block as XML for LLM context.
+    /// Render the block as XML for LLM context (Kelpie-compatible format).
     ///
-    /// `TigerStyle`: Deterministic, predictable output format.
+    /// `TigerStyle`: Deterministic, predictable output format with importance.
+    ///
+    /// # Example Output
+    ///
+    /// ```xml
+    /// <block type="system" importance="0.95">
+    /// You are a helpful assistant.
+    /// </block>
+    /// ```
     #[must_use]
     pub fn render(&self) -> String {
         let type_attr = self.block_type.as_str();
         match &self.label {
             Some(label) => {
                 format!(
-                    "<block type=\"{}\" label=\"{}\">\n{}\n</block>",
-                    type_attr, label, self.content
+                    "<block type=\"{}\" label=\"{}\" importance=\"{:.2}\">\n{}\n</block>",
+                    type_attr, label, self.importance, self.content
                 )
             }
             None => {
-                format!("<block type=\"{}\">\n{}\n</block>", type_attr, self.content)
+                format!(
+                    "<block type=\"{}\" importance=\"{:.2}\">\n{}\n</block>",
+                    type_attr, self.importance, self.content
+                )
             }
         }
     }
@@ -387,7 +450,8 @@ mod tests {
         let block = MemoryBlock::new(MemoryBlockType::System, "You are helpful.", 1000);
         let rendered = block.render();
 
-        assert!(rendered.contains("<block type=\"system\">"));
+        assert!(rendered.contains("type=\"system\""));
+        assert!(rendered.contains("importance=\"0.50\"")); // Default importance
         assert!(rendered.contains("You are helpful."));
         assert!(rendered.contains("</block>"));
     }
@@ -399,6 +463,7 @@ mod tests {
 
         assert!(rendered.contains("type=\"human\""));
         assert!(rendered.contains("label=\"profile\""));
+        assert!(rendered.contains("importance=\"0.50\"")); // Default importance
         assert!(rendered.contains("Name: Alice"));
     }
 

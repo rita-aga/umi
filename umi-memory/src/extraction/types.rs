@@ -87,7 +87,6 @@ impl EntityType {
     }
 }
 
-
 impl std::fmt::Display for EntityType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
@@ -161,7 +160,6 @@ impl RelationType {
         }
     }
 }
-
 
 impl std::fmt::Display for RelationType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

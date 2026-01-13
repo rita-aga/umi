@@ -29,7 +29,10 @@ async fn test_semantic_search_finds_similar_content() {
         .unwrap();
 
     memory
-        .remember("Bob works as a developer at TechCo", RememberOptions::default())
+        .remember(
+            "Bob works as a developer at TechCo",
+            RememberOptions::default(),
+        )
         .await
         .unwrap();
 
@@ -85,7 +88,10 @@ async fn test_memory_full_workflow() {
         !result1.entities.is_empty(),
         "Should extract entities from first remember"
     );
-    println!("First remember: extracted {} entities", result1.entity_count());
+    println!(
+        "First remember: extracted {} entities",
+        result1.entity_count()
+    );
 
     // Step 2: Remember updated fact (should trigger evolution detection)
     let result2 = memory

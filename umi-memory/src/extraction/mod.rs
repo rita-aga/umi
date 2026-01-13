@@ -386,9 +386,9 @@ impl<P: LLMProvider> EntityExtractor<P> {
             };
 
             // Parse confidence
-            let confidence = raw
-                .confidence
-                .map_or(EXTRACTION_CONFIDENCE_DEFAULT, |c| c.clamp(EXTRACTION_CONFIDENCE_MIN, EXTRACTION_CONFIDENCE_MAX));
+            let confidence = raw.confidence.map_or(EXTRACTION_CONFIDENCE_DEFAULT, |c| {
+                c.clamp(EXTRACTION_CONFIDENCE_MIN, EXTRACTION_CONFIDENCE_MAX)
+            });
 
             entities.push(ExtractedEntity::new(name, entity_type, content, confidence));
         }
@@ -413,15 +413,15 @@ impl<P: LLMProvider> EntityExtractor<P> {
             };
 
             // Parse relation type
-            let relation_type = raw
-                .relation_type
-                .as_deref()
-                .map_or(RelationType::RelatesTo, RelationType::from_str_or_relates_to);
+            let relation_type = raw.relation_type.as_deref().map_or(
+                RelationType::RelatesTo,
+                RelationType::from_str_or_relates_to,
+            );
 
             // Parse confidence
-            let confidence = raw
-                .confidence
-                .map_or(EXTRACTION_CONFIDENCE_DEFAULT, |c| c.clamp(EXTRACTION_CONFIDENCE_MIN, EXTRACTION_CONFIDENCE_MAX));
+            let confidence = raw.confidence.map_or(EXTRACTION_CONFIDENCE_DEFAULT, |c| {
+                c.clamp(EXTRACTION_CONFIDENCE_MIN, EXTRACTION_CONFIDENCE_MAX)
+            });
 
             relations.push(ExtractedRelation::new(
                 source,
@@ -827,9 +827,7 @@ mod dst_tests {
                     println!("✓ LLM rate limit handled gracefully: fallback entity created");
                 }
                 Err(e) => {
-                    panic!(
-                        "BUG: Rate limit should return fallback, not error: {e:?}"
-                    );
+                    panic!("BUG: Rate limit should return fallback, not error: {e:?}");
                 }
             }
 
@@ -970,9 +968,7 @@ mod dst_tests {
                     println!("✓ Service unavailable handled: fallback entity created");
                 }
                 Err(e) => {
-                    panic!(
-                        "BUG: Service unavailable should return fallback, not error: {e:?}"
-                    );
+                    panic!("BUG: Service unavailable should return fallback, not error: {e:?}");
                 }
             }
 

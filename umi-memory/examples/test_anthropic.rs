@@ -11,14 +11,14 @@
 //!
 //! Cost: ~$0.01-0.02 per run (uses Claude Sonnet 3.5)
 
+use std::env;
+use umi_memory::dst::SimConfig;
+use umi_memory::embedding::SimEmbeddingProvider;
+use umi_memory::evolution::{DetectionOptions, EvolutionTracker};
 use umi_memory::extraction::{EntityExtractor, ExtractionOptions};
 use umi_memory::llm::AnthropicProvider;
 use umi_memory::retrieval::DualRetriever;
-use umi_memory::evolution::{EvolutionTracker, DetectionOptions};
 use umi_memory::storage::{Entity, EntityType, SimStorageBackend, SimVectorBackend};
-use umi_memory::embedding::SimEmbeddingProvider;
-use umi_memory::dst::SimConfig;
-use std::env;
 
 // Note: extraction::EntityType is separate from storage::EntityType
 // For extraction results, use extraction::EntityType::Note for fallback detection
@@ -84,19 +84,22 @@ async fn test_entity_extraction(llm: &AnthropicProvider) -> Result<(), Box<dyn s
     println!("  Found {} entities:", result.entities.len());
 
     for entity in &result.entities {
-        println!("    - Type: {:?}, Name: {}", entity.entity_type, entity.name);
+        println!(
+            "    - Type: {:?}, Name: {}",
+            entity.entity_type, entity.name
+        );
         println!("      Content: {}", entity.content);
         println!("      Confidence: {:.2}", entity.confidence);
     }
 
     // Verify: Should have at least one entity
-    assert!(
-        !result.entities.is_empty(),
-        "Expected at least one entity"
-    );
+    assert!(!result.entities.is_empty(), "Expected at least one entity");
 
     // Verify: Should NOT be fallback (ExtractionEntityType::Note means fallback)
-    let has_fallback = result.entities.iter().any(|e| e.entity_type == ExtractionEntityType::Note);
+    let has_fallback = result
+        .entities
+        .iter()
+        .any(|e| e.entity_type == ExtractionEntityType::Note);
     assert!(
         !has_fallback,
         "Expected real entity extraction, got fallback (ExtractionEntityType::Note)"
@@ -142,8 +145,11 @@ async fn test_query_rewriting(llm: &AnthropicProvider) -> Result<(), Box<dyn std
 }
 
 /// Test evolution detection with real Anthropic API
-async fn test_evolution_detection(llm: &AnthropicProvider) -> Result<(), Box<dyn std::error::Error>> {
-    let tracker: EvolutionTracker<AnthropicProvider, SimStorageBackend> = EvolutionTracker::new(llm.clone());
+async fn test_evolution_detection(
+    llm: &AnthropicProvider,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let tracker: EvolutionTracker<AnthropicProvider, SimStorageBackend> =
+        EvolutionTracker::new(llm.clone());
 
     // Create test entities
     let old_entity = Entity::new(

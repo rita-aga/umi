@@ -31,6 +31,15 @@ pub const CORE_MEMORY_BLOCK_LABEL_BYTES_MAX: usize = 64;
 /// Maximum number of blocks in core memory
 pub const CORE_MEMORY_BLOCKS_COUNT_MAX: usize = 32;
 
+/// Default importance for memory blocks
+pub const CORE_MEMORY_BLOCK_IMPORTANCE_DEFAULT: f64 = 0.5;
+
+/// Minimum importance for memory blocks
+pub const CORE_MEMORY_BLOCK_IMPORTANCE_MIN: f64 = 0.0;
+
+/// Maximum importance for memory blocks
+pub const CORE_MEMORY_BLOCK_IMPORTANCE_MAX: f64 = 1.0;
+
 // =============================================================================
 // Working Memory Limits
 // =============================================================================

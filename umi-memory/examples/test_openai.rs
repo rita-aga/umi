@@ -11,13 +11,13 @@
 //!
 //! Cost: ~$0.01-0.02 per run (uses GPT-4o-mini + text-embedding-3-small)
 
+use std::env;
+use umi_memory::dst::SimConfig;
+use umi_memory::embedding::{EmbeddingProvider, OpenAIEmbeddingProvider, SimEmbeddingProvider};
 use umi_memory::extraction::{EntityExtractor, ExtractionOptions};
 use umi_memory::llm::OpenAIProvider;
-use umi_memory::embedding::{EmbeddingProvider, OpenAIEmbeddingProvider, SimEmbeddingProvider};
 use umi_memory::retrieval::DualRetriever;
 use umi_memory::storage::{SimStorageBackend, SimVectorBackend};
-use umi_memory::dst::SimConfig;
-use std::env;
 
 // Note: extraction::EntityType is separate from storage::EntityType
 // For extraction results, use extraction::EntityType::Note for fallback detection
@@ -35,7 +35,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("\nSetup:");
             eprintln!("  1. Get API key from https://platform.openai.com/api-keys");
             eprintln!("  2. Export OPENAI_API_KEY=<your-key>");
-            eprintln!("  3. Run: cargo run --example test_openai --features openai,embedding-openai\n");
+            eprintln!(
+                "  3. Run: cargo run --example test_openai --features openai,embedding-openai\n"
+            );
             std::process::exit(1);
         }
     };
@@ -78,7 +80,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn test_entity_extraction(llm: &OpenAIProvider) -> Result<(), Box<dyn std::error::Error>> {
     let extractor = EntityExtractor::new(llm.clone());
 
-    let text = "Bob is the CTO at TechCo. He has 15 years of experience in AI and machine learning.";
+    let text =
+        "Bob is the CTO at TechCo. He has 15 years of experience in AI and machine learning.";
     println!("  Input: \"{}\"", text);
 
     let result = extractor
@@ -89,19 +92,22 @@ async fn test_entity_extraction(llm: &OpenAIProvider) -> Result<(), Box<dyn std:
     println!("  Found {} entities:", result.entities.len());
 
     for entity in &result.entities {
-        println!("    - Type: {:?}, Name: {}", entity.entity_type, entity.name);
+        println!(
+            "    - Type: {:?}, Name: {}",
+            entity.entity_type, entity.name
+        );
         println!("      Content: {}", entity.content);
         println!("      Confidence: {:.2}", entity.confidence);
     }
 
     // Verify: Should have at least one entity
-    assert!(
-        !result.entities.is_empty(),
-        "Expected at least one entity"
-    );
+    assert!(!result.entities.is_empty(), "Expected at least one entity");
 
     // Verify: Should NOT be fallback (ExtractionEntityType::Note means fallback)
-    let has_fallback = result.entities.iter().any(|e| e.entity_type == ExtractionEntityType::Note);
+    let has_fallback = result
+        .entities
+        .iter()
+        .any(|e| e.entity_type == ExtractionEntityType::Note);
     assert!(
         !has_fallback,
         "Expected real entity extraction, got fallback (ExtractionEntityType::Note)"
@@ -142,14 +148,19 @@ async fn test_query_rewriting(llm: &OpenAIProvider) -> Result<(), Box<dyn std::e
         println!("  ℹ Query rewriting used fallback (returned original query only)");
         println!("    This is acceptable - graceful degradation working correctly");
     } else {
-        println!("  ✓ Query expansion generated {} variations", variations.len());
+        println!(
+            "  ✓ Query expansion generated {} variations",
+            variations.len()
+        );
     }
 
     Ok(())
 }
 
 /// Test embedding generation with real OpenAI API
-async fn test_embedding_generation(embedder: &OpenAIEmbeddingProvider) -> Result<(), Box<dyn std::error::Error>> {
+async fn test_embedding_generation(
+    embedder: &OpenAIEmbeddingProvider,
+) -> Result<(), Box<dyn std::error::Error>> {
     let texts = vec![
         "Alice is a software engineer",
         "Bob is a data scientist",
@@ -206,7 +217,10 @@ async fn test_embedding_generation(embedder: &OpenAIEmbeddingProvider) -> Result
 }
 
 /// Test full pipeline with both LLM and embeddings
-async fn test_full_pipeline(llm: &OpenAIProvider, embedder: &OpenAIEmbeddingProvider) -> Result<(), Box<dyn std::error::Error>> {
+async fn test_full_pipeline(
+    llm: &OpenAIProvider,
+    embedder: &OpenAIEmbeddingProvider,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("  Testing complete extraction + embedding pipeline");
 
     let extractor = EntityExtractor::new(llm.clone());

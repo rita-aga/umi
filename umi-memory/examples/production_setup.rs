@@ -11,12 +11,12 @@
 //! Run with:
 //!   cargo run --example production_setup
 
+use std::time::Duration;
 use umi_memory::dst::SimConfig;
 use umi_memory::embedding::SimEmbeddingProvider;
 use umi_memory::llm::SimLLMProvider;
 use umi_memory::storage::{SimStorageBackend, SimVectorBackend};
 use umi_memory::umi::{Memory, MemoryBuilder, MemoryConfig, RecallOptions, RememberOptions};
-use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -32,13 +32,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let storage_backend = SimStorageBackend::new(SimConfig::with_seed(42));
 
     // Assemble with builder
-    let mut memory: Memory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend> =
-        MemoryBuilder::new()
-            .with_llm(llm)
-            .with_embedder(embedder)
-            .with_vector(vector_backend)
-            .with_storage(storage_backend)
-            .build();
+    let mut memory: Memory<
+        SimLLMProvider,
+        SimEmbeddingProvider,
+        SimStorageBackend,
+        SimVectorBackend,
+    > = MemoryBuilder::new()
+        .with_llm(llm)
+        .with_embedder(embedder)
+        .with_vector(vector_backend)
+        .with_storage(storage_backend)
+        .build();
 
     println!("✓ Created Memory with builder pattern");
     println!("  - LLM: SimLLMProvider (seed: 42)");
@@ -57,27 +61,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("--- Production Configuration ---");
 
     let production_config = MemoryConfig::default()
-        .with_core_memory_bytes(128 * 1024)     // 128 KB for larger context
+        .with_core_memory_bytes(128 * 1024) // 128 KB for larger context
         .with_working_memory_bytes(10 * 1024 * 1024) // 10 MB working memory
         .with_working_memory_ttl(Duration::from_secs(3600 * 4)) // 4 hours
-        .with_recall_limit(50)                   // Return more results
-        .with_embedding_batch_size(500);        // Larger batches for production
-        // Note: semantic_search_enabled and query_expansion_enabled are true by default
+        .with_recall_limit(50) // Return more results
+        .with_embedding_batch_size(500); // Larger batches for production
+                                         // Note: semantic_search_enabled and query_expansion_enabled are true by default
 
     println!("✓ Production configuration:");
-    println!("  - Core memory: {} KB", production_config.core_memory_bytes / 1024);
-    println!("  - Working memory: {} MB", production_config.working_memory_bytes / (1024 * 1024));
-    println!("  - Working memory TTL: {} hours", production_config.working_memory_ttl.as_secs() / 3600);
-    println!("  - Recall limit: {}", production_config.default_recall_limit);
-    println!("  - Embedding batch size: {}", production_config.embedding_batch_size);
-    println!("  - Semantic search: {}", production_config.semantic_search_enabled);
-    println!("  - Query expansion: {}", production_config.query_expansion_enabled);
+    println!(
+        "  - Core memory: {} KB",
+        production_config.core_memory_bytes / 1024
+    );
+    println!(
+        "  - Working memory: {} MB",
+        production_config.working_memory_bytes / (1024 * 1024)
+    );
+    println!(
+        "  - Working memory TTL: {} hours",
+        production_config.working_memory_ttl.as_secs() / 3600
+    );
+    println!(
+        "  - Recall limit: {}",
+        production_config.default_recall_limit
+    );
+    println!(
+        "  - Embedding batch size: {}",
+        production_config.embedding_batch_size
+    );
+    println!(
+        "  - Semantic search: {}",
+        production_config.semantic_search_enabled
+    );
+    println!(
+        "  - Query expansion: {}",
+        production_config.query_expansion_enabled
+    );
     println!();
 
     // === LanceDB Backend (Conceptual) ===
     println!("--- LanceDB Backend (Conceptual Example) ---");
     println!("In production, you would use:");
-    println!(r#"
+    println!(
+        r#"
     #[cfg(feature = "lance")]
     {{
         use umi_memory::storage::LanceVectorBackend;
@@ -94,13 +120,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_storage(/* your storage backend */)
             .build();
     }}
-    "#);
+    "#
+    );
     println!();
 
     // === Anthropic Provider (Conceptual) ===
     println!("--- Real LLM Provider (Conceptual Example) ---");
     println!("In production with Anthropic:");
-    println!(r#"
+    println!(
+        r#"
     #[cfg(feature = "anthropic")]
     {{
         use umi_memory::llm::AnthropicProvider;
@@ -117,7 +145,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_storage(/* your storage backend */)
             .build();
     }}
-    "#);
+    "#
+    );
     println!();
 
     // === Error Handling ===
@@ -132,9 +161,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => println!("  ✗ Remember failed: {}", e),
     }
 
-    let query_result = memory
-        .recall("test", RecallOptions::default())
-        .await;
+    let query_result = memory.recall("test", RecallOptions::default()).await;
 
     match query_result {
         Ok(results) => println!("  ✓ Recall succeeded: {} results", results.len()),
@@ -165,7 +192,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .recall("graceful", RecallOptions::default())
         .await?;
 
-    println!("  Recall with degraded config: {} results", degraded_results.len());
+    println!(
+        "  Recall with degraded config: {} results",
+        degraded_results.len()
+    );
     println!();
 
     println!("=== Example Complete ===");

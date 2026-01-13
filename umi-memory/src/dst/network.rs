@@ -254,7 +254,9 @@ impl SimNetwork {
     /// Get count of pending messages for a node.
     pub async fn pending_count(&self, node_id: &str) -> usize {
         let messages = self.messages.read().await;
-        messages.get(node_id).map_or(0, std::collections::VecDeque::len)
+        messages
+            .get(node_id)
+            .map_or(0, std::collections::VecDeque::len)
     }
 
     /// Get total pending messages across all nodes.

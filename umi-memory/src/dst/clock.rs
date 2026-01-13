@@ -94,7 +94,8 @@ impl SimClock {
     ///
     /// # Returns
     /// The new current time.
-    #[must_use] pub fn advance_ms(&self, ms: u64) -> u64 {
+    #[must_use]
+    pub fn advance_ms(&self, ms: u64) -> u64 {
         // Preconditions
         assert!(
             ms <= DST_TIME_ADVANCE_MS_MAX,
@@ -117,7 +118,8 @@ impl SimClock {
     ///
     /// # Panics
     /// Panics if resulting ms exceeds `DST_TIME_ADVANCE_MS_MAX`.
-    #[must_use] pub fn advance_secs(&self, secs: f64) -> u64 {
+    #[must_use]
+    pub fn advance_secs(&self, secs: f64) -> u64 {
         // Precondition
         assert!(secs >= 0.0, "secs must be non-negative, got {secs}");
 
@@ -140,10 +142,7 @@ impl SimClock {
     pub fn set_ms(&self, ms: u64) {
         let current = self.now_ms();
         // Precondition
-        assert!(
-            ms >= current,
-            "cannot set time backwards: {ms} < {current}"
-        );
+        assert!(ms >= current, "cannot set time backwards: {ms} < {current}");
 
         self.current_ms.store(ms, Ordering::SeqCst);
         self.notify.notify_waiters();

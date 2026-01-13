@@ -70,6 +70,29 @@ pub enum WorkingMemoryError {
         /// Maximum allowed
         max_secs: u64,
     },
+
+    /// Key not found
+    #[error("key not found: {key}")]
+    KeyNotFound {
+        /// The key that was not found
+        key: String,
+    },
+
+    /// Type mismatch (e.g., trying to incr a non-integer value)
+    #[error("type mismatch: expected {expected}, got {actual}")]
+    TypeMismatch {
+        /// Expected type
+        expected: String,
+        /// Actual type
+        actual: String,
+    },
+
+    /// Overflow error
+    #[error("overflow: {operation} would overflow")]
+    Overflow {
+        /// Operation that would overflow
+        operation: String,
+    },
 }
 
 /// Result type for working memory operations.
@@ -204,10 +227,7 @@ impl WorkingMemory {
         }
 
         // Calculate size delta (account for existing entry if overwriting)
-        let old_size = self
-            .entries
-            .get(key)
-            .map_or(0, |e| key_len + e.size_bytes);
+        let old_size = self.entries.get(key).map_or(0, |e| key_len + e.size_bytes);
         let projected_size = self.current_bytes - old_size + entry_size;
 
         // Check capacity
@@ -304,6 +324,194 @@ impl WorkingMemory {
         }
 
         count
+    }
+
+    /// Increment an integer value atomically (Kelpie-compatible).
+    ///
+    /// If the key doesn't exist, it is initialized to 0 before incrementing.
+    /// If the key exists but is not a valid i64, returns TypeMismatch error.
+    /// If the operation would overflow, returns Overflow error.
+    ///
+    /// # Errors
+    /// Returns error if value is not an integer, or if operation would overflow.
+    ///
+    /// # Example
+    /// ```rust
+    /// use umi_memory::memory::WorkingMemory;
+    ///
+    /// let mut wm = WorkingMemory::new();
+    /// let result = wm.incr("counter", 5).unwrap();
+    /// assert_eq!(result, 5);
+    ///
+    /// let result = wm.incr("counter", 3).unwrap();
+    /// assert_eq!(result, 8);
+    /// ```
+    pub fn incr(&mut self, key: &str, delta: i64) -> WorkingMemoryResult<i64> {
+        // Preconditions
+        assert!(
+            key.len() <= self.config.max_key_len,
+            "key length must be within limits"
+        );
+
+        // Get current value or initialize to 0
+        let current_value: i64 = if let Some(entry) = self.entries.get(key) {
+            // Check if not expired
+            if entry.expires_at_ms <= self.clock_ms {
+                0 // Expired, treat as 0
+            } else {
+                // Try to parse as i64
+                let value_str = std::str::from_utf8(&entry.value).map_err(|_| {
+                    WorkingMemoryError::TypeMismatch {
+                        expected: "i64".to_string(),
+                        actual: "non-UTF8 bytes".to_string(),
+                    }
+                })?;
+
+                value_str
+                    .parse::<i64>()
+                    .map_err(|_| WorkingMemoryError::TypeMismatch {
+                        expected: "i64".to_string(),
+                        actual: format!("string: {}", value_str),
+                    })?
+            }
+        } else {
+            0 // Key doesn't exist, initialize to 0
+        };
+
+        // Check for overflow
+        let new_value =
+            current_value
+                .checked_add(delta)
+                .ok_or_else(|| WorkingMemoryError::Overflow {
+                    operation: format!("{} + {}", current_value, delta),
+                })?;
+
+        // Store the new value
+        let new_value_str = new_value.to_string();
+        self.set(key, new_value_str.as_bytes(), None)?;
+
+        // Postconditions
+        assert!(self.get(key).is_some(), "key must exist after incr");
+        assert!(
+            self.get(key).unwrap() == new_value_str.as_bytes(),
+            "value must match new_value"
+        );
+
+        Ok(new_value)
+    }
+
+    /// Append to a string value (Kelpie-compatible).
+    ///
+    /// If the key doesn't exist, it is created with the appended value.
+    /// If the key exists but is expired, it is treated as empty.
+    /// Checks size limits before appending.
+    ///
+    /// # Errors
+    /// Returns error if the result would exceed entry size limits.
+    ///
+    /// # Example
+    /// ```rust
+    /// use umi_memory::memory::WorkingMemory;
+    ///
+    /// let mut wm = WorkingMemory::new();
+    /// wm.append("log", b"first").unwrap();
+    /// wm.append("log", b"second").unwrap();
+    ///
+    /// assert_eq!(wm.get("log"), Some(b"firstsecond".as_slice()));
+    /// ```
+    pub fn append(&mut self, key: &str, value: &[u8]) -> WorkingMemoryResult<()> {
+        // Preconditions
+        assert!(
+            key.len() <= self.config.max_key_len,
+            "key length must be within limits"
+        );
+        assert!(
+            value.len() <= WORKING_MEMORY_ENTRY_SIZE_BYTES_MAX,
+            "append value must be within entry size limits"
+        );
+
+        // Get current value or empty
+        let current_value: Vec<u8> = if let Some(entry) = self.entries.get(key) {
+            // Check if not expired
+            if entry.expires_at_ms <= self.clock_ms {
+                Vec::new() // Expired, treat as empty
+            } else {
+                entry.value.clone()
+            }
+        } else {
+            Vec::new() // Key doesn't exist, start with empty
+        };
+
+        // Calculate new value
+        let mut new_value = current_value;
+        new_value.extend_from_slice(value);
+
+        // Check size limit
+        if new_value.len() > WORKING_MEMORY_ENTRY_SIZE_BYTES_MAX {
+            return Err(WorkingMemoryError::EntryTooLarge {
+                size_bytes: new_value.len(),
+                max_bytes: WORKING_MEMORY_ENTRY_SIZE_BYTES_MAX,
+            });
+        }
+
+        // Store the new value
+        self.set(key, &new_value, None)?;
+
+        // Postcondition
+        assert!(self.get(key).is_some(), "key must exist after append");
+
+        Ok(())
+    }
+
+    /// Refresh TTL on a key without reading its value (Kelpie-compatible).
+    ///
+    /// Resets the TTL to the default value. If the key doesn't exist or is expired,
+    /// returns KeyNotFound error.
+    ///
+    /// # Errors
+    /// Returns error if key doesn't exist or is expired.
+    ///
+    /// # Example
+    /// ```rust
+    /// use umi_memory::memory::WorkingMemory;
+    ///
+    /// let mut wm = WorkingMemory::new();
+    /// wm.set("key", b"value", None).unwrap();
+    ///
+    /// // Refresh TTL
+    /// wm.touch("key").unwrap();
+    /// ```
+    pub fn touch(&mut self, key: &str) -> WorkingMemoryResult<()> {
+        // Preconditions
+        assert!(
+            key.len() <= self.config.max_key_len,
+            "key length must be within limits"
+        );
+
+        // Check if key exists and is not expired
+        if let Some(entry) = self.entries.get(key) {
+            if entry.expires_at_ms <= self.clock_ms {
+                // Expired
+                return Err(WorkingMemoryError::KeyNotFound {
+                    key: key.to_string(),
+                });
+            }
+
+            // Clone the value to avoid borrow issues
+            let value = entry.value.clone();
+
+            // Reset TTL by calling set
+            self.set(key, &value, None)?;
+
+            // Postcondition
+            assert!(self.exists(key), "key must exist after touch");
+
+            Ok(())
+        } else {
+            Err(WorkingMemoryError::KeyNotFound {
+                key: key.to_string(),
+            })
+        }
     }
 
     /// Get used bytes (keys + values).
@@ -740,6 +948,381 @@ mod dst_tests {
         .await
         .unwrap();
     }
+
+    // =========================================================================
+    // Atomic Operations Tests (Kelpie Integration)
+    // =========================================================================
+
+    /// Test incr() with new key (Kelpie-compatible).
+    #[tokio::test]
+    async fn test_incr_new_key() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut wm = WorkingMemory::new();
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Increment non-existent key, should initialize to 0 then add delta
+            let result = wm.incr("counter", 5).unwrap();
+            assert_eq!(result, 5);
+
+            // Verify value is stored correctly
+            assert_eq!(wm.get("counter"), Some(b"5".as_slice()));
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test incr() with existing key.
+    #[tokio::test]
+    async fn test_incr_existing_key() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut wm = WorkingMemory::new();
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Set initial value
+            wm.set("counter", b"10", None).unwrap();
+
+            // Increment
+            let result = wm.incr("counter", 7).unwrap();
+            assert_eq!(result, 17);
+
+            // Increment again with negative delta
+            let result = wm.incr("counter", -3).unwrap();
+            assert_eq!(result, 14);
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test incr() with expired key.
+    #[tokio::test]
+    async fn test_incr_expired_key() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut wm = WorkingMemory::new();
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Set key with short TTL
+            wm.set("counter", b"100", Some(1000)).unwrap();
+
+            // Advance time past expiration
+            let _ = env.clock.advance_ms(1500);
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Incr should treat expired key as 0
+            let result = wm.incr("counter", 5).unwrap();
+            assert_eq!(result, 5);
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test incr() with type mismatch error.
+    #[tokio::test]
+    async fn test_incr_type_mismatch() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|_env| async move {
+            let mut wm = WorkingMemory::new();
+
+            // Set a non-integer value
+            wm.set("key", b"not_a_number", None).unwrap();
+
+            // Try to increment - should fail with type mismatch
+            let result = wm.incr("key", 5);
+            assert!(matches!(
+                result,
+                Err(WorkingMemoryError::TypeMismatch { .. })
+            ));
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test incr() with overflow error.
+    #[tokio::test]
+    async fn test_incr_overflow() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut wm = WorkingMemory::new();
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Set value near i64::MAX
+            let near_max = i64::MAX - 10;
+            wm.set("counter", near_max.to_string().as_bytes(), None)
+                .unwrap();
+
+            // Try to increment by large value - should overflow
+            let result = wm.incr("counter", 100);
+            assert!(matches!(result, Err(WorkingMemoryError::Overflow { .. })));
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test incr() determinism.
+    #[tokio::test]
+    async fn test_incr_determinism() {
+        let sim = Simulation::new(SimConfig::with_seed(99));
+
+        sim.run(|mut env| async move {
+            let mut wm = WorkingMemory::new();
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Use deterministic RNG to generate deltas
+            for _ in 0..5 {
+                let delta = env.rng.next_int(-10, 10);
+                wm.incr("counter", delta).unwrap();
+            }
+
+            // Final value should be deterministic
+            let final_value_str = std::str::from_utf8(wm.get("counter").unwrap()).unwrap();
+            let final_value: i64 = final_value_str.parse().unwrap();
+
+            // With seed 99, this sequence should produce consistent result
+            assert!(
+                final_value.abs() <= 50,
+                "value should be within expected range"
+            );
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test append() with new key (Kelpie-compatible).
+    #[tokio::test]
+    async fn test_append_new_key() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut wm = WorkingMemory::new();
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Append to non-existent key
+            wm.append("log", b"first").unwrap();
+            assert_eq!(wm.get("log"), Some(b"first".as_slice()));
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test append() with existing key.
+    #[tokio::test]
+    async fn test_append_existing_key() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut wm = WorkingMemory::new();
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Set initial value
+            wm.set("log", b"first", None).unwrap();
+
+            // Append multiple times
+            wm.append("log", b"|second").unwrap();
+            wm.append("log", b"|third").unwrap();
+
+            assert_eq!(wm.get("log"), Some(b"first|second|third".as_slice()));
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test append() with expired key.
+    #[tokio::test]
+    async fn test_append_expired_key() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut wm = WorkingMemory::new();
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Set key with short TTL
+            wm.set("log", b"old", Some(1000)).unwrap();
+
+            // Advance time past expiration
+            let _ = env.clock.advance_ms(1500);
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Append should treat expired key as empty
+            wm.append("log", b"new").unwrap();
+            assert_eq!(wm.get("log"), Some(b"new".as_slice()));
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test append() with size limit error.
+    #[tokio::test]
+    async fn test_append_size_limit() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut wm = WorkingMemory::new();
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Fill key near size limit
+            let large_value = vec![b'x'; WORKING_MEMORY_ENTRY_SIZE_BYTES_MAX - 100];
+            wm.set("log", &large_value, None).unwrap();
+
+            // Try to append beyond limit
+            let append_value = vec![b'y'; 200];
+            let result = wm.append("log", &append_value);
+            assert!(matches!(
+                result,
+                Err(WorkingMemoryError::EntryTooLarge { .. })
+            ));
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test touch() with existing key (Kelpie-compatible).
+    #[tokio::test]
+    async fn test_touch_existing_key() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut wm = WorkingMemory::new();
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Set key with TTL
+            wm.set("key", b"value", Some(2000)).unwrap();
+
+            // Advance time partway
+            let _ = env.clock.advance_ms(1500);
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Touch to refresh TTL
+            wm.touch("key").unwrap();
+
+            // Advance time again by 1500ms (would have expired without touch)
+            let _ = env.clock.advance_ms(1500);
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Should still exist because TTL was refreshed
+            assert!(wm.exists("key"));
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test touch() with non-existent key.
+    #[tokio::test]
+    async fn test_touch_nonexistent_key() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|_env| async move {
+            let mut wm = WorkingMemory::new();
+
+            // Try to touch non-existent key
+            let result = wm.touch("nonexistent");
+            assert!(matches!(
+                result,
+                Err(WorkingMemoryError::KeyNotFound { .. })
+            ));
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test touch() with expired key.
+    #[tokio::test]
+    async fn test_touch_expired_key() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut wm = WorkingMemory::new();
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Set key with short TTL
+            wm.set("key", b"value", Some(1000)).unwrap();
+
+            // Advance time past expiration
+            let _ = env.clock.advance_ms(1500);
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Try to touch expired key - should fail
+            let result = wm.touch("key");
+            assert!(matches!(
+                result,
+                Err(WorkingMemoryError::KeyNotFound { .. })
+            ));
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test atomic operations together.
+    #[tokio::test]
+    async fn test_atomic_operations_combined() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut wm = WorkingMemory::new();
+            wm.set_clock_ms(env.clock.now_ms());
+
+            // Increment counter
+            wm.incr("requests", 1).unwrap();
+            wm.incr("requests", 1).unwrap();
+            wm.incr("requests", 1).unwrap();
+
+            // Append to log
+            wm.append("log", b"Request 1|").unwrap();
+            wm.append("log", b"Request 2|").unwrap();
+            wm.append("log", b"Request 3").unwrap();
+
+            // Touch to refresh TTL
+            wm.touch("requests").unwrap();
+            wm.touch("log").unwrap();
+
+            // Verify values
+            assert_eq!(wm.get("requests"), Some(b"3".as_slice()));
+            assert_eq!(
+                wm.get("log"),
+                Some(b"Request 1|Request 2|Request 3".as_slice())
+            );
+
+            // Both should still exist
+            assert!(wm.exists("requests"));
+            assert!(wm.exists("log"));
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
 }
 
 // =============================================================================
@@ -836,7 +1419,9 @@ mod property_tests {
                     ttl_ms,
                 } => {
                     let value = vec![0u8; *value_len];
-                    if self.inner.set(key, &value, Some(*ttl_ms)).is_ok() && !self.known_keys.contains(key) {
+                    if self.inner.set(key, &value, Some(*ttl_ms)).is_ok()
+                        && !self.known_keys.contains(key)
+                    {
                         self.known_keys.push(key.clone());
                     }
                 }

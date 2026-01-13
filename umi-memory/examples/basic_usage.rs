@@ -20,27 +20,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("--- Remembering facts ---");
 
     let result1 = memory
-        .remember("Alice works at Acme Corp as a software engineer", RememberOptions::default())
+        .remember(
+            "Alice works at Acme Corp as a software engineer",
+            RememberOptions::default(),
+        )
         .await?;
-    println!("  Stored {} entities from first remember", result1.entity_count());
+    println!(
+        "  Stored {} entities from first remember",
+        result1.entity_count()
+    );
 
     let result2 = memory
         .remember("Bob is the CTO at TechCo", RememberOptions::default())
         .await?;
-    println!("  Stored {} entities from second remember", result2.entity_count());
+    println!(
+        "  Stored {} entities from second remember",
+        result2.entity_count()
+    );
 
     let result3 = memory
-        .remember("Alice and Bob are collaborating on a new project", RememberOptions::default())
+        .remember(
+            "Alice and Bob are collaborating on a new project",
+            RememberOptions::default(),
+        )
         .await?;
-    println!("  Stored {} entities from third remember\n", result3.entity_count());
+    println!(
+        "  Stored {} entities from third remember\n",
+        result3.entity_count()
+    );
 
     // === Recall Memories ===
     println!("--- Recalling memories ---");
 
     // Query 1: Specific person
-    let alice_results = memory
-        .recall("Alice", RecallOptions::default())
-        .await?;
+    let alice_results = memory.recall("Alice", RecallOptions::default()).await?;
     println!("  Query: 'Alice'");
     println!("  Found {} results:", alice_results.len());
     for entity in alice_results.iter().take(3) {
@@ -49,9 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Query 2: Company
-    let acme_results = memory
-        .recall("Acme Corp", RecallOptions::default())
-        .await?;
+    let acme_results = memory.recall("Acme Corp", RecallOptions::default()).await?;
     println!("  Query: 'Acme Corp'");
     println!("  Found {} results:", acme_results.len());
     for entity in acme_results.iter().take(3) {
@@ -76,10 +87,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let update_result = memory
         .remember("Alice now works at TechCo", RememberOptions::default())
         .await?;
-    println!("  Stored {} entities from update", update_result.entity_count());
+    println!(
+        "  Stored {} entities from update",
+        update_result.entity_count()
+    );
 
     if update_result.has_evolutions() {
-        println!("  ✓ Evolution detected! ({} evolutions)", update_result.evolutions.len());
+        println!(
+            "  ✓ Evolution detected! ({} evolutions)",
+            update_result.evolutions.len()
+        );
         for evolution in &update_result.evolutions {
             println!("    - Type: {:?}", evolution.evolution_type);
         }

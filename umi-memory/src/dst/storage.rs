@@ -249,9 +249,7 @@ impl SimStorage {
             FaultType::StorageWriteFail => {
                 StorageError::Write(format!("injected {operation} fault"))
             }
-            FaultType::StorageReadFail => {
-                StorageError::Read(format!("injected {operation} fault"))
-            }
+            FaultType::StorageReadFail => StorageError::Read(format!("injected {operation} fault")),
             FaultType::StorageDeleteFail => {
                 StorageError::Delete(format!("injected {operation} fault"))
             }

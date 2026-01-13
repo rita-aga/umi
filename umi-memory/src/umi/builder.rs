@@ -182,23 +182,31 @@ mod tests {
     #[should_panic(expected = "LLM provider is required")]
     fn test_builder_missing_llm() {
         use crate::umi::Memory;
-        let _memory: Memory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend> =
-            MemoryBuilder::new()
-                .with_embedder(SimEmbeddingProvider::with_seed(42))
-                .with_vector(SimVectorBackend::new(42))
-                .with_storage(SimStorageBackend::new(SimConfig::with_seed(42)))
-                .build();
+        let _memory: Memory<
+            SimLLMProvider,
+            SimEmbeddingProvider,
+            SimStorageBackend,
+            SimVectorBackend,
+        > = MemoryBuilder::new()
+            .with_embedder(SimEmbeddingProvider::with_seed(42))
+            .with_vector(SimVectorBackend::new(42))
+            .with_storage(SimStorageBackend::new(SimConfig::with_seed(42)))
+            .build();
     }
 
     #[test]
     #[should_panic(expected = "Embedder is required")]
     fn test_builder_missing_embedder() {
         use crate::umi::Memory;
-        let _memory: Memory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend> =
-            MemoryBuilder::new()
-                .with_llm(SimLLMProvider::with_seed(42))
-                .with_vector(SimVectorBackend::new(42))
-                .with_storage(SimStorageBackend::new(SimConfig::with_seed(42)))
-                .build();
+        let _memory: Memory<
+            SimLLMProvider,
+            SimEmbeddingProvider,
+            SimStorageBackend,
+            SimVectorBackend,
+        > = MemoryBuilder::new()
+            .with_llm(SimLLMProvider::with_seed(42))
+            .with_vector(SimVectorBackend::new(42))
+            .with_storage(SimStorageBackend::new(SimConfig::with_seed(42)))
+            .build();
     }
 }

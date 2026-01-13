@@ -19,6 +19,7 @@ use std::collections::HashMap;
 
 use super::block::{MemoryBlock, MemoryBlockId, MemoryBlockType};
 use crate::constants::{
+    CORE_MEMORY_BLOCK_IMPORTANCE_MAX, CORE_MEMORY_BLOCK_IMPORTANCE_MIN,
     CORE_MEMORY_BLOCK_SIZE_BYTES_MAX, CORE_MEMORY_SIZE_BYTES_MAX, CORE_MEMORY_SIZE_BYTES_MIN,
 };
 
@@ -278,7 +279,9 @@ impl CoreMemory {
     /// Get block content by type.
     #[must_use]
     pub fn get_content(&self, block_type: MemoryBlockType) -> Option<&str> {
-        self.blocks_by_type.get(&block_type).map(super::block::MemoryBlock::content)
+        self.blocks_by_type
+            .get(&block_type)
+            .map(super::block::MemoryBlock::content)
     }
 
     /// Check if a block type exists.
@@ -304,6 +307,54 @@ impl CoreMemory {
 
                 Ok(block)
             }
+            None => Err(CoreMemoryError::BlockNotFound {
+                block_type: block_type.to_string(),
+            }),
+        }
+    }
+
+    /// Set importance for a block.
+    ///
+    /// # Errors
+    /// Returns error if block doesn't exist or importance is invalid.
+    pub fn set_block_importance(
+        &mut self,
+        block_type: MemoryBlockType,
+        importance: f64,
+    ) -> CoreMemoryResult<()> {
+        // Preconditions
+        assert!(
+            importance >= CORE_MEMORY_BLOCK_IMPORTANCE_MIN
+                && importance <= CORE_MEMORY_BLOCK_IMPORTANCE_MAX,
+            "importance {importance} outside valid range"
+        );
+
+        match self.blocks_by_type.get_mut(&block_type) {
+            Some(block) => {
+                block.set_importance(importance);
+
+                // Postcondition
+                assert_eq!(
+                    block.importance(),
+                    importance,
+                    "importance must be set correctly"
+                );
+
+                Ok(())
+            }
+            None => Err(CoreMemoryError::BlockNotFound {
+                block_type: block_type.to_string(),
+            }),
+        }
+    }
+
+    /// Get importance for a block.
+    ///
+    /// # Errors
+    /// Returns error if block doesn't exist.
+    pub fn get_block_importance(&self, block_type: MemoryBlockType) -> CoreMemoryResult<f64> {
+        match self.blocks_by_type.get(&block_type) {
+            Some(block) => Ok(block.importance()),
             None => Err(CoreMemoryError::BlockNotFound {
                 block_type: block_type.to_string(),
             }),
@@ -832,6 +883,146 @@ mod dst_tests {
 
             assert!(sys_pos < human_pos);
             assert!(human_pos < facts_pos);
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test importance rendering in XML (Kelpie integration).
+    #[tokio::test]
+    async fn test_render_with_importance() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut core = CoreMemory::new();
+            core.set_clock_ms(env.clock.now_ms());
+
+            // Add blocks with default importance
+            core.set_block(MemoryBlockType::System, "System prompt")
+                .unwrap();
+            core.set_block(MemoryBlockType::Human, "User info").unwrap();
+
+            // Set different importance levels
+            core.set_block_importance(MemoryBlockType::System, 0.95)
+                .unwrap();
+            core.set_block_importance(MemoryBlockType::Human, 0.75)
+                .unwrap();
+
+            let rendered = core.render();
+
+            // Verify importance is in XML
+            assert!(rendered.contains("importance=\"0.95\""));
+            assert!(rendered.contains("importance=\"0.75\""));
+
+            // Verify structure
+            assert!(rendered.starts_with("<core_memory>"));
+            assert!(rendered.ends_with("</core_memory>"));
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test importance get/set operations.
+    #[tokio::test]
+    async fn test_importance_operations() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut core = CoreMemory::new();
+            core.set_clock_ms(env.clock.now_ms());
+
+            // Add a block
+            core.set_block(MemoryBlockType::System, "System prompt")
+                .unwrap();
+
+            // Get default importance
+            let default_importance = core.get_block_importance(MemoryBlockType::System).unwrap();
+            assert_eq!(default_importance, 0.5);
+
+            // Set importance to 0.8
+            core.set_block_importance(MemoryBlockType::System, 0.8)
+                .unwrap();
+            let new_importance = core.get_block_importance(MemoryBlockType::System).unwrap();
+            assert_eq!(new_importance, 0.8);
+
+            // Test boundary values
+            core.set_block_importance(MemoryBlockType::System, 0.0)
+                .unwrap();
+            assert_eq!(
+                core.get_block_importance(MemoryBlockType::System).unwrap(),
+                0.0
+            );
+
+            core.set_block_importance(MemoryBlockType::System, 1.0)
+                .unwrap();
+            assert_eq!(
+                core.get_block_importance(MemoryBlockType::System).unwrap(),
+                1.0
+            );
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test importance error handling.
+    #[tokio::test]
+    async fn test_importance_error_handling() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|_env| async move {
+            let mut core = CoreMemory::new();
+
+            // Try to set importance on non-existent block
+            let result = core.set_block_importance(MemoryBlockType::System, 0.5);
+            assert!(matches!(result, Err(CoreMemoryError::BlockNotFound { .. })));
+
+            // Try to get importance on non-existent block
+            let result = core.get_block_importance(MemoryBlockType::System);
+            assert!(matches!(result, Err(CoreMemoryError::BlockNotFound { .. })));
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test importance determinism within a run.
+    #[tokio::test]
+    async fn test_importance_determinism() {
+        let sim = Simulation::new(SimConfig::with_seed(99));
+
+        sim.run(|mut env| async move {
+            let mut core = CoreMemory::new();
+            core.set_clock_ms(env.clock.now_ms());
+
+            // Test that importance is preserved across operations
+            core.set_block(MemoryBlockType::System, "test").unwrap();
+
+            // Generate random importance
+            let importance = env.rng.next_float() * 0.5 + 0.5; // 0.5-1.0 range
+            core.set_block_importance(MemoryBlockType::System, importance)
+                .unwrap();
+
+            // Retrieve and verify it matches
+            let retrieved = core.get_block_importance(MemoryBlockType::System).unwrap();
+            assert!(
+                (importance - retrieved).abs() < 0.00001,
+                "importance should be preserved"
+            );
+
+            // Verify importance is in rendered XML
+            let rendered = core.render();
+            let expected_attr = format!("importance=\"{:.2}\"", importance);
+            assert!(
+                rendered.contains(&expected_attr),
+                "XML should contain importance attribute"
+            );
 
             Ok::<(), std::convert::Infallible>(())
         })

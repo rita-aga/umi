@@ -528,7 +528,11 @@ impl<
                 .await
             {
                 Ok(result) => {
-                    tracing::event!(tracing::Level::INFO, extracted_count = result.entities.len(), "Entities extracted");
+                    tracing::event!(
+                        tracing::Level::INFO,
+                        extracted_count = result.entities.len(),
+                        "Entities extracted"
+                    );
                     result.entities
                 }
                 Err(_) => vec![], // Extraction failed, will use fallback
@@ -563,7 +567,11 @@ impl<
 
             match self.embedder.embed_batch(&contents).await {
                 Ok(embeddings) => {
-                    tracing::event!(tracing::Level::INFO, embedding_count = embeddings.len(), "Embeddings generated");
+                    tracing::event!(
+                        tracing::Level::INFO,
+                        embedding_count = embeddings.len(),
+                        "Embeddings generated"
+                    );
                     // Set embeddings on entities
                     for (entity, embedding) in to_store.iter_mut().zip(embeddings) {
                         entity.set_embedding(embedding);
@@ -620,7 +628,12 @@ impl<
         // Postcondition (TigerStyle)
         debug_assert!(!entities.is_empty(), "must store at least one entity");
 
-        tracing::event!(tracing::Level::INFO, stored_count = entities.len(), evolution_count = evolutions.len(), "Entities stored");
+        tracing::event!(
+            tracing::Level::INFO,
+            stored_count = entities.len(),
+            evolution_count = evolutions.len(),
+            "Entities stored"
+        );
 
         Ok(RememberResult::new(entities, evolutions))
     }
@@ -664,12 +677,13 @@ impl<
         };
 
         // Build search options
-        let mut search_options = SearchOptions::new()
-            .with_limit(effective_limit)
-            .map_err(|_e| MemoryError::InvalidLimit {
-                value: effective_limit,
-                max: MEMORY_RECALL_LIMIT_MAX,
-            })?;
+        let mut search_options =
+            SearchOptions::new()
+                .with_limit(effective_limit)
+                .map_err(|_e| MemoryError::InvalidLimit {
+                    value: effective_limit,
+                    max: MEMORY_RECALL_LIMIT_MAX,
+                })?;
 
         // Apply deep_search setting
         if let Some(deep) = options.deep_search {
@@ -1145,12 +1159,14 @@ mod tests {
 // Sim Constructor
 // =============================================================================
 
-impl Memory<
-    crate::llm::SimLLMProvider,
-    crate::embedding::SimEmbeddingProvider,
-    crate::storage::SimStorageBackend,
-    crate::storage::SimVectorBackend,
-> {
+impl
+    Memory<
+        crate::llm::SimLLMProvider,
+        crate::embedding::SimEmbeddingProvider,
+        crate::storage::SimStorageBackend,
+        crate::storage::SimVectorBackend,
+    >
+{
     /// Create a deterministic simulation Memory for testing.
     ///
     /// All components (LLM, embedder, vector, storage) use the same seed
@@ -1646,9 +1662,7 @@ mod dst_tests {
             // Use without_extraction to ensure deterministic entities
             for i in 0..10 {
                 let opts = RememberOptions::default().without_extraction();
-                memory
-                    .remember(&format!("Entity number {i}"), opts)
-                    .await?;
+                memory.remember(&format!("Entity number {i}"), opts).await?;
             }
 
             // Recall with text search should still work (fallback path)

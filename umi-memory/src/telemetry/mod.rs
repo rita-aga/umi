@@ -39,7 +39,10 @@ use tracing_subscriber::layer::SubscriberExt;
 #[cfg(feature = "opentelemetry")]
 use tracing_subscriber::Registry;
 
-use crate::constants::{TELEMETRY_BATCH_SIZE_MAX, TELEMETRY_EXPORT_TIMEOUT_MS, TELEMETRY_SAMPLING_RATE_DEFAULT, TELEMETRY_SAMPLING_RATE_MAX, TELEMETRY_SAMPLING_RATE_MIN};
+use crate::constants::{
+    TELEMETRY_BATCH_SIZE_MAX, TELEMETRY_EXPORT_TIMEOUT_MS, TELEMETRY_SAMPLING_RATE_DEFAULT,
+    TELEMETRY_SAMPLING_RATE_MAX, TELEMETRY_SAMPLING_RATE_MIN,
+};
 use std::time::Duration;
 use thiserror::Error;
 
@@ -50,21 +53,21 @@ pub enum TelemetryError {
     #[error("telemetry initialization failed: {reason}")]
     InitFailed {
         /// The reason for the failure
-        reason: String
+        reason: String,
     },
 
     /// Invalid sampling rate provided
     #[error("invalid sampling rate: {rate} (must be in [0.0, 1.0])")]
     InvalidSamplingRate {
         /// The invalid sampling rate value
-        rate: f64
+        rate: f64,
     },
 
     /// Invalid endpoint configuration
     #[error("invalid endpoint: {endpoint}")]
     InvalidEndpoint {
         /// The invalid endpoint string
-        endpoint: String
+        endpoint: String,
     },
 
     /// OpenTelemetry feature is not enabled
@@ -110,7 +113,8 @@ impl Default for TelemetryConfig {
 
 impl TelemetryConfig {
     /// Create a new builder for `TelemetryConfig`
-    #[must_use] pub fn builder() -> TelemetryConfigBuilder {
+    #[must_use]
+    pub fn builder() -> TelemetryConfigBuilder {
         TelemetryConfigBuilder::default()
     }
 
@@ -139,9 +143,7 @@ impl TelemetryConfig {
 
         if self.batch_size_max == 0 || self.batch_size_max > TELEMETRY_BATCH_SIZE_MAX {
             return Err(TelemetryError::InitFailed {
-                reason: format!(
-                    "batch_size_max must be in (0, {TELEMETRY_BATCH_SIZE_MAX}]"
-                ),
+                reason: format!("batch_size_max must be in (0, {TELEMETRY_BATCH_SIZE_MAX}]"),
             });
         }
 

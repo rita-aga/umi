@@ -72,8 +72,8 @@ pub struct MemoryConfig {
 impl Default for MemoryConfig {
     fn default() -> Self {
         Self {
-            core_memory_bytes: 32 * 1024,         // 32KB
-            working_memory_bytes: 1024 * 1024,    // 1MB
+            core_memory_bytes: 32 * 1024,                  // 32KB
+            working_memory_bytes: 1024 * 1024,             // 1MB
             working_memory_ttl: Duration::from_secs(3600), // 1 hour
             generate_embeddings: true,
             embedding_batch_size: 100,

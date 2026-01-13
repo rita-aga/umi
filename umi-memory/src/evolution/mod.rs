@@ -1096,7 +1096,11 @@ mod dst_tests {
                 .detect(&new_entity, &existing, DetectionOptions::default())
                 .await;
 
-            println!("Result with {} existing entities: {:?}", existing.len(), result);
+            println!(
+                "Result with {} existing entities: {:?}",
+                existing.len(),
+                result
+            );
 
             // PROPER VERIFICATION: Even with multiple entities, fault should cause Ok(None)
             assert!(result.is_ok(), "BUG: Should return Ok even with faults");
