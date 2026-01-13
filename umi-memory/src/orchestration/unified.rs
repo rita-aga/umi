@@ -1656,4 +1656,116 @@ mod dst_tests {
         .await
         .unwrap();
     }
+
+    // =========================================================================
+    // CategoryEvolver Integration Tests (Phase 5)
+    // =========================================================================
+
+    /// Test that CategoryEvolver tracks entity type accesses during remember().
+    #[tokio::test]
+    async fn test_category_evolver_tracks_remember() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut memory = create_unified_in_sim(42, env.clock.clone());
+
+            // Initially no accesses
+            assert_eq!(
+                memory.category_evolver().total_accesses(),
+                0,
+                "should start with 0 accesses"
+            );
+
+            // Remember something (will extract entities and track them)
+            let _ = memory.remember("Alice works at Acme Corp").await;
+
+            // Should have tracked accesses (at least 1 for the Note fallback)
+            let total = memory.category_evolver().total_accesses();
+            assert!(
+                total > 0,
+                "should track accesses after remember(), got {}",
+                total
+            );
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test that CategoryEvolver provides evolution suggestions after enough samples.
+    #[tokio::test]
+    async fn test_category_evolver_evolution_suggestions() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut memory = create_unified_in_sim(42, env.clock.clone());
+
+            // Remember many things to generate enough samples (default min is 100)
+            for i in 0..110 {
+                let text = format!("Person {} works on project {}", i, i % 5);
+                let _ = memory.remember(&text).await;
+            }
+
+            // Check total accesses
+            let total = memory.category_evolver().total_accesses();
+            assert!(
+                total >= 100,
+                "should have 100+ accesses for analysis, got {}",
+                total
+            );
+
+            // Get evolution suggestions (may be empty if no strong patterns)
+            let suggestions = memory.get_evolution_suggestions();
+            println!("Evolution suggestions after {} accesses: {:?}", total, suggestions.len());
+
+            // At minimum, the analysis should run without error
+            // Whether we get suggestions depends on the access patterns
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Test that block usage is tracked correctly.
+    #[tokio::test]
+    async fn test_category_evolver_block_usage_tracking() {
+        let sim = Simulation::new(SimConfig::with_seed(42));
+
+        sim.run(|env| async move {
+            let mut memory = create_unified_in_sim(42, env.clock.clone());
+
+            // Remember several things
+            for _ in 0..5 {
+                let _ = memory.remember("Test note for tracking").await;
+            }
+
+            // Check that block usage is being tracked
+            // Notes go to the Note entity type which maps to Scratch block
+            let scratch_usage = memory.block_usage(MemoryBlockType::Scratch);
+
+            // We should have some usage tracked
+            let total = memory.category_evolver().total_accesses();
+            println!(
+                "Block usage after {} accesses - Scratch: {:.2}%",
+                total,
+                scratch_usage * 100.0
+            );
+
+            // Verify tracking happened
+            assert!(total > 0, "should have tracked accesses");
+
+            // Scratch block should have usage since we stored notes
+            assert!(
+                scratch_usage > 0.0,
+                "Scratch block should have usage after storing notes, got {}",
+                scratch_usage
+            );
+
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .unwrap();
+    }
 }
