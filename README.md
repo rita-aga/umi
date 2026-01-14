@@ -21,7 +21,7 @@ Umi provides infrastructure for building AI agents that:
 
 ### Python
 
-**Status**: 🔶 Experimental - Low-level memory primitives only. See [PYTHON.md](PYTHON.md) for full details.
+**Status**: ✅ Feature Complete (v0.2.0) - Full async Memory API with real provider support. See [PYTHON.md](PYTHON.md) for full details.
 
 ```bash
 # Install from source (not yet on PyPI)
@@ -31,28 +31,37 @@ maturin develop  # Build and install locally
 ```
 
 ```python
+import asyncio
 import umi
 
-# Core Memory (32KB, always in LLM context)
-core = umi.CoreMemory()
-core.set_block("system", "You are a helpful assistant.")
-core.set_block("human", "User prefers concise responses.")
-context = core.render()  # XML for LLM context
+async def main():
+    # Production with real providers
+    memory = umi.Memory.with_anthropic(
+        anthropic_key="sk-ant-...",
+        openai_key="sk-...",
+        db_path="./umi_db"
+    )
 
-# Working Memory (1MB KV store with TTL)
-working = umi.WorkingMemory()
-working.set("session_id", b"abc123")
-value = working.get("session_id")
+    # Store information
+    result = await memory.remember("Alice works at Acme Corp")
+    print(f"Stored {result.entity_count()} entities")
 
-# Entities for storage
-entity = umi.Entity("person", "Alice", "Software engineer at Acme")
-print(f"{entity.name}: {entity.content}")
+    # Retrieve information
+    entities = await memory.recall("Who works at Acme?")
+    for entity in entities:
+        print(f"- {entity.name}: {entity.content}")
+
+asyncio.run(main())
 ```
 
-**What works**: `CoreMemory`, `WorkingMemory`, `Entity`, `EvolutionRelation`
-**What's missing**: High-level `Memory` class, real LLM providers, async support
+**What works**:
+- Full `Memory` API with async/await support
+- Real LLM providers (Anthropic, OpenAI)
+- Storage backends (Lance, Postgres)
+- `CoreMemory`, `WorkingMemory`, `Entity`, options types
+- Deterministic testing with sim providers
 
-See [PYTHON.md](PYTHON.md) for roadmap and contributing guide.
+See [PYTHON.md](PYTHON.md) for comprehensive documentation and examples.
 
 ### Rust
 
@@ -140,7 +149,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | Component | Description | Status | Tests |
 |-----------|-------------|--------|-------|
 | **umi-memory** | Rust core (memory tiers, DST) | ✅ Complete | ~813 |
-| **umi-py** | PyO3 bindings (CoreMemory, WorkingMemory, Entity) | 🔶 Partial | - |
+| **umi-py** | PyO3 bindings (full Memory API, async/await) | ✅ Complete | 23 |
 | Memory API | Main orchestrator with remember/recall | ✅ Complete | ✓ |
 | MemoryBuilder | Builder pattern for Memory construction | ✅ Complete | ✓ |
 | MemoryConfig | Global configuration system | ✅ Complete | ✓ |
@@ -168,7 +177,7 @@ let llm = umi_memory::llm::AnthropicProvider::new(api_key);
 let llm = umi_memory::llm::OpenAIProvider::new(api_key);
 ```
 
-*Note: Python bindings do not yet support LLM providers. See [PYTHON.md](PYTHON.md).*
+*Note: Python bindings support all LLM providers through convenient constructors. See [PYTHON.md](PYTHON.md).*
 
 ### Storage Backends
 
@@ -230,7 +239,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-*Note: Python bindings currently only support low-level primitives (`CoreMemory`, `WorkingMemory`). High-level `Memory` class with LLM integration is planned for v0.3.0.*
+*Note: Python bindings (v0.2.0) include full `Memory` API with async/await, real LLM providers, and convenient constructors like `Memory.with_anthropic()`. See [PYTHON.md](PYTHON.md) for Python examples.*
 
 ## Configuration
 
@@ -319,9 +328,10 @@ DST_SEED=12345 cargo test --all-features
 # Rust with coverage
 cargo tarpaulin --all-features --out Html
 
-# Python tests (not yet implemented)
-# pip install -e ".[dev]"
-# pytest -v
+# Python tests (23 tests with pytest)
+cd umi-py
+pip install pytest pytest-asyncio
+pytest tests/ -v
 ```
 
 ### Fault Injection (Rust)
@@ -340,14 +350,14 @@ sim.run(|env| async move {
 }).await.unwrap();
 ```
 
-*Note: Python bindings do not yet expose fault injection. See [PYTHON.md](PYTHON.md).*
+*Note: Python bindings currently use simulation providers for testing. Fault injection with real providers is planned.*
 
 ### Test Coverage
 
 | Category | Tests | Status |
 |----------|-------|--------|
 | **Rust Core** | ~813 | ✅ Passing |
-| **Python Layer** | 0 | ⚠️ Not Implemented |
+| **Python Bindings** | 23 | ✅ Passing |
 
 ## Performance
 
@@ -363,15 +373,16 @@ sim.run(|env| async move {
 
 ### Python Development
 
-*Note: Python tests not yet implemented. PyO3 bindings can be built with:*
-
 ```bash
 cd umi-py
-pip install maturin
+pip install maturin pytest pytest-asyncio
 maturin develop  # Build and install locally
 
-# Test the bindings work
-python -c "import umi; print(umi.CoreMemory())"
+# Run tests (23 tests)
+pytest tests/ -v
+
+# Test basic functionality
+python test_bindings.py
 ```
 
 ### Rust Development
@@ -401,8 +412,8 @@ Before every commit:
 # Rust (required)
 cargo fmt && cargo clippy --all-features -- -D warnings && cargo test --all-features
 
-# Python (when Python tests are implemented)
-# ruff check . && ruff format . && pytest
+# Python (if modifying Python bindings)
+cd umi-py && pytest tests/ -v
 ```
 
 ## Project Structure
@@ -423,8 +434,11 @@ umi/
 │   │   └── constants.rs    # TigerStyle limits
 │   └── benches/            # Benchmarks
 │
-├── umi-py/                 # PyO3 bindings (planned)
-│   └── src/lib.rs
+├── umi-py/                 # PyO3 Python bindings (v0.2.0)
+│   ├── src/lib.rs
+│   ├── tests/              # Pytest tests (23 tests)
+│   ├── examples/           # Example scripts
+│   └── umi.pyi             # Type stubs
 │
 ├── docs/                   # Documentation
 │   └── adr/                # Architecture Decision Records
@@ -446,9 +460,9 @@ See [VISION.md](./VISION.md) for detailed roadmap.
 
 **Next priorities:**
 
-1. **PyO3 bindings** (P0) - Connect Python to Rust core
-2. **Real Postgres backend** (P0) - Persistent storage
-3. **PyPI publishing** (P1) - Public release
+1. ✅ ~~**PyO3 bindings** (P0) - Connect Python to Rust core~~ (Completed v0.2.0)
+2. **PyPI publishing** (P0) - Public release of Python bindings
+3. **Integration tests with real providers** (P1) - Test with actual API keys
 4. **Crates.io publishing** (P1) - Rust crate distribution
 
 ## Engineering Principles
