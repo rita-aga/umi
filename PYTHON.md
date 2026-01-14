@@ -46,7 +46,11 @@ Python bindings for Umi Memory using PyO3.
 
 - ⚠️ **Real Provider Integration in Memory** - Memory class currently only works with Sim providers
   - All real provider classes ARE exposed and functional
-  - Just not wired into Memory constructor yet (needs enum-based type erasure)
+  - Technical limitation: Provider traits are not object-safe (LLMProvider has generic method `complete_json<T>`)
+  - Solutions require upstream changes:
+    1. Make umi-memory traits object-safe (remove/redesign generic methods)
+    2. Use enum with all 54 provider combinations (3×2×3×3 variants)
+    3. Accept current limitation (users can use providers directly, just not inject into Memory)
 
 ## Installation
 
