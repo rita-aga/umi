@@ -4,8 +4,7 @@ Python bindings for Umi Memory using PyO3.
 
 ## Status: Feature Complete (v0.2.0)
 
-✅ **All Phases 1-10 Complete** - Full Python bindings with async support!
-⚠️  **Phase 12 Pending** - Real provider injection (requires type erasure)
+✅ **All Phases 1-12 Complete** - Full Python bindings with real provider support!
 
 ### What Works
 
@@ -23,8 +22,11 @@ Python bindings for Umi Memory using PyO3.
 - ✅ **Result Types** (Phase 4)
   - `RememberResult` - Contains stored entities and evolution relationships
 
-- ✅ **Memory Class with Full API** (Phase 5-6)
+- ✅ **Memory Class with Full API** (Phase 5-6, 12)
   - `Memory.sim(seed)` - Create with Sim providers (deterministic testing)
+  - `Memory.with_anthropic()` - Anthropic LLM + OpenAI embeddings + Lance storage
+  - `Memory.with_openai()` - OpenAI LLM + embeddings + Lance storage
+  - `Memory.with_postgres()` - Anthropic LLM + OpenAI embeddings + Postgres storage
   - **Async API**: `remember()`, `recall()`, `forget()`, `get()`, `count()`
   - **Sync API**: `remember_sync()`, `recall_sync()`, `forget_sync()`, `get_sync()`, `count_sync()`
 
@@ -42,15 +44,10 @@ Python bindings for Umi Memory using PyO3.
 - ✅ **Tests** (Phase 10)
   - Basic unit tests with pytest
 
-### What's Not Yet Implemented
-
-- ⚠️ **Real Provider Integration in Memory** - Memory class currently only works with Sim providers
-  - All real provider classes ARE exposed and functional
-  - Technical limitation: Provider traits are not object-safe (LLMProvider has generic method `complete_json<T>`)
-  - Solutions require upstream changes:
-    1. Make umi-memory traits object-safe (remove/redesign generic methods)
-    2. Use enum with all 54 provider combinations (3×2×3×3 variants)
-    3. Accept current limitation (users can use providers directly, just not inject into Memory)
+- ✅ **Real Provider Support** (Phase 12)
+  - Made all provider traits object-safe (using trait objects)
+  - Added convenient constructors for common provider combinations
+  - Full support for Anthropic, OpenAI, Lance, and Postgres in production
 
 ## Installation
 
@@ -67,19 +64,22 @@ pip install target/wheels/umi-*.whl
 
 ## Quick Start
 
-### Async API (Recommended)
+### Production with Real Providers
 
 ```python
 import asyncio
 import umi
 
 async def main():
-    # Create memory with deterministic seed
-    memory = umi.Memory.sim(seed=42)
+    # Create memory with real providers
+    memory = umi.Memory.with_anthropic(
+        anthropic_key="sk-ant-...",
+        openai_key="sk-...",
+        db_path="./umi_db"
+    )
 
     # Store information
-    options = umi.RememberOptions()
-    result = await memory.remember("Alice works at Acme Corp", options)
+    result = await memory.remember("Alice works at Acme Corp", umi.RememberOptions())
     print(f"Stored {result.entity_count()} entities")
 
     # Retrieve information
@@ -87,9 +87,22 @@ async def main():
     for entity in entities:
         print(f"- {entity.name}: {entity.content}")
 
-    # Count total entities
-    total = await memory.count()
-    print(f"Total: {total} entities")
+asyncio.run(main())
+```
+
+### Testing with Sim Providers
+
+```python
+import asyncio
+import umi
+
+async def main():
+    # Create memory with deterministic seed (for testing)
+    memory = umi.Memory.sim(seed=42)
+
+    # Store information
+    result = await memory.remember("Alice works at Acme Corp", umi.RememberOptions())
+    print(f"Stored {result.entity_count()} entities")
 
 asyncio.run(main())
 ```
@@ -105,9 +118,38 @@ entities = memory.recall_sync("Alice", umi.RecallOptions())
 print(f"Found {len(entities)} entities")
 ```
 
-## Provider Classes
+## Memory Constructors
 
-All provider classes are exposed and functional:
+### Convenient Constructors
+
+```python
+# Anthropic LLM + OpenAI embeddings + Lance storage
+memory = umi.Memory.with_anthropic(
+    anthropic_key="sk-ant-...",
+    openai_key="sk-...",
+    db_path="./umi_db"
+)
+
+# OpenAI LLM + embeddings + Lance storage
+memory = umi.Memory.with_openai(
+    openai_key="sk-...",
+    db_path="./umi_db"
+)
+
+# Anthropic LLM + OpenAI embeddings + Postgres storage
+memory = umi.Memory.with_postgres(
+    anthropic_key="sk-ant-...",
+    openai_key="sk-...",
+    postgres_url="postgresql://localhost/umi"
+)
+
+# Simulation providers (deterministic testing)
+memory = umi.Memory.sim(seed=42)
+```
+
+### Individual Provider Classes
+
+All provider classes are also exposed for direct use:
 
 ```python
 # LLM Providers
@@ -129,8 +171,6 @@ vector = umi.LanceVectorBackend.connect(path="./umi_db")
 vector = umi.PostgresVectorBackend.connect(url="postgresql://...")
 vector = umi.SimVectorBackend(seed=42)
 ```
-
-**Note**: Real providers are exposed but not yet integrated into Memory constructor. Memory currently only supports `Memory.sim(seed)` constructor.
 
 ## Options API
 
@@ -232,25 +272,26 @@ pytest umi-py/tests/ -m "not integration"
 
 ## Implementation Notes
 
-### Current Limitations
+### Provider Support
 
-1. **Memory only supports Sim providers** - Real providers (Anthropic, OpenAI, Lance, Postgres) are exposed as classes but not yet integrated into Memory constructor. Requires enum-based type erasure to support all provider combinations.
-
-### Why Sim Providers Only in Memory?
-
-The Rust `Memory` struct is generic over 4 provider types:
+The Rust `Memory` struct uses trait objects internally for runtime polymorphism:
 ```rust
-Memory<L: LLMProvider, E: EmbeddingProvider, S: StorageBackend, V: VectorBackend>
+pub struct Memory {
+    storage: Box<dyn StorageBackend>,
+    extractor: EntityExtractor,
+    retriever: DualRetriever,
+    // ...
+}
 ```
 
-Supporting all combinations in Python requires type erasure (enum or trait objects), which adds significant complexity. The current implementation prioritizes getting a working Memory API with full DST capabilities. Real provider support in Memory is planned for a future release.
+This allows Python bindings to support any provider combination through convenient constructors. The constructors accept concrete provider types and box them into trait objects.
 
 ### Future Work (v0.3.0)
 
-- [ ] Add enum-based type erasure for Memory to support all provider combinations
+- [ ] Additional constructor combinations (e.g., `with_openai_postgres()`)
 - [ ] Integration tests for real providers (Anthropic, OpenAI, LanceDB, Postgres)
-- [ ] Builder pattern for Memory construction
-- [ ] Comprehensive documentation with all provider examples
+- [ ] Comprehensive documentation with production deployment examples
+- [ ] Performance benchmarks with real providers
 
 ## Architecture
 
