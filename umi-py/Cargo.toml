@@ -10,7 +10,14 @@ name = "umi"
 crate-type = ["cdylib"]
 
 [dependencies]
-umi-memory = { path = "../umi-memory" }
+# Enable ALL features for complete Python bindings
+umi-memory = { path = "../umi-memory", features = [
+    "anthropic",          # Anthropic LLM provider
+    "openai",             # OpenAI LLM provider
+    "embedding-openai",   # OpenAI embedding provider
+    "lance",              # LanceDB storage + vector backend
+    "postgres",           # Postgres storage + vector backend
+] }
 pyo3 = { workspace = true }
 pyo3-asyncio = { workspace = true }
 tokio = { workspace = true }

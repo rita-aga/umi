@@ -22,8 +22,9 @@
 //! entity = umi.Entity("person", "Alice", "My friend Alice")
 //! ```
 
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyException, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::{create_exception, PyErr};
 use pyo3::types::PyBytes;
 use std::collections::HashMap;
 
@@ -684,6 +685,793 @@ impl PyEvolutionRelation {
 }
 
 // =============================================================================
+// Provider Classes - LLM
+// =============================================================================
+
+/// Anthropic LLM Provider (Claude).
+///
+/// Uses the Anthropic API for text generation and entity extraction.
+///
+/// Requires `ANTHROPIC_API_KEY` environment variable or pass as constructor argument.
+///
+/// Example:
+///     provider = umi.AnthropicProvider(api_key="sk-ant-...")
+#[pyclass(name = "AnthropicProvider")]
+pub struct PyAnthropicProvider {
+    #[allow(dead_code)]
+    inner: umi_memory::llm::AnthropicProvider,
+}
+
+#[pymethods]
+impl PyAnthropicProvider {
+    /// Create a new Anthropic provider.
+    ///
+    /// Args:
+    ///     api_key: Anthropic API key (sk-ant-...)
+    #[new]
+    fn new(api_key: String) -> PyResult<Self> {
+        let inner = umi_memory::llm::AnthropicProvider::new(api_key);
+        Ok(Self { inner })
+    }
+
+    fn __repr__(&self) -> String {
+        "AnthropicProvider(model='claude-sonnet-4')".to_string()
+    }
+}
+
+/// OpenAI LLM Provider (GPT).
+///
+/// Uses the OpenAI API for text generation and entity extraction.
+///
+/// Requires `OPENAI_API_KEY` environment variable or pass as constructor argument.
+///
+/// Example:
+///     provider = umi.OpenAIProvider(api_key="sk-...")
+#[pyclass(name = "OpenAIProvider")]
+pub struct PyOpenAIProvider {
+    #[allow(dead_code)]
+    inner: umi_memory::llm::OpenAIProvider,
+}
+
+#[pymethods]
+impl PyOpenAIProvider {
+    /// Create a new OpenAI provider.
+    ///
+    /// Args:
+    ///     api_key: OpenAI API key (sk-...)
+    #[new]
+    fn new(api_key: String) -> PyResult<Self> {
+        let inner = umi_memory::llm::OpenAIProvider::new(api_key);
+        Ok(Self { inner })
+    }
+
+    fn __repr__(&self) -> String {
+        "OpenAIProvider(model='gpt-4o')".to_string()
+    }
+}
+
+/// Simulation LLM Provider (for testing).
+///
+/// Deterministic LLM provider for testing. Returns predictable responses based on seed.
+///
+/// Example:
+///     provider = umi.SimLLMProvider(seed=42)
+#[pyclass(name = "SimLLMProvider")]
+pub struct PySimLLMProvider {
+    #[allow(dead_code)]
+    inner: umi_memory::llm::SimLLMProvider,
+}
+
+#[pymethods]
+impl PySimLLMProvider {
+    /// Create a new simulation LLM provider.
+    ///
+    /// Args:
+    ///     seed: Random seed for deterministic behavior
+    #[new]
+    fn new(seed: u64) -> Self {
+        let inner = umi_memory::llm::SimLLMProvider::with_seed(seed);
+        Self { inner }
+    }
+
+    fn __repr__(&self) -> String {
+        "SimLLMProvider(deterministic)".to_string()
+    }
+}
+
+// =============================================================================
+// Provider Classes - Embedding
+// =============================================================================
+
+/// OpenAI Embedding Provider.
+///
+/// Uses OpenAI's text-embedding-3-small model (1536 dimensions).
+///
+/// Example:
+///     provider = umi.OpenAIEmbeddingProvider(api_key="sk-...")
+#[pyclass(name = "OpenAIEmbeddingProvider")]
+pub struct PyOpenAIEmbeddingProvider {
+    #[allow(dead_code)]
+    inner: umi_memory::embedding::OpenAIEmbeddingProvider,
+}
+
+#[pymethods]
+impl PyOpenAIEmbeddingProvider {
+    /// Create a new OpenAI embedding provider.
+    ///
+    /// Args:
+    ///     api_key: OpenAI API key (sk-...)
+    #[new]
+    fn new(api_key: String) -> PyResult<Self> {
+        let inner = umi_memory::embedding::OpenAIEmbeddingProvider::new(api_key);
+        Ok(Self { inner })
+    }
+
+    fn __repr__(&self) -> String {
+        "OpenAIEmbeddingProvider(model='text-embedding-3-small')".to_string()
+    }
+}
+
+/// Simulation Embedding Provider (for testing).
+///
+/// Deterministic embedding provider for testing. Returns predictable embeddings based on seed.
+///
+/// Example:
+///     provider = umi.SimEmbeddingProvider(seed=42)
+#[pyclass(name = "SimEmbeddingProvider")]
+pub struct PySimEmbeddingProvider {
+    #[allow(dead_code)]
+    inner: umi_memory::embedding::SimEmbeddingProvider,
+}
+
+#[pymethods]
+impl PySimEmbeddingProvider {
+    /// Create a new simulation embedding provider.
+    ///
+    /// Args:
+    ///     seed: Random seed for deterministic behavior
+    #[new]
+    fn new(seed: u64) -> Self {
+        let inner = umi_memory::embedding::SimEmbeddingProvider::with_seed(seed);
+        Self { inner }
+    }
+
+    fn __repr__(&self) -> String {
+        "SimEmbeddingProvider(deterministic)".to_string()
+    }
+}
+
+// =============================================================================
+// Provider Classes - Storage Backend
+// =============================================================================
+
+/// LanceDB Storage Backend.
+///
+/// Persistent storage using LanceDB (embedded vector database).
+///
+/// Example:
+///     storage = await umi.LanceStorageBackend.connect(path="./umi_db")
+#[pyclass(name = "LanceStorageBackend")]
+pub struct PyLanceStorageBackend {
+    #[allow(dead_code)]
+    inner: umi_memory::storage::LanceStorageBackend,
+}
+
+#[pymethods]
+impl PyLanceStorageBackend {
+    /// Connect to LanceDB storage (async constructor).
+    ///
+    /// Args:
+    ///     path: Path to LanceDB directory
+    ///
+    /// Returns:
+    ///     Connected storage backend
+    #[staticmethod]
+    #[pyo3(name = "connect")]
+    fn connect_sync(_py: Python<'_>, path: String) -> PyResult<Self> {
+        // Block on async connect
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
+
+        let inner = runtime
+            .block_on(umi_memory::storage::LanceStorageBackend::connect(&path))
+            .map_err(|e| PyValueError::new_err(format!("Failed to connect to LanceDB: {}", e)))?;
+
+        Ok(Self { inner })
+    }
+
+    fn __repr__(&self) -> String {
+        "LanceStorageBackend(connected)".to_string()
+    }
+}
+
+/// Postgres Storage Backend.
+///
+/// Persistent storage using PostgreSQL database.
+///
+/// Example:
+///     storage = await umi.PostgresStorageBackend.connect(url="postgresql://localhost/umi")
+#[pyclass(name = "PostgresStorageBackend")]
+pub struct PyPostgresStorageBackend {
+    #[allow(dead_code)]
+    inner: umi_memory::storage::PostgresBackend,
+}
+
+#[pymethods]
+impl PyPostgresStorageBackend {
+    /// Connect to Postgres storage (async constructor).
+    ///
+    /// Args:
+    ///     url: Postgres connection URL (postgresql://...)
+    ///
+    /// Returns:
+    ///     Connected storage backend
+    #[staticmethod]
+    #[pyo3(name = "connect")]
+    fn connect_sync(_py: Python<'_>, url: String) -> PyResult<Self> {
+        // Block on async connect
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
+
+        let inner = runtime
+            .block_on(umi_memory::storage::PostgresBackend::new(&url))
+            .map_err(|e| PyValueError::new_err(format!("Failed to connect to Postgres: {}", e)))?;
+
+        Ok(Self { inner })
+    }
+
+    fn __repr__(&self) -> String {
+        "PostgresStorageBackend(connected)".to_string()
+    }
+}
+
+/// Simulation Storage Backend (for testing).
+///
+/// In-memory storage backend for testing. Data is not persisted.
+///
+/// Example:
+///     storage = umi.SimStorageBackend(seed=42)
+#[pyclass(name = "SimStorageBackend")]
+pub struct PySimStorageBackend {
+    #[allow(dead_code)]
+    inner: umi_memory::storage::SimStorageBackend,
+}
+
+#[pymethods]
+impl PySimStorageBackend {
+    /// Create a new simulation storage backend.
+    ///
+    /// Args:
+    ///     seed: Random seed for deterministic behavior
+    #[new]
+    fn new(seed: u64) -> Self {
+        let config = umi_memory::dst::SimConfig::with_seed(seed);
+        let inner = umi_memory::storage::SimStorageBackend::new(config);
+        Self { inner }
+    }
+
+    fn __repr__(&self) -> String {
+        "SimStorageBackend(in-memory)".to_string()
+    }
+}
+
+// =============================================================================
+// Provider Classes - Vector Backend
+// =============================================================================
+
+/// LanceDB Vector Backend.
+///
+/// Vector similarity search using LanceDB.
+///
+/// Example:
+///     vector = await umi.LanceVectorBackend.connect(path="./umi_db")
+#[pyclass(name = "LanceVectorBackend")]
+pub struct PyLanceVectorBackend {
+    #[allow(dead_code)]
+    inner: umi_memory::storage::LanceVectorBackend,
+}
+
+#[pymethods]
+impl PyLanceVectorBackend {
+    /// Connect to LanceDB vector backend (async constructor).
+    ///
+    /// Args:
+    ///     path: Path to LanceDB directory
+    ///
+    /// Returns:
+    ///     Connected vector backend
+    #[staticmethod]
+    #[pyo3(name = "connect")]
+    fn connect_sync(_py: Python<'_>, path: String) -> PyResult<Self> {
+        // Block on async connect
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
+
+        let inner = runtime
+            .block_on(umi_memory::storage::LanceVectorBackend::connect(&path))
+            .map_err(|e| PyValueError::new_err(format!("Failed to connect to LanceDB: {}", e)))?;
+
+        Ok(Self { inner })
+    }
+
+    fn __repr__(&self) -> String {
+        "LanceVectorBackend(connected)".to_string()
+    }
+}
+
+/// Postgres Vector Backend.
+///
+/// Vector similarity search using PostgreSQL with pgvector extension.
+///
+/// Example:
+///     vector = await umi.PostgresVectorBackend.connect(url="postgresql://localhost/umi")
+#[pyclass(name = "PostgresVectorBackend")]
+pub struct PyPostgresVectorBackend {
+    #[allow(dead_code)]
+    inner: umi_memory::storage::PostgresVectorBackend,
+}
+
+#[pymethods]
+impl PyPostgresVectorBackend {
+    /// Connect to Postgres vector backend (async constructor).
+    ///
+    /// Args:
+    ///     url: Postgres connection URL (postgresql://...)
+    ///
+    /// Returns:
+    ///     Connected vector backend
+    #[staticmethod]
+    #[pyo3(name = "connect")]
+    fn connect_sync(_py: Python<'_>, url: String) -> PyResult<Self> {
+        // Block on async connect
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
+
+        let inner = runtime
+            .block_on(umi_memory::storage::PostgresVectorBackend::connect(&url))
+            .map_err(|e| PyValueError::new_err(format!("Failed to connect to Postgres: {}", e)))?;
+
+        Ok(Self { inner })
+    }
+
+    fn __repr__(&self) -> String {
+        "PostgresVectorBackend(connected)".to_string()
+    }
+}
+
+/// Simulation Vector Backend (for testing).
+///
+/// In-memory vector backend for testing. Uses simple cosine similarity.
+///
+/// Example:
+///     vector = umi.SimVectorBackend(seed=42)
+#[pyclass(name = "SimVectorBackend")]
+pub struct PySimVectorBackend {
+    #[allow(dead_code)]
+    inner: umi_memory::storage::SimVectorBackend,
+}
+
+#[pymethods]
+impl PySimVectorBackend {
+    /// Create a new simulation vector backend.
+    ///
+    /// Args:
+    ///     seed: Random seed for deterministic behavior
+    #[new]
+    fn new(seed: u64) -> Self {
+        let inner = umi_memory::storage::SimVectorBackend::new(seed);
+        Self { inner }
+    }
+
+    fn __repr__(&self) -> String {
+        "SimVectorBackend(in-memory)".to_string()
+    }
+}
+
+// =============================================================================
+// Options Types
+// =============================================================================
+
+/// Options for remember operations.
+///
+/// Controls how memories are stored, including entity extraction,
+/// evolution tracking, and embedding generation.
+///
+/// Example:
+///     options = umi.RememberOptions()
+///     options = options.without_extraction().with_importance(0.8)
+#[pyclass(name = "RememberOptions")]
+#[derive(Clone)]
+pub struct PyRememberOptions {
+    inner: umi_memory::umi::RememberOptions,
+}
+
+#[pymethods]
+impl PyRememberOptions {
+    /// Create new options with defaults.
+    #[new]
+    fn new() -> Self {
+        Self {
+            inner: umi_memory::umi::RememberOptions::default(),
+        }
+    }
+
+    /// Disable entity extraction (store as raw text).
+    fn without_extraction(mut slf: PyRefMut<'_, Self>) -> PyRefMut<'_, Self> {
+        slf.inner = slf.inner.clone().without_extraction();
+        slf
+    }
+
+    /// Disable evolution tracking.
+    fn without_evolution(mut slf: PyRefMut<'_, Self>) -> PyRefMut<'_, Self> {
+        slf.inner = slf.inner.clone().without_evolution();
+        slf
+    }
+
+    /// Set importance score (0.0-1.0).
+    ///
+    /// Args:
+    ///     importance: Importance score (0.0 = low, 1.0 = high)
+    fn with_importance(mut slf: PyRefMut<'_, Self>, importance: f32) -> PyRefMut<'_, Self> {
+        slf.inner = slf.inner.clone().with_importance(importance);
+        slf
+    }
+
+    /// Disable embedding generation.
+    fn without_embeddings(mut slf: PyRefMut<'_, Self>) -> PyRefMut<'_, Self> {
+        slf.inner = slf.inner.clone().without_embeddings();
+        slf
+    }
+
+    /// Enable embedding generation (default).
+    fn with_embeddings(mut slf: PyRefMut<'_, Self>) -> PyRefMut<'_, Self> {
+        slf.inner = slf.inner.clone().with_embeddings();
+        slf
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "RememberOptions(extract={}, evolve={}, embeddings={}, importance={:.2})",
+            self.inner.extract_entities,
+            self.inner.track_evolution,
+            self.inner.generate_embeddings,
+            self.inner.importance
+        )
+    }
+}
+
+/// Options for recall operations.
+///
+/// Controls how memories are retrieved, including result limits,
+/// deep search, and time range filtering.
+///
+/// Example:
+///     options = umi.RecallOptions().with_limit(20).with_deep_search()
+#[pyclass(name = "RecallOptions")]
+#[derive(Clone)]
+pub struct PyRecallOptions {
+    inner: umi_memory::umi::RecallOptions,
+}
+
+#[pymethods]
+impl PyRecallOptions {
+    /// Create new options with defaults.
+    #[new]
+    fn new() -> Self {
+        Self {
+            inner: umi_memory::umi::RecallOptions::default(),
+        }
+    }
+
+    /// Set maximum number of results (1-100).
+    ///
+    /// Args:
+    ///     limit: Maximum results
+    fn with_limit(mut slf: PyRefMut<'_, Self>, limit: usize) -> PyResult<PyRefMut<'_, Self>> {
+        slf.inner = slf
+            .inner
+            .clone()
+            .with_limit(limit)
+            .map_err(|e| PyValueError::new_err(format!("Invalid limit: {}", e)))?;
+        Ok(slf)
+    }
+
+    /// Enable deep search (LLM rewrites query).
+    fn with_deep_search(mut slf: PyRefMut<'_, Self>) -> PyRefMut<'_, Self> {
+        slf.inner = slf.inner.clone().with_deep_search();
+        slf
+    }
+
+    /// Disable deep search (fast text-only search).
+    fn fast_only(mut slf: PyRefMut<'_, Self>) -> PyRefMut<'_, Self> {
+        slf.inner = slf.inner.clone().fast_only();
+        slf
+    }
+
+    /// Set time range filter (Unix timestamps in milliseconds).
+    ///
+    /// Args:
+    ///     start_ms: Start time (Unix timestamp in milliseconds)
+    ///     end_ms: End time (Unix timestamp in milliseconds)
+    fn with_time_range(
+        mut slf: PyRefMut<'_, Self>,
+        start_ms: u64,
+        end_ms: u64,
+    ) -> PyRefMut<'_, Self> {
+        slf.inner = slf.inner.clone().with_time_range(start_ms, end_ms);
+        slf
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "RecallOptions(limit={}, deep_search={:?})",
+            self.inner.limit, self.inner.deep_search
+        )
+    }
+}
+
+/// Memory configuration.
+///
+/// Controls memory behavior like default recall limits.
+///
+/// Example:
+///     config = umi.MemoryConfig().with_recall_limit(50)
+#[pyclass(name = "MemoryConfig")]
+#[derive(Clone)]
+pub struct PyMemoryConfig {
+    inner: umi_memory::umi::MemoryConfig,
+}
+
+#[pymethods]
+impl PyMemoryConfig {
+    /// Create new config with defaults.
+    #[new]
+    fn new() -> Self {
+        Self {
+            inner: umi_memory::umi::MemoryConfig::default(),
+        }
+    }
+
+    /// Set default recall limit.
+    ///
+    /// Args:
+    ///     limit: Default limit for recall operations
+    fn with_recall_limit(mut slf: PyRefMut<'_, Self>, limit: usize) -> PyRefMut<'_, Self> {
+        slf.inner = slf.inner.clone().with_recall_limit(limit);
+        slf
+    }
+
+    fn __repr__(&self) -> String {
+        format!("MemoryConfig(recall_limit={})", self.inner.default_recall_limit)
+    }
+}
+
+// =============================================================================
+// Result Types
+// =============================================================================
+
+/// Result of a remember operation.
+///
+/// Contains the stored entities and any detected evolution relationships.
+///
+/// Example:
+///     result = await memory.remember("text", options)
+///     print(f"Stored {result.entity_count()} entities")
+#[pyclass(name = "RememberResult")]
+pub struct PyRememberResult {
+    inner: umi_memory::umi::RememberResult,
+}
+
+#[pymethods]
+impl PyRememberResult {
+    /// Get the list of stored entities.
+    #[getter]
+    fn entities(&self) -> Vec<PyEntity> {
+        self.inner
+            .entities
+            .iter()
+            .map(|e| PyEntity::from_rust(e.clone()))
+            .collect()
+    }
+
+    /// Get the list of detected evolution relationships.
+    #[getter]
+    fn evolutions(&self) -> Vec<PyEvolutionRelation> {
+        self.inner
+            .evolutions
+            .iter()
+            .map(|e| PyEvolutionRelation::from_rust(e.clone()))
+            .collect()
+    }
+
+    /// Get the number of stored entities.
+    fn entity_count(&self) -> usize {
+        self.inner.entity_count()
+    }
+
+    /// Check if any evolution relationships were detected.
+    fn has_evolutions(&self) -> bool {
+        self.inner.has_evolutions()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "RememberResult(entities={}, evolutions={})",
+            self.inner.entity_count(),
+            self.inner.evolutions.len()
+        )
+    }
+}
+
+impl PyRememberResult {
+    /// Convert from Rust RememberResult.
+    pub fn from_rust(result: umi_memory::umi::RememberResult) -> Self {
+        Self { inner: result }
+    }
+}
+
+// =============================================================================
+// Memory Class
+// =============================================================================
+
+/// Main memory interface for Umi.
+///
+/// Orchestrates all components for remember/recall operations.
+///
+/// Example (Sim providers):
+///     memory = umi.Memory.sim(seed=42)
+///     result = memory.remember_sync("text", options)
+#[pyclass(name = "Memory")]
+pub struct PyMemory {
+    // For now, only support Sim providers (simplest path)
+    // TODO: Add support for real providers with enum-based type erasure
+    inner: umi_memory::umi::Memory<
+        umi_memory::llm::SimLLMProvider,
+        umi_memory::embedding::SimEmbeddingProvider,
+        umi_memory::storage::SimStorageBackend,
+        umi_memory::storage::SimVectorBackend,
+    >,
+}
+
+#[pymethods]
+impl PyMemory {
+    /// Create a Memory with Sim providers (for testing).
+    ///
+    /// Args:
+    ///     seed: Random seed for deterministic behavior
+    ///
+    /// Example:
+    ///     memory = umi.Memory.sim(seed=42)
+    #[staticmethod]
+    fn sim(seed: u64) -> Self {
+        let inner = umi_memory::umi::Memory::sim(seed);
+        Self { inner }
+    }
+
+    // =========================================================================
+    // Sync API (blocking)
+    // =========================================================================
+
+    /// Store information in memory (blocking).
+    ///
+    /// Args:
+    ///     text: Text to remember
+    ///     options: Remember options
+    ///
+    /// Returns:
+    ///     RememberResult with stored entities and evolutions
+    fn remember_sync(
+        &mut self,
+        text: String,
+        options: PyRememberOptions,
+    ) -> PyResult<PyRememberResult> {
+        // Create a tokio runtime and block on the async method
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
+
+        let result = runtime
+            .block_on(self.inner.remember(&text, options.inner.clone()))
+            .map_err(|e| PyValueError::new_err(format!("Remember failed: {}", e)))?;
+
+        Ok(PyRememberResult::from_rust(result))
+    }
+
+    /// Retrieve memories matching query (blocking).
+    ///
+    /// Args:
+    ///     query: Search query
+    ///     options: Recall options
+    ///
+    /// Returns:
+    ///     List of matching entities
+    fn recall_sync(
+        &self,
+        query: String,
+        options: PyRecallOptions,
+    ) -> PyResult<Vec<PyEntity>> {
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
+
+        let entities = runtime
+            .block_on(self.inner.recall(&query, options.inner.clone()))
+            .map_err(|e| PyValueError::new_err(format!("Recall failed: {}", e)))?;
+
+        Ok(entities.into_iter().map(PyEntity::from_rust).collect())
+    }
+
+    /// Delete entity by ID (blocking).
+    ///
+    /// Args:
+    ///     entity_id: ID of entity to delete
+    ///
+    /// Returns:
+    ///     True if deleted, False if not found
+    fn forget_sync(&mut self, entity_id: String) -> PyResult<bool> {
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
+
+        let deleted = runtime
+            .block_on(self.inner.forget(&entity_id))
+            .map_err(|e| PyValueError::new_err(format!("Forget failed: {}", e)))?;
+
+        Ok(deleted)
+    }
+
+    /// Get entity by ID (blocking).
+    ///
+    /// Args:
+    ///     entity_id: Entity ID
+    ///
+    /// Returns:
+    ///     Entity if found, None otherwise
+    fn get_sync(&self, entity_id: String) -> PyResult<Option<PyEntity>> {
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
+
+        let entity = runtime
+            .block_on(self.inner.get(&entity_id))
+            .map_err(|e| PyValueError::new_err(format!("Get failed: {}", e)))?;
+
+        Ok(entity.map(PyEntity::from_rust))
+    }
+
+    /// Count total entities in storage (blocking).
+    ///
+    /// Returns:
+    ///     Total number of entities
+    fn count_sync(&self) -> PyResult<usize> {
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
+
+        let count = runtime
+            .block_on(self.inner.count())
+            .map_err(|e| PyValueError::new_err(format!("Count failed: {}", e)))?;
+
+        Ok(count)
+    }
+
+    fn __repr__(&self) -> String {
+        "Memory(providers=sim)".to_string()
+    }
+}
+
+// =============================================================================
+// Python Exceptions
+// =============================================================================
+
+// Base exception for all Umi errors
+create_exception!(umi, UmiError, PyException);
+
+// Specific exception types
+create_exception!(umi, EmptyTextError, UmiError);
+create_exception!(umi, TextTooLongError, UmiError);
+create_exception!(umi, EmptyQueryError, UmiError);
+create_exception!(umi, InvalidLimitError, UmiError);
+create_exception!(umi, StorageError, UmiError);
+create_exception!(umi, EmbeddingError, UmiError);
+create_exception!(umi, ProviderError, UmiError);
+
+// =============================================================================
 // Module
 // =============================================================================
 
@@ -700,11 +1488,45 @@ fn umi(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyEntity>()?;
     m.add_class::<PyEvolutionRelation>()?;
 
-    // Convenience aliases (for cleaner API)
-    m.add("CoreMemory", m.getattr("PyCoreMemory")?)?;
-    m.add("WorkingMemory", m.getattr("PyWorkingMemory")?)?;
-    m.add("Entity", m.getattr("PyEntity")?)?;
-    m.add("EvolutionRelation", m.getattr("PyEvolutionRelation")?)?;
+    // LLM Providers
+    m.add_class::<PyAnthropicProvider>()?;
+    m.add_class::<PyOpenAIProvider>()?;
+    m.add_class::<PySimLLMProvider>()?;
+
+    // Embedding Providers
+    m.add_class::<PyOpenAIEmbeddingProvider>()?;
+    m.add_class::<PySimEmbeddingProvider>()?;
+
+    // Storage Backends
+    m.add_class::<PyLanceStorageBackend>()?;
+    m.add_class::<PyPostgresStorageBackend>()?;
+    m.add_class::<PySimStorageBackend>()?;
+
+    // Vector Backends
+    m.add_class::<PyLanceVectorBackend>()?;
+    m.add_class::<PyPostgresVectorBackend>()?;
+    m.add_class::<PySimVectorBackend>()?;
+
+    // Options and Config
+    m.add_class::<PyRememberOptions>()?;
+    m.add_class::<PyRecallOptions>()?;
+    m.add_class::<PyMemoryConfig>()?;
+
+    // Result Types
+    m.add_class::<PyRememberResult>()?;
+
+    // Memory
+    m.add_class::<PyMemory>()?;
+
+    // Exceptions
+    m.add("UmiError", m.py().get_type::<UmiError>())?;
+    m.add("EmptyTextError", m.py().get_type::<EmptyTextError>())?;
+    m.add("TextTooLongError", m.py().get_type::<TextTooLongError>())?;
+    m.add("EmptyQueryError", m.py().get_type::<EmptyQueryError>())?;
+    m.add("InvalidLimitError", m.py().get_type::<InvalidLimitError>())?;
+    m.add("StorageError", m.py().get_type::<StorageError>())?;
+    m.add("EmbeddingError", m.py().get_type::<EmbeddingError>())?;
+    m.add("ProviderError", m.py().get_type::<ProviderError>())?;
 
     Ok(())
 }
