@@ -363,19 +363,15 @@ sim.run(|env| async move {
 
 ### Python Development
 
+*Note: Python tests not yet implemented. PyO3 bindings can be built with:*
+
 ```bash
-# Install in editable mode
-pip install -e ".[dev]"
+cd umi-py
+pip install maturin
+maturin develop  # Build and install locally
 
-# Run linter
-ruff check .
-ruff format .
-
-# Run type checker
-mypy umi/
-
-# Run tests
-pytest -v
+# Test the bindings work
+python -c "import umi; print(umi.CoreMemory())"
 ```
 
 ### Rust Development
@@ -402,11 +398,11 @@ cargo bench -p umi-memory
 Before every commit:
 
 ```bash
-# Python
-ruff check . && ruff format . && mypy umi/ && pytest
-
-# Rust
+# Rust (required)
 cargo fmt && cargo clippy --all-features -- -D warnings && cargo test --all-features
+
+# Python (when Python tests are implemented)
+# ruff check . && ruff format . && pytest
 ```
 
 ## Project Structure

@@ -19,21 +19,14 @@ Every component MUST have a simulation implementation:
 
 ```rust
 // Rust - Deterministic simulation
-use umi_memory::{Memory, SimLLMProvider, SimStorageBackend, SimConfig};
+use umi_memory::umi::Memory;
 
-let config = SimConfig::with_seed(42);
-let llm = SimLLMProvider::new();
-let storage = SimStorageBackend::new();
-```
-
-```python
-# Python - Deterministic simulation
-from umi import Memory
-
-memory = Memory(seed=42)  # Same seed = same results
+let mut memory = Memory::sim(42);  // Same seed = same results
 ```
 
 **Why?** Same seed = same results = reproducible tests and bugs.
+
+*Note: Python bindings currently only expose low-level primitives (`CoreMemory`, `WorkingMemory`). High-level `Memory` class is planned for v0.2.0.*
 
 ### 2. Graceful Degradation
 
@@ -46,10 +39,11 @@ LLM calls can fail. Components should:
 ### 3. Simple API
 
 Users should be able to:
-```python
-memory = Memory(seed=42)  # or provider="anthropic"
-await memory.remember("Alice works at Acme")
-results = await memory.recall("Who works at Acme?")
+```rust
+// Rust API
+let mut memory = Memory::sim(42);  // or with real LLM provider
+memory.remember("Alice works at Acme", RememberOptions::default()).await?;
+let results = memory.recall("Who works at Acme?", RecallOptions::default()).await?;
 ```
 
 ### 4. TigerStyle Safety
@@ -116,14 +110,14 @@ Following TigerBeetle's engineering principles:
 
 | Component | Description | Status | Lines |
 |-----------|-------------|--------|-------|
-| `umi-memory` | Rust core (memory tiers, DST) | Complete | ~3,500 |
-| `umi-py` | PyO3 bindings | Planned | - |
-| EntityExtractor | LLM-powered entity extraction | Complete | ~400 |
-| DualRetriever | Fast + LLM semantic search | Complete | ~350 |
-| EvolutionTracker | Memory relationship detection | Complete | ~300 |
-| SimLLMProvider | Deterministic LLM simulation | Complete | ~200 |
-| LanceVectorBackend | Production vector storage | Complete | ~600 |
-| PostgresVectorBackend | Postgres-based storage | Complete | ~400 |
+| `umi-memory` | Rust core (memory tiers, DST) | ✅ Complete | ~15,000 |
+| `umi-py` | PyO3 bindings (low-level only) | 🔶 Partial | ~700 |
+| EntityExtractor | LLM-powered entity extraction | ✅ Complete | ~400 |
+| DualRetriever | Fast + LLM semantic search | ✅ Complete | ~350 |
+| EvolutionTracker | Memory relationship detection | ✅ Complete | ~300 |
+| SimLLMProvider | Deterministic LLM simulation | ✅ Complete | ~200 |
+| LanceVectorBackend | Production vector storage | ✅ Complete | ~600 |
+| PostgresVectorBackend | Postgres-based storage | ✅ Complete | ~400 |
 
 ---
 
@@ -147,38 +141,38 @@ Umi doesn't route between LLM providers or manage API keys. Use LiteLLM, OpenRou
 
 ### 1. Agent Memory System
 Build agents that remember context across sessions:
-```python
-# Session 1
-await memory.remember("User prefers dark mode")
-# Session 2 (days later)
-prefs = await memory.recall("user preferences")
+```rust
+// Session 1
+memory.remember("User prefers dark mode", RememberOptions::default()).await?;
+// Session 2 (days later)
+let prefs = memory.recall("user preferences", RecallOptions::default()).await?;
 ```
 
 ### 2. Evolving Knowledge Base
 Track how information changes over time:
-```python
-await memory.remember("Alice works at Acme Corp")
-# Later...
-await memory.remember("Alice now works at Initech")
-# Evolution tracker detects UPDATE relationship
+```rust
+memory.remember("Alice works at Acme Corp", RememberOptions::default()).await?;
+// Later...
+memory.remember("Alice now works at Initech", RememberOptions::default()).await?;
+// Evolution tracker detects UPDATE relationship
 ```
 
 ### 3. Semantic Entity Search
 Find structured entities across conversations:
-```python
-await memory.remember("Met Bob at the AI conference")
-await memory.remember("Discussed transformers with Carol")
-# Later...
-entities = await memory.recall("who did I meet at conferences?")
+```rust
+memory.remember("Met Bob at the AI conference", RememberOptions::default()).await?;
+memory.remember("Discussed transformers with Carol", RememberOptions::default()).await?;
+// Later...
+let entities = memory.recall("who did I meet at conferences?", RecallOptions::default()).await?;
 ```
 
 ### 4. Deterministic Testing
 Test AI agents without API calls:
-```python
-# Same seed = same results = reproducible tests
-memory = Memory(seed=42)
-result = await memory.remember("test input")
-assert len(result) == 3  # Always true with seed 42
+```rust
+// Same seed = same results = reproducible tests
+let mut memory = Memory::sim(42);
+let result = memory.remember("test input", RememberOptions::default()).await?;
+// Result is deterministic with seed 42
 ```
 
 ---
@@ -221,28 +215,27 @@ assert len(result) == 3  # Always true with seed 42
 | Vector search (10K) | <100ms | ~50ms | In-memory SimVector |
 | Vector search (1M) | <500ms | ~300ms | Lance backend |
 | Memory write | <10ms | ~5ms | Core/Working memory |
-| DST test suite | <30s | ~25s | 232 Rust + 145 Python tests |
+| DST test suite | <30s | ~25s | ~813 Rust tests |
 | Dual retrieval | <3s | ~2s | Fast + LLM combined |
 | Evolution tracking | <1s | ~800ms | Per memory relationship |
+
+*Note: Performance metrics for entity extraction, dual retrieval, and evolution tracking are with real LLM providers. SimLLM returns instantly.*
 
 ---
 
 ## Test Coverage
 
-| Category | Test Count | Status | Coverage |
-|----------|------------|--------|----------|
-| **Rust Core** | **232** | ✅ Passing | **~85%** |
-| Memory Tiers | 85 | ✅ Passing | High |
-| DST Framework | 62 | ✅ Passing | High |
-| Storage Backends | 52 | ✅ Passing | High |
-| Entity Types | 33 | ✅ Passing | High |
-| **Python Layer** | **145** | ✅ Passing | **~78%** |
-| Entity Extraction | 38 | ✅ Passing | High |
-| Dual Retrieval | 42 | ✅ Passing | High |
-| Evolution Tracking | 31 | ✅ Passing | High |
-| LLM Providers | 22 | ✅ Passing | Medium |
-| Integration | 12 | ✅ Passing | Medium |
-| **Total** | **377** | ✅ All Passing | **~82%** |
+| Category | Test Count | Status |
+|----------|------------|--------|
+| **Rust Core** | **~813** | ✅ Passing |
+| Memory Tiers | ✓ | ✅ Passing |
+| DST Framework | ✓ | ✅ Passing |
+| Storage Backends | ✓ | ✅ Passing |
+| Entity Extraction | ✓ | ✅ Passing |
+| Dual Retrieval | ✓ | ✅ Passing |
+| Evolution Tracking | ✓ | ✅ Passing |
+| LLM Providers | ✓ | ✅ Passing |
+| **Python Layer** | **0** | ⚠️ Not Implemented |
 
 ### DST Test Coverage
 
@@ -263,10 +256,11 @@ See [CLAUDE.md](./CLAUDE.md) for development guidelines.
 
 ### Phase 1: Production Foundation (Current)
 - [x] Complete Rust memory tiers
-- [x] Complete Python LLM integration
+- [x] Complete Rust LLM integration
 - [x] Lance vector backend
 - [x] Postgres backend (sim-first)
-- [ ] **PyO3 bindings** (P0 - Critical)
+- [x] PyO3 bindings (low-level: CoreMemory, WorkingMemory, Entity)
+- [ ] **PyO3 Memory class** (P0 - Critical)
 - [ ] **Real Postgres persistence** (P0 - Critical)
 - [ ] **PyPI package** (P1)
 
@@ -345,7 +339,7 @@ See [CLAUDE.md](./CLAUDE.md) for development guidelines.
 
 Key principles:
 1. **Simulation-first** - Every component has a Sim implementation
-2. **Tests must pass** - All 377 tests before commit
+2. **Tests must pass** - All ~813 Rust tests before commit
 3. **TigerStyle** - Explicit limits, assertions, no silent failures
 4. **No stubs** - Complete implementations or don't merge
 5. **Graceful degradation** - Handle LLM failures elegantly

@@ -29,10 +29,6 @@ ruff format .
 
 # Run linter
 cargo clippy --all-features -- -D warnings
-ruff check .
-
-# Type check Python
-mypy umi/
 
 # Run benchmarks
 cargo bench -p umi-memory
@@ -537,13 +533,11 @@ Before every commit, you MUST verify the code works:
 # Rust - Required before EVERY commit
 cargo fmt --all                                  # Format
 cargo clippy --all-features -- -D warnings       # Lint
-cargo test --all-features                        # All tests pass
+cargo test --all-features                        # All tests pass (~813 tests)
 
-# Python - Required before EVERY commit
-ruff format .                                    # Format
-ruff check .                                     # Lint
-mypy umi/                                        # Type check
-pytest -v                                        # All tests pass
+# Python - Not yet implemented
+# PyO3 bindings exist but no Python tests yet
+# cd umi-py && maturin develop  # Build Python bindings
 ```
 
 ### Why This Matters
@@ -557,12 +551,11 @@ pytest -v                                        # All tests pass
 
 Before running `git commit`:
 
-1. **Run `cargo test --all-features`** - All Rust tests must pass (currently 232 tests)
-2. **Run `pytest`** - All Python tests must pass (currently 145 tests)
-3. **Run `cargo clippy`** - Fix any warnings
-4. **Run `ruff check .`** - Fix any lint errors
-5. **Review changes** - `git diff` to verify what's being committed
-6. **Write clear message** - Describe what and why, not how
+1. **Run `cargo test --all-features`** - All Rust tests must pass (~813 tests)
+2. **Run `cargo clippy`** - Fix any warnings
+3. **Run `cargo fmt`** - Format code
+4. **Review changes** - `git diff` to verify what's being committed
+5. **Write clear message** - Describe what and why, not how
 
 ### If Tests Fail
 
@@ -676,16 +669,15 @@ Run this evaluation periodically:
 
 ```bash
 # Find stubs and TODOs
-grep -r "TODO" --include="*.rs" --include="*.py" umi-memory/ umi/
+grep -r "TODO" --include="*.rs" umi-memory/
 grep -r "unimplemented!" --include="*.rs" umi-memory/
-grep -r "stub" --include="*.rs" --include="*.py" umi-memory/ umi/
+grep -r "stub" --include="*.rs" umi-memory/
 
 # Verify all tests pass
-cargo test --all-features && pytest
+cargo test --all-features
 
 # Check test coverage
 cargo tarpaulin --all-features --out Html
-pytest --cov=umi --cov-report=html
 ```
 
 ---
