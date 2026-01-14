@@ -1,36 +1,35 @@
 # Python Bindings for Umi Memory
 
-**Status**: 🔶 Experimental - Basic functionality works, but incomplete
+**Status**: 🔶 Experimental - Low-level primitives only
 
 The Python bindings for Umi are built with PyO3 and provide a Python interface to the Rust library. However, they are currently **incomplete** and should be considered **experimental**.
 
 ## What Works ✅
 
-- **Basic Memory Operations**:
-  - `Memory.sim(seed)` - Create deterministic memory
-  - `memory.remember(text)` - Store information
-  - `memory.recall(query)` - Retrieve information
-  - Returns lists of entities with basic fields
+- **Low-Level Memory Primitives**:
+  - `CoreMemory` - 32KB structured memory for LLM context
+  - `WorkingMemory` - 1MB KV store with TTL
+  - `Entity` - Entity objects for archival storage
+  - `EvolutionRelation` - Memory evolution relationships
 
 ## What's Missing ❌
 
-- **Type System**: Most Rust types not exposed to Python
-  - No `RememberOptions` class
-  - No `RecallOptions` class
+- **High-Level API**:
+  - No `Memory` class (the main orchestrator)
+  - No `remember()` / `recall()` high-level methods
+  - No `RememberOptions` or `RecallOptions` classes
   - No `MemoryConfig` class
-  - No `Entity` class with full fields
-  - No `EvolutionRelation` type
 
 - **Advanced Features**:
-  - Cannot customize memory configuration
   - Cannot use real LLM providers (Anthropic, OpenAI)
   - Cannot use production storage backends (LanceDB, Postgres)
+  - No async support
   - Limited error handling
 
 - **Documentation**:
   - No type stubs (`.pyi` files)
-  - No docstrings in Python
-  - No Python examples
+  - No Python examples directory
+  - No Python tests
 
 ## Installation
 
@@ -45,20 +44,44 @@ maturin develop  # Build and install locally
 ## Usage
 
 ```python
-from umi import Memory
+import umi
 
-# Create deterministic memory (simulation only)
-memory = Memory.sim(42)
+# Core Memory (32KB, always in LLM context)
+core = umi.CoreMemory()
+core.set_block("system", "You are a helpful assistant.")
+core.set_block("human", "User prefers concise responses.")
+core.set_block("facts", "User's name is Alice.")
 
-# Remember information
-memory.remember("Alice is a software engineer at Acme Corp")
-memory.remember("Bob is the CTO at TechCo")
+# Render to XML for LLM context
+context = core.render()
+print(context)
 
-# Recall information
-results = memory.recall("Who works at Acme?")
+# Check usage
+print(f"Used: {core.used_bytes}/{core.max_bytes} bytes ({core.utilization*100:.1f}%)")
 
-for entity in results:
-    print(f"Found: {entity.name} - {entity.content}")
+# Working Memory (1MB KV store with TTL)
+working = umi.WorkingMemory()
+working.set("session_id", b"abc123")
+working.set("user_prefs", b'{"theme": "dark"}', ttl_secs=3600)  # 1 hour TTL
+
+value = working.get("session_id")  # Returns bytes
+if value:
+    print(f"Session: {value.decode()}")
+
+# Entity for archival storage
+entity = umi.Entity("person", "Alice", "Software engineer at Acme Corp")
+print(f"{entity.name}: {entity.content}")
+print(f"Type: {entity.entity_type}, ID: {entity.id}")
+
+# Evolution relation (memory updates/contradictions)
+relation = umi.EvolutionRelation(
+    source_id="entity-1",
+    target_id="entity-2",
+    evolution_type="update",
+    reason="Job change",
+    confidence=0.95
+)
+print(f"Evolution: {relation.evolution_type} ({relation.confidence})")
 ```
 
 ## Current Architecture
@@ -66,22 +89,21 @@ for entity in results:
 ```
 umi-py/
 ├── src/
-│   └── lib.rs          # PyO3 bindings (incomplete)
-├── Cargo.toml          # Python package config
+│   └── lib.rs          # PyO3 bindings
+├── Cargo.toml          # Rust package config
 └── pyproject.toml      # Maturin config
 ```
 
-The bindings expose a minimal `Memory` class but don't expose the full Rust type system.
+The bindings expose low-level memory primitives but NOT the high-level `Memory` class.
 
 ## Roadmap
 
-### Version 0.2.0 - Full Options Classes
+### Version 0.2.0 - High-Level Memory Class
 **Target**: Q1 2026
 
+- [ ] Expose `Memory` class to Python (main orchestrator)
 - [ ] Expose `MemoryConfig` to Python
 - [ ] Expose `RememberOptions` and `RecallOptions`
-- [ ] Expose `Entity` with all fields
-- [ ] Expose `EvolutionRelation` and evolution types
 - [ ] Add Python type stubs (`.pyi` files)
 - [ ] Add docstrings for all classes and methods
 
@@ -197,7 +219,12 @@ for entity in results:
 
 | Feature | v0.1 (Current) | v1.0 (Goal) |
 |---------|----------------|-------------|
-| Basic remember/recall | ✅ | ✅ |
+| CoreMemory | ✅ | ✅ |
+| WorkingMemory | ✅ | ✅ |
+| Entity | ✅ | ✅ |
+| EvolutionRelation | ✅ | ✅ |
+| Memory class | ❌ | ✅ |
+| remember/recall | ❌ | ✅ |
 | Options classes | ❌ | ✅ |
 | Real LLM providers | ❌ | ✅ |
 | Storage backends | ❌ | ✅ |
@@ -210,10 +237,10 @@ for entity in results:
 ## Questions?
 
 - **Q: When will Python bindings be complete?**
-  A: Version 0.2.0 (Q1 2026) will have full options classes. Version 1.0.0 (2026) will have feature parity.
+  A: Version 0.2.0 (Q1 2026) will add the high-level `Memory` class. Version 1.0.0 (2026) will have feature parity.
 
 - **Q: Should I use Python or Rust?**
-  A: Use **Rust** for production. Python bindings are experimental and incomplete.
+  A: Use **Rust** for production. Python bindings currently only offer low-level primitives.
 
 - **Q: Can I help complete the bindings?**
   A: Yes! See the Contributing section above. PRs welcome.

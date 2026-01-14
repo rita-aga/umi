@@ -21,7 +21,7 @@ Umi provides infrastructure for building AI agents that:
 
 ### Python
 
-**Status**: 🔶 Experimental - Basic functionality works, but incomplete. See [PYTHON.md](PYTHON.md) for full details.
+**Status**: 🔶 Experimental - Low-level memory primitives only. See [PYTHON.md](PYTHON.md) for full details.
 
 ```bash
 # Install from source (not yet on PyPI)
@@ -31,22 +31,26 @@ maturin develop  # Build and install locally
 ```
 
 ```python
-from umi import Memory
+import umi
 
-# Simulation mode (deterministic, no API calls)
-memory = Memory.sim(42)
+# Core Memory (32KB, always in LLM context)
+core = umi.CoreMemory()
+core.set_block("system", "You are a helpful assistant.")
+core.set_block("human", "User prefers concise responses.")
+context = core.render()  # XML for LLM context
 
-# Remember information
-memory.remember("Alice is a software engineer at Acme Corp")
+# Working Memory (1MB KV store with TTL)
+working = umi.WorkingMemory()
+working.set("session_id", b"abc123")
+value = working.get("session_id")
 
-# Recall memories
-results = memory.recall("Who works at Acme?")
-for entity in results:
-    print(f"Found: {entity.name} - {entity.content}")
+# Entities for storage
+entity = umi.Entity("person", "Alice", "Software engineer at Acme")
+print(f"{entity.name}: {entity.content}")
 ```
 
-**What works**: Basic `Memory.sim()`, `remember()`, `recall()`
-**What's missing**: Options classes, real LLM providers, type stubs, async support
+**What works**: `CoreMemory`, `WorkingMemory`, `Entity`, `EvolutionRelation`
+**What's missing**: High-level `Memory` class, real LLM providers, async support
 
 See [PYTHON.md](PYTHON.md) for roadmap and contributing guide.
 
@@ -135,30 +139,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 | Component | Description | Status | Tests |
 |-----------|-------------|--------|-------|
-| **umi-memory** | Rust core (memory tiers, DST) | ✅ Complete | 559 |
-| **umi-py** | PyO3 bindings | 🚧 Planned | - |
-| Memory API | Main orchestrator with remember/recall | ✅ Complete | 12 |
-| MemoryBuilder | Builder pattern for Memory construction | ✅ Complete | 11 |
-| MemoryConfig | Global configuration system | ✅ Complete | 13 |
-| EntityExtractor | LLM-powered entity extraction | ✅ Complete | 38 |
-| DualRetriever | Fast + LLM semantic search | ✅ Complete | 42 |
-| EvolutionTracker | Memory relationship detection | ✅ Complete | 31 |
-| SimLLMProvider | Deterministic LLM simulation | ✅ Complete | 22 |
-| LanceVectorBackend | Production vector storage | ✅ Complete | 28 |
-| PostgresVectorBackend | Postgres-based storage | ✅ Complete | 24 |
+| **umi-memory** | Rust core (memory tiers, DST) | ✅ Complete | ~813 |
+| **umi-py** | PyO3 bindings (CoreMemory, WorkingMemory, Entity) | 🔶 Partial | - |
+| Memory API | Main orchestrator with remember/recall | ✅ Complete | ✓ |
+| MemoryBuilder | Builder pattern for Memory construction | ✅ Complete | ✓ |
+| MemoryConfig | Global configuration system | ✅ Complete | ✓ |
+| EntityExtractor | LLM-powered entity extraction | ✅ Complete | ✓ |
+| DualRetriever | Fast + LLM semantic search | ✅ Complete | ✓ |
+| EvolutionTracker | Memory relationship detection | ✅ Complete | ✓ |
+| SimLLMProvider | Deterministic LLM simulation | ✅ Complete | ✓ |
+| LanceVectorBackend | Production vector storage | ✅ Complete | ✓ |
+| PostgresVectorBackend | Postgres-based storage | ✅ Complete | ✓ |
 
-### LLM Providers
+### LLM Providers (Rust)
 
-```python
-# Simulation (deterministic, no API)
-memory = Memory(seed=42)
+```rust
+use umi_memory::llm::{SimLLMProvider, LLMProvider};
 
-# Anthropic Claude
-memory = Memory(provider="anthropic")
+// Simulation (deterministic, no API)
+let llm = SimLLMProvider::with_seed(42);
 
-# OpenAI GPT
-memory = Memory(provider="openai")
+// Anthropic Claude (requires 'anthropic' feature)
+#[cfg(feature = "anthropic")]
+let llm = umi_memory::llm::AnthropicProvider::new(api_key);
+
+// OpenAI GPT (requires 'openai' feature)
+#[cfg(feature = "openai")]
+let llm = umi_memory::llm::OpenAIProvider::new(api_key);
 ```
+
+*Note: Python bindings do not yet support LLM providers. See [PYTHON.md](PYTHON.md).*
 
 ### Storage Backends
 
@@ -194,24 +204,33 @@ let memory = Memory::builder()
 }
 ```
 
-## Production Mode
+## Production Mode (Rust)
 
-```python
-import os
-from umi import Memory
+```rust
+use umi_memory::umi::{Memory, MemoryBuilder};
+use std::env;
 
-# Set API keys
-os.environ["ANTHROPIC_API_KEY"] = "sk-ant-..."
-# or
-os.environ["OPENAI_API_KEY"] = "sk-..."
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Production with real LLM (requires 'anthropic' feature)
+    #[cfg(feature = "anthropic")]
+    {
+        use umi_memory::llm::AnthropicProvider;
 
-# Create memory with real LLM
-memory = Memory(provider="anthropic")
+        let api_key = env::var("ANTHROPIC_API_KEY")?;
+        let llm = AnthropicProvider::new(&api_key);
 
-# Use normally - LLM calls are made
-entities = await memory.remember("Important information")
-results = await memory.recall("search query")
+        // Build memory with real provider
+        // let memory = MemoryBuilder::new()
+        //     .with_llm(llm)
+        //     .build();
+    }
+
+    Ok(())
+}
 ```
+
+*Note: Python bindings currently only support low-level primitives (`CoreMemory`, `WorkingMemory`). High-level `Memory` class with LLM integration is planned for v0.3.0.*
 
 ## Configuration
 
@@ -276,60 +295,59 @@ let mut memory = Memory::sim_with_config(42, config);
 
 Umi uses deterministic simulation for reliable, reproducible tests:
 
-```python
-# Python - Same seed = same results
-memory = Memory(seed=42)
-result = await memory.remember("test input")
-assert len(result) == 3  # Always true with seed 42
-```
-
 ```rust
 // Rust - Deterministic simulation
-use umi_memory::SimConfig;
+use umi_memory::dst::SimConfig;
+use umi_memory::umi::Memory;
 
-let config = SimConfig::with_seed(42);
-// All operations deterministic with this seed
+// Same seed = same results
+let mut memory1 = Memory::sim(42);
+let mut memory2 = Memory::sim(42);
+
+// Both produce identical results
 ```
 
 ### Running Tests
 
 ```bash
-# Python tests (not yet implemented)
-pip install -e ".[dev]"
-pytest -v
-
-# Rust tests (559 tests)
-cargo test -p umi-memory --features lance
+# Rust tests (~813 tests)
+cargo test -p umi-memory --all-features
 
 # All tests with specific DST seed
 DST_SEED=12345 cargo test --all-features
 
 # Rust with coverage
 cargo tarpaulin --all-features --out Html
+
+# Python tests (not yet implemented)
+# pip install -e ".[dev]"
+# pytest -v
 ```
 
-### Fault Injection
+### Fault Injection (Rust)
 
-```python
-from umi import Memory, FaultConfig, FaultType
+```rust
+use umi_memory::dst::{Simulation, SimConfig, FaultConfig, FaultType};
 
-# Test with simulated failures
-memory = Memory(
-    seed=42,
-    fault_config=FaultConfig(
-        fault_type=FaultType.STORAGE_WRITE_FAIL,
-        probability=0.1  # 10% chance of failure
-    )
-)
+// Test with simulated failures
+let sim = Simulation::new(SimConfig::with_seed(42))
+    .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 0.1));  // 10% failure
+
+sim.run(|env| async move {
+    let mut memory = env.create_memory();
+    // Operations may fail due to fault injection
+    Ok(())
+}).await.unwrap();
 ```
+
+*Note: Python bindings do not yet expose fault injection. See [PYTHON.md](PYTHON.md).*
 
 ### Test Coverage
 
-| Category | Tests | Status | Coverage |
-|----------|-------|--------|----------|
-| **Rust Core** | 559 | ✅ Passing | ~85% |
-| **Python Layer** | 0 | ⚠️ Not Implemented | - |
-| **Total** | 559 | ✅ All Passing | ~85% |
+| Category | Tests | Status |
+|----------|-------|--------|
+| **Rust Core** | ~813 | ✅ Passing |
+| **Python Layer** | 0 | ⚠️ Not Implemented |
 
 ## Performance
 
