@@ -26,7 +26,7 @@ use crate::storage::{EntityType, SimStorageBackend, SimVectorBackend};
 fn create_unified(
     seed: u64,
     clock: SimClock,
-) -> UnifiedMemory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend> {
+) -> UnifiedMemory {
     let llm = SimLLMProvider::with_seed(seed);
     let embedder = SimEmbeddingProvider::with_seed(seed);
     let vector = SimVectorBackend::new(seed);
@@ -41,7 +41,7 @@ fn create_unified_with_config(
     seed: u64,
     clock: SimClock,
     config: UnifiedMemoryConfig,
-) -> UnifiedMemory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend> {
+) -> UnifiedMemory {
     let llm = SimLLMProvider::with_seed(seed);
     let embedder = SimEmbeddingProvider::with_seed(seed);
     let vector = SimVectorBackend::new(seed);
@@ -55,7 +55,7 @@ fn create_unified_with_faults(
     seed: u64,
     clock: SimClock,
     fault_config: FaultConfig,
-) -> UnifiedMemory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend> {
+) -> UnifiedMemory {
     let llm = SimLLMProvider::with_seed(seed);
     let embedder = SimEmbeddingProvider::with_seed(seed);
     let vector = SimVectorBackend::new(seed);

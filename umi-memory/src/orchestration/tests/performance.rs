@@ -22,7 +22,7 @@ fn create_memory_with_storage_faults(
     seed: u64,
     clock: crate::dst::SimClock,
     fault_rate: f64,
-) -> UnifiedMemory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend> {
+) -> UnifiedMemory {
     let llm = SimLLMProvider::with_seed(seed);
     let embedder = SimEmbeddingProvider::with_seed(seed);
     let vector = SimVectorBackend::new(seed);
@@ -35,7 +35,7 @@ fn create_memory_with_storage_faults(
 fn create_memory_no_faults(
     seed: u64,
     clock: crate::dst::SimClock,
-) -> UnifiedMemory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend> {
+) -> UnifiedMemory {
     let llm = SimLLMProvider::with_seed(seed);
     let embedder = SimEmbeddingProvider::with_seed(seed);
     let vector = SimVectorBackend::new(seed);

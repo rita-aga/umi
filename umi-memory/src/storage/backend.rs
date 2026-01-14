@@ -16,7 +16,7 @@ use super::error::StorageResult;
 ///
 /// TigerStyle: All operations are async, return explicit errors.
 #[async_trait]
-pub trait StorageBackend: Send + Sync {
+pub trait StorageBackend: Send + Sync + std::fmt::Debug + 'static {
     /// Store or update an entity.
     ///
     /// If entity with same ID exists, it is updated.

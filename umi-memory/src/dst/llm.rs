@@ -652,6 +652,8 @@ mod tests {
         }
 
         let prompt = "Hello, world!";
+        // Note: SimLLM::complete_json remains generic (internal to DST)
+        // This test verifies the internal DST API still works
         let result: GenericResponse = llm.complete_json(prompt).await.unwrap();
 
         assert!(result.success);

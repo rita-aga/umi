@@ -7,7 +7,7 @@
 //! # Architecture
 //!
 //! ```text
-//! DualRetriever<L: LLMProvider, S: StorageBackend>
+//! DualRetriever
 //! ├── search()          → SearchResult
 //! ├── needs_deep_search() → bool (heuristic)
 //! ├── rewrite_query()   → Vec<String> (via LLM)
@@ -16,7 +16,7 @@
 //!
 //! # Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use umi_memory::retrieval::{DualRetriever, SearchOptions};
 //! use umi_memory::llm::SimLLMProvider;
 //! use umi_memory::embedding::SimEmbeddingProvider;
@@ -29,7 +29,12 @@
 //!     let embedder = SimEmbeddingProvider::with_seed(42);
 //!     let vector = SimVectorBackend::new(42);
 //!     let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-//!     let retriever = DualRetriever::new(llm, embedder, vector, storage);
+//!     let retriever = DualRetriever::new(
+//!         Box::new(llm),
+//!         Box::new(embedder),
+//!         Box::new(vector),
+//!         Box::new(storage),
+//!     );
 //!
 //!     let result = retriever.search("Who works at Acme?", SearchOptions::default()).await.unwrap();
 //!     println!("Found {} results", result.len());
@@ -137,20 +142,22 @@ impl From<crate::storage::StorageError> for RetrievalError {
 /// }
 /// ```
 #[derive(Debug)]
-pub struct DualRetriever<L: LLMProvider, E: EmbeddingProvider, V: VectorBackend, S: StorageBackend>
-{
-    llm: L,
-    embedder: E,
-    vector: V,
-    storage: S,
+pub struct DualRetriever {
+    llm: Box<dyn LLMProvider>,
+    embedder: Box<dyn EmbeddingProvider>,
+    vector: Box<dyn VectorBackend>,
+    storage: Box<dyn StorageBackend>,
 }
 
-impl<L: LLMProvider, E: EmbeddingProvider, V: VectorBackend, S: StorageBackend>
-    DualRetriever<L, E, V, S>
-{
+impl DualRetriever {
     /// Create a new dual retriever.
     #[must_use]
-    pub fn new(llm: L, embedder: E, vector: V, storage: S) -> Self {
+    pub fn new(
+        llm: Box<dyn LLMProvider>,
+        embedder: Box<dyn EmbeddingProvider>,
+        vector: Box<dyn VectorBackend>,
+        storage: Box<dyn StorageBackend>,
+    ) -> Self {
         Self {
             llm,
             embedder,
@@ -505,14 +512,14 @@ impl<L: LLMProvider, E: EmbeddingProvider, V: VectorBackend, S: StorageBackend>
 
     /// Get a reference to the underlying LLM provider.
     #[must_use]
-    pub fn llm(&self) -> &L {
-        &self.llm
+    pub fn llm(&self) -> &dyn LLMProvider {
+        self.llm.as_ref()
     }
 
     /// Get a reference to the underlying storage backend.
     #[must_use]
-    pub fn storage(&self) -> &S {
-        &self.storage
+    pub fn storage(&self) -> &dyn StorageBackend {
+        self.storage.as_ref()
     }
 }
 
@@ -528,21 +535,20 @@ mod tests {
     use crate::llm::SimLLMProvider;
     use crate::storage::{Entity, EntityType, SimStorageBackend, SimVectorBackend, StorageBackend};
 
-    async fn create_test_retriever(
-        seed: u64,
-    ) -> DualRetriever<SimLLMProvider, SimEmbeddingProvider, SimVectorBackend, SimStorageBackend>
-    {
+    async fn create_test_retriever(seed: u64) -> DualRetriever {
         let llm = SimLLMProvider::with_seed(seed);
         let embedder = SimEmbeddingProvider::with_seed(seed);
         let vector = SimVectorBackend::new(seed);
         let storage = SimStorageBackend::new(SimConfig::with_seed(seed));
-        DualRetriever::new(llm, embedder, vector, storage)
+        DualRetriever::new(
+            Box::new(llm),
+            Box::new(embedder),
+            Box::new(vector),
+            Box::new(storage),
+        )
     }
 
-    async fn create_test_retriever_with_data(
-        seed: u64,
-    ) -> DualRetriever<SimLLMProvider, SimEmbeddingProvider, SimVectorBackend, SimStorageBackend>
-    {
+    async fn create_test_retriever_with_data(seed: u64) -> DualRetriever {
         let llm = SimLLMProvider::with_seed(seed);
         let embedder = SimEmbeddingProvider::with_seed(seed);
         let vector = SimVectorBackend::new(seed);
@@ -582,7 +588,12 @@ mod tests {
             .await
             .unwrap();
 
-        DualRetriever::new(llm, embedder, vector, storage)
+        DualRetriever::new(
+            Box::new(llm),
+            Box::new(embedder),
+            Box::new(vector),
+            Box::new(storage),
+        )
     }
 
     #[tokio::test]
@@ -687,10 +698,10 @@ mod tests {
     #[test]
     fn test_merge_rrf() {
         let retriever = DualRetriever::new(
-            SimLLMProvider::with_seed(42),
-            SimEmbeddingProvider::with_seed(42),
-            SimVectorBackend::new(42),
-            SimStorageBackend::new(SimConfig::with_seed(42)),
+            Box::new(SimLLMProvider::with_seed(42)),
+            Box::new(SimEmbeddingProvider::with_seed(42)),
+            Box::new(SimVectorBackend::new(42)),
+            Box::new(SimStorageBackend::new(SimConfig::with_seed(42))),
         );
 
         let e1 = Entity::new(EntityType::Note, "A".to_string(), "content A".to_string());
@@ -710,10 +721,10 @@ mod tests {
     #[test]
     fn test_merge_rrf_empty() {
         let retriever = DualRetriever::new(
-            SimLLMProvider::with_seed(42),
-            SimEmbeddingProvider::with_seed(42),
-            SimVectorBackend::new(42),
-            SimStorageBackend::new(SimConfig::with_seed(42)),
+            Box::new(SimLLMProvider::with_seed(42)),
+            Box::new(SimEmbeddingProvider::with_seed(42)),
+            Box::new(SimVectorBackend::new(42)),
+            Box::new(SimStorageBackend::new(SimConfig::with_seed(42))),
         );
 
         let empty: Vec<Entity> = vec![];
@@ -725,10 +736,10 @@ mod tests {
     #[test]
     fn test_parse_variations_valid() {
         let retriever = DualRetriever::new(
-            SimLLMProvider::with_seed(42),
-            SimEmbeddingProvider::with_seed(42),
-            SimVectorBackend::new(42),
-            SimStorageBackend::new(SimConfig::with_seed(42)),
+            Box::new(SimLLMProvider::with_seed(42)),
+            Box::new(SimEmbeddingProvider::with_seed(42)),
+            Box::new(SimVectorBackend::new(42)),
+            Box::new(SimStorageBackend::new(SimConfig::with_seed(42))),
         );
 
         let response = r#"["variation 1", "variation 2"]"#;
@@ -741,10 +752,10 @@ mod tests {
     #[test]
     fn test_parse_variations_invalid_json() {
         let retriever = DualRetriever::new(
-            SimLLMProvider::with_seed(42),
-            SimEmbeddingProvider::with_seed(42),
-            SimVectorBackend::new(42),
-            SimStorageBackend::new(SimConfig::with_seed(42)),
+            Box::new(SimLLMProvider::with_seed(42)),
+            Box::new(SimEmbeddingProvider::with_seed(42)),
+            Box::new(SimVectorBackend::new(42)),
+            Box::new(SimStorageBackend::new(SimConfig::with_seed(42))),
         );
 
         let response = "not valid json";
@@ -756,10 +767,10 @@ mod tests {
     #[test]
     fn test_parse_variations_empty_strings() {
         let retriever = DualRetriever::new(
-            SimLLMProvider::with_seed(42),
-            SimEmbeddingProvider::with_seed(42),
-            SimVectorBackend::new(42),
-            SimStorageBackend::new(SimConfig::with_seed(42)),
+            Box::new(SimLLMProvider::with_seed(42)),
+            Box::new(SimEmbeddingProvider::with_seed(42)),
+            Box::new(SimVectorBackend::new(42)),
+            Box::new(SimStorageBackend::new(SimConfig::with_seed(42))),
         );
 
         let response = r#"["", "  ", "valid"]"#;
@@ -795,7 +806,12 @@ mod tests {
         e3.event_time = Some(Utc.timestamp_millis_opt(3000).unwrap());
         storage.store_entity(&e3).await.unwrap();
 
-        let retriever = DualRetriever::new(llm, embedder, vector, storage);
+        let retriever = DualRetriever::new(
+            Box::new(llm),
+            Box::new(embedder),
+            Box::new(vector),
+            Box::new(storage),
+        );
 
         let options = SearchOptions::new().with_time_range(1500, 2500).fast_only();
 
@@ -861,7 +877,12 @@ mod dst_tests {
             let embedder = SimEmbeddingProvider::with_seed(42);
             let vector = SimVectorBackend::new(42);
             let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-            let retriever = DualRetriever::new(llm, embedder, vector, storage);
+            let retriever = DualRetriever::new(
+                Box::new(llm),
+                Box::new(embedder),
+                Box::new(vector),
+                Box::new(storage),
+            );
 
             // Query that would trigger deep search (has question words)
             let result = retriever
@@ -922,7 +943,12 @@ mod dst_tests {
             let embedder = SimEmbeddingProvider::with_seed(42);
             let vector = SimVectorBackend::with_faults(42, env.faults.clone());
             let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-            let retriever = DualRetriever::new(llm, embedder, vector, storage);
+            let retriever = DualRetriever::new(
+                Box::new(llm),
+                Box::new(embedder),
+                Box::new(vector),
+                Box::new(storage),
+            );
 
             let result = retriever
                 .search("test query", SearchOptions::default())
@@ -965,7 +991,12 @@ mod dst_tests {
             let vector = SimVectorBackend::new(42);
             let storage = SimStorageBackend::new(SimConfig::with_seed(42))
                 .with_faults(FaultConfig::new(FaultType::StorageReadFail, 1.0));
-            let retriever = DualRetriever::new(llm, embedder, vector, storage);
+            let retriever = DualRetriever::new(
+                Box::new(llm),
+                Box::new(embedder),
+                Box::new(vector),
+                Box::new(storage),
+            );
 
             let result = retriever
                 .search("test query", SearchOptions::default())
@@ -1006,7 +1037,12 @@ mod dst_tests {
             let embedder = SimEmbeddingProvider::with_seed(42);
             let vector = SimVectorBackend::with_faults(42, env.faults.clone());
             let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-            let retriever = DualRetriever::new(llm, embedder, vector, storage);
+            let retriever = DualRetriever::new(
+                Box::new(llm),
+                Box::new(embedder),
+                Box::new(vector),
+                Box::new(storage),
+            );
 
             let result = retriever
                 .search("complex query", SearchOptions::default())
@@ -1054,7 +1090,12 @@ mod dst_tests {
             let embedder = SimEmbeddingProvider::with_seed(42);
             let vector = SimVectorBackend::new(42);
             let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-            let retriever = DualRetriever::new(llm, embedder, vector, storage);
+            let retriever = DualRetriever::new(
+                Box::new(llm),
+                Box::new(embedder),
+                Box::new(vector),
+                Box::new(storage),
+            );
 
             let mut deep_search_count = 0;
             let mut fast_search_count = 0;

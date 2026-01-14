@@ -60,6 +60,7 @@ use super::evolution::{EvolutionRelation, EvolutionType};
 /// PostgreSQL storage backend for production use.
 ///
 /// TigerStyle: Connection pooling, explicit schema, proper error handling.
+#[derive(Clone, Debug)]
 pub struct PostgresBackend {
     pool: PgPool,
 }

@@ -260,19 +260,14 @@ impl UnifiedRememberResult {
 /// - Automatic promotion/eviction
 /// - Graceful degradation
 /// - Self_ entities never evicted
-pub struct UnifiedMemory<
-    L: LLMProvider,
-    E: EmbeddingProvider,
-    S: StorageBackend,
-    V: VectorBackend,
-> {
+pub struct UnifiedMemory {
     // Archival layer components (existing)
-    storage: S,
-    extractor: crate::extraction::EntityExtractor<L>,
-    retriever: crate::retrieval::DualRetriever<L, E, V, S>,
-    evolution: crate::evolution::EvolutionTracker<L, S>,
-    embedder: E,
-    vector: V,
+    storage: Box<dyn StorageBackend>,
+    extractor: crate::extraction::EntityExtractor,
+    retriever: crate::retrieval::DualRetriever,
+    evolution: crate::evolution::EvolutionTracker,
+    embedder: Box<dyn EmbeddingProvider>,
+    vector: Box<dyn VectorBackend>,
 
     // New tier components
     core: CoreMemory,
@@ -296,13 +291,7 @@ pub struct UnifiedMemory<
     category_evolver: CategoryEvolver,
 }
 
-impl<
-        L: LLMProvider + Clone,
-        E: EmbeddingProvider + Clone,
-        S: StorageBackend + Clone,
-        V: VectorBackend + Clone,
-    > UnifiedMemory<L, E, S, V>
-{
+impl UnifiedMemory {
     /// Create a new UnifiedMemory with all components.
     ///
     /// # Arguments
@@ -316,25 +305,31 @@ impl<
     /// # Panics
     /// Panics if clock is at negative time (impossible but TigerStyle requires assertion).
     #[must_use]
-    pub fn new(
+    pub fn new<L, E, V, S>(
         llm: L,
         embedder: E,
         vector: V,
         storage: S,
         clock: SimClock,
         config: UnifiedMemoryConfig,
-    ) -> Self {
+    ) -> Self
+    where
+        L: LLMProvider + Clone + 'static,
+        E: EmbeddingProvider + Clone + 'static,
+        V: VectorBackend + Clone + 'static,
+        S: StorageBackend + Clone + 'static,
+    {
         // TigerStyle: clock.now_ms() is u64, always non-negative
 
         // Create archival layer components
-        let extractor = crate::extraction::EntityExtractor::new(llm.clone());
+        let extractor = crate::extraction::EntityExtractor::new(Box::new(llm.clone()));
         let retriever = crate::retrieval::DualRetriever::new(
-            llm.clone(),
-            embedder.clone(),
-            vector.clone(),
-            storage.clone(),
+            Box::new(llm.clone()),
+            Box::new(embedder.clone()),
+            Box::new(vector.clone()),
+            Box::new(storage.clone()),
         );
-        let evolution = crate::evolution::EvolutionTracker::new(llm);
+        let evolution = crate::evolution::EvolutionTracker::new(Box::new(llm));
 
         // Create tier components
         let core = CoreMemory::new();
@@ -353,12 +348,12 @@ impl<
         let current_time = clock.now_ms();
 
         Self {
-            storage,
+            storage: Box::new(storage),
             extractor,
             retriever,
             evolution,
-            embedder,
-            vector,
+            embedder: Box::new(embedder),
+            vector: Box::new(vector),
             core,
             working,
             access_tracker,
@@ -375,7 +370,7 @@ impl<
 
     /// Create with custom policies.
     #[must_use]
-    pub fn with_policies(
+    pub fn with_policies<L, E, V, S>(
         llm: L,
         embedder: E,
         vector: V,
@@ -384,7 +379,13 @@ impl<
         config: UnifiedMemoryConfig,
         promotion_policy: Box<dyn PromotionPolicy + Send + Sync>,
         eviction_policy: Box<dyn EvictionPolicy + Send + Sync>,
-    ) -> Self {
+    ) -> Self
+    where
+        L: LLMProvider + Clone + 'static,
+        E: EmbeddingProvider + Clone + 'static,
+        V: VectorBackend + Clone + 'static,
+        S: StorageBackend + Clone + 'static,
+    {
         let mut unified = Self::new(llm, embedder, vector, storage, clock, config);
         unified.promotion_policy = promotion_policy;
         unified.eviction_policy = eviction_policy;
@@ -415,8 +416,8 @@ impl<
 
     /// Get reference to storage backend.
     #[must_use]
-    pub fn storage(&self) -> &S {
-        &self.storage
+    pub fn storage(&self) -> &dyn StorageBackend {
+        self.storage.as_ref()
     }
 
     /// Get reference to access tracker.
@@ -874,7 +875,7 @@ mod tests {
     /// Create UnifiedMemory with deterministic seed.
     fn create_unified_memory(
         seed: u64,
-    ) -> UnifiedMemory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend>
+    ) -> UnifiedMemory
     {
         let llm = SimLLMProvider::with_seed(seed);
         let embedder = SimEmbeddingProvider::with_seed(seed);
@@ -890,7 +891,7 @@ mod tests {
     fn create_unified_memory_with_config(
         seed: u64,
         config: UnifiedMemoryConfig,
-    ) -> UnifiedMemory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend>
+    ) -> UnifiedMemory
     {
         let llm = SimLLMProvider::with_seed(seed);
         let embedder = SimEmbeddingProvider::with_seed(seed);
@@ -1301,7 +1302,7 @@ mod dst_tests {
     fn create_unified_in_sim(
         seed: u64,
         clock: SimClock,
-    ) -> UnifiedMemory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend>
+    ) -> UnifiedMemory
     {
         let llm = SimLLMProvider::with_seed(seed);
         let embedder = SimEmbeddingProvider::with_seed(seed);
@@ -1317,7 +1318,7 @@ mod dst_tests {
         seed: u64,
         clock: SimClock,
         fault_config: FaultConfig,
-    ) -> UnifiedMemory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend>
+    ) -> UnifiedMemory
     {
         let llm = SimLLMProvider::with_seed(seed);
         let embedder = SimEmbeddingProvider::with_seed(seed);

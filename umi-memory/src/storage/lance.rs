@@ -50,6 +50,7 @@ const TABLE_NAME: &str = "entities";
 ///
 /// let storage = LanceStorageBackend::connect("./data/umi.lance").await?;
 /// ```
+#[derive(Clone)]
 pub struct LanceStorageBackend {
     db: std::sync::Arc<dyn Connection>,
     table_name: String,

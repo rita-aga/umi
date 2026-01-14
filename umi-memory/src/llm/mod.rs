@@ -46,7 +46,6 @@ pub use anthropic::AnthropicProvider;
 pub use openai::OpenAIProvider;
 
 use async_trait::async_trait;
-use serde::de::DeserializeOwned;
 
 use crate::constants::{LLM_PROMPT_BYTES_MAX, LLM_RESPONSE_BYTES_MAX};
 
@@ -290,7 +289,7 @@ impl CompletionRequest {
 /// }
 /// ```
 #[async_trait]
-pub trait LLMProvider: Send + Sync {
+pub trait LLMProvider: Send + Sync + std::fmt::Debug + 'static {
     /// Complete a prompt with a text response.
     ///
     /// # Errors
@@ -299,14 +298,30 @@ pub trait LLMProvider: Send + Sync {
 
     /// Complete a prompt expecting a JSON response.
     ///
-    /// This is a convenience method that calls `complete` and parses the response.
+    /// This is a convenience method that calls `complete` and parses the response
+    /// into a `serde_json::Value`. Callers can then deserialize to their desired type.
     ///
     /// # Errors
     /// Returns `ProviderError` on failure or JSON parse error.
-    async fn complete_json<T: DeserializeOwned + Send>(
+    ///
+    /// # Example
+    /// ```rust
+    /// # use umi_memory::llm::{LLMProvider, SimLLMProvider, CompletionRequest};
+    /// # use serde::Deserialize;
+    /// # tokio_test::block_on(async {
+    /// #[derive(Deserialize)]
+    /// struct MyResponse { name: String }
+    ///
+    /// let provider = SimLLMProvider::with_seed(42);
+    /// let request = CompletionRequest::new("Extract entity");
+    /// let value = provider.complete_json(&request).await.unwrap();
+    /// let typed: MyResponse = serde_json::from_value(value).unwrap();
+    /// # });
+    /// ```
+    async fn complete_json(
         &self,
         request: &CompletionRequest,
-    ) -> Result<T, ProviderError> {
+    ) -> Result<serde_json::Value, ProviderError> {
         let response = self.complete(request).await?;
 
         // Postcondition: response should be valid JSON

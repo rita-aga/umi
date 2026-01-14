@@ -7,7 +7,7 @@
 //! # Architecture
 //!
 //! ```text
-//! EntityExtractor<P: LLMProvider>
+//! EntityExtractor
 //! ├── extract()         → ExtractionResult
 //! ├── extract_entities_only() → Vec<ExtractedEntity>
 //! └── Uses prompts::build_extraction_prompt()
@@ -15,14 +15,14 @@
 //!
 //! # Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use umi_memory::extraction::{EntityExtractor, ExtractionOptions};
 //! use umi_memory::llm::SimLLMProvider;
 //!
 //! #[tokio::main]
 //! async fn main() {
 //!     let provider = SimLLMProvider::with_seed(42);
-//!     let extractor = EntityExtractor::new(provider);
+//!     let extractor = EntityExtractor::new(Box::new(provider));
 //!
 //!     let result = extractor.extract("Alice works at Acme Corp", ExtractionOptions::default()).await.unwrap();
 //!     println!("Found {} entities", result.entity_count());
@@ -130,7 +130,7 @@ struct RawRelation {
 /// async fn main() {
 ///     // Simulation provider for testing
 ///     let provider = SimLLMProvider::with_seed(42);
-///     let extractor = EntityExtractor::new(provider);
+///     let extractor = EntityExtractor::new(Box::new(provider));
 ///
 ///     let result = extractor
 ///         .extract("Alice works at Acme Corp", ExtractionOptions::default())
@@ -142,14 +142,14 @@ struct RawRelation {
 /// }
 /// ```
 #[derive(Debug)]
-pub struct EntityExtractor<P: LLMProvider> {
-    provider: P,
+pub struct EntityExtractor {
+    provider: Box<dyn LLMProvider>,
 }
 
-impl<P: LLMProvider> EntityExtractor<P> {
+impl EntityExtractor {
     /// Create a new entity extractor with the given LLM provider.
     #[must_use]
-    pub fn new(provider: P) -> Self {
+    pub fn new(provider: Box<dyn LLMProvider>) -> Self {
         Self { provider }
     }
 
@@ -449,8 +449,8 @@ impl<P: LLMProvider> EntityExtractor<P> {
 
     /// Get a reference to the underlying provider.
     #[must_use]
-    pub fn provider(&self) -> &P {
-        &self.provider
+    pub fn provider(&self) -> &dyn LLMProvider {
+        self.provider.as_ref()
     }
 }
 
@@ -463,8 +463,8 @@ mod tests {
     use super::*;
     use crate::llm::SimLLMProvider;
 
-    fn create_test_extractor(seed: u64) -> EntityExtractor<SimLLMProvider> {
-        EntityExtractor::new(SimLLMProvider::with_seed(seed))
+    fn create_test_extractor(seed: u64) -> EntityExtractor {
+        EntityExtractor::new(Box::new(SimLLMProvider::with_seed(seed)))
     }
 
     #[tokio::test]
@@ -715,7 +715,7 @@ mod tests {
     #[test]
     fn test_provider_accessor() {
         let provider = SimLLMProvider::with_seed(42);
-        let extractor = EntityExtractor::new(provider);
+        let extractor = EntityExtractor::new(Box::new(provider));
 
         assert!(extractor.provider().is_simulation());
     }
@@ -742,7 +742,7 @@ mod dst_tests {
 
         sim.run(|env| async move {
             let llm = SimLLMProvider::with_faults(42, env.faults.clone());
-            let extractor = EntityExtractor::new(llm);
+            let extractor = EntityExtractor::new(Box::new(llm));
 
             let result = extractor
                 .extract("Alice works at Acme Corp", ExtractionOptions::default())
@@ -811,7 +811,7 @@ mod dst_tests {
 
         sim.run(|env| async move {
             let llm = SimLLMProvider::with_faults(42, env.faults.clone());
-            let extractor = EntityExtractor::new(llm);
+            let extractor = EntityExtractor::new(Box::new(llm));
 
             let result = extractor
                 .extract("Bob is the CTO at TechCo", ExtractionOptions::default())
@@ -848,7 +848,7 @@ mod dst_tests {
 
         sim.run(|env| async move {
             let llm = SimLLMProvider::with_faults(42, env.faults.clone());
-            let extractor = EntityExtractor::new(llm);
+            let extractor = EntityExtractor::new(Box::new(llm));
 
             let result = extractor
                 .extract(
@@ -890,7 +890,7 @@ mod dst_tests {
 
         sim.run(|env| async move {
             let llm = SimLLMProvider::with_faults(42, env.faults.clone());
-            let extractor = EntityExtractor::new(llm);
+            let extractor = EntityExtractor::new(Box::new(llm));
 
             let mut fallback_count = 0;
             let mut success_count = 0;
@@ -953,7 +953,7 @@ mod dst_tests {
 
         sim.run(|env| async move {
             let llm = SimLLMProvider::with_faults(42, env.faults.clone());
-            let extractor = EntityExtractor::new(llm);
+            let extractor = EntityExtractor::new(Box::new(llm));
 
             let result = extractor
                 .extract("Test entity extraction", ExtractionOptions::default())

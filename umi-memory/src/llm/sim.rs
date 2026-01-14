@@ -241,7 +241,8 @@ mod tests {
         }
 
         let request = CompletionRequest::new("Hello, world!").with_json_mode();
-        let result: GenericResponse = provider.complete_json(&request).await.unwrap();
+        let value = provider.complete_json(&request).await.unwrap();
+        let result: GenericResponse = serde_json::from_value(value).unwrap();
 
         assert!(result.success);
         assert!(!result.response.is_empty());

@@ -1323,19 +1323,18 @@ impl PyRememberResult {
 /// Example (Sim providers):
 ///     memory = umi.Memory.sim(seed=42)
 ///     result = await memory.remember("text", options)
+///
+/// Example (Real providers):
+///     llm = umi.AnthropicProvider(api_key="sk-ant-...")
+///     embedder = umi.OpenAIEmbeddingProvider(api_key="sk-...")
+///     vector = umi.LanceVectorBackend.connect("./db")
+///     storage = umi.LanceStorageBackend.connect("./db")
+///     memory = umi.Memory.new(llm, embedder, vector, storage)
 #[pyclass(name = "Memory")]
 pub struct PyMemory {
     // Wrapped in Arc<Mutex<>> for sharing across async boundaries
-    inner: Arc<
-        Mutex<
-            umi_memory::umi::Memory<
-                umi_memory::llm::SimLLMProvider,
-                umi_memory::embedding::SimEmbeddingProvider,
-                umi_memory::storage::SimStorageBackend,
-                umi_memory::storage::SimVectorBackend,
-            >,
-        >,
-    >,
+    // Memory no longer has generic type parameters (uses trait objects internally)
+    inner: Arc<Mutex<umi_memory::umi::Memory>>,
 }
 
 #[pymethods]
@@ -1353,6 +1352,132 @@ impl PyMemory {
         Self {
             inner: Arc::new(Mutex::new(inner)),
         }
+    }
+
+    /// Create a Memory with Anthropic LLM + OpenAI embeddings + Lance storage.
+    ///
+    /// Args:
+    ///     anthropic_key: Anthropic API key (sk-ant-...)
+    ///     openai_key: OpenAI API key for embeddings (sk-...)
+    ///     db_path: Path to LanceDB directory
+    ///
+    /// Example:
+    ///     memory = umi.Memory.with_anthropic(
+    ///         anthropic_key="sk-ant-...",
+    ///         openai_key="sk-...",
+    ///         db_path="./umi_db"
+    ///     )
+    #[staticmethod]
+    fn with_anthropic(
+        anthropic_key: String,
+        openai_key: String,
+        db_path: String,
+    ) -> PyResult<Self> {
+        // Create providers
+        let llm = umi_memory::llm::AnthropicProvider::new(anthropic_key);
+        let embedder = umi_memory::embedding::OpenAIEmbeddingProvider::new(openai_key);
+
+        // Create tokio runtime for async operations
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
+
+        // Connect to LanceDB
+        let vector = runtime
+            .block_on(umi_memory::storage::LanceVectorBackend::connect(&db_path))
+            .map_err(|e| PyValueError::new_err(format!("Failed to connect to Lance vector: {}", e)))?;
+
+        let storage = runtime
+            .block_on(umi_memory::storage::LanceStorageBackend::connect(&db_path))
+            .map_err(|e| PyValueError::new_err(format!("Failed to connect to Lance storage: {}", e)))?;
+
+        // Create Memory with providers
+        let inner = umi_memory::umi::Memory::new(llm, embedder, vector, storage);
+
+        Ok(Self {
+            inner: Arc::new(Mutex::new(inner)),
+        })
+    }
+
+    /// Create a Memory with OpenAI LLM + embeddings + Lance storage.
+    ///
+    /// Args:
+    ///     openai_key: OpenAI API key (sk-...)
+    ///     db_path: Path to LanceDB directory
+    ///
+    /// Example:
+    ///     memory = umi.Memory.with_openai(
+    ///         openai_key="sk-...",
+    ///         db_path="./umi_db"
+    ///     )
+    #[staticmethod]
+    fn with_openai(openai_key: String, db_path: String) -> PyResult<Self> {
+        // Create providers
+        let llm = umi_memory::llm::OpenAIProvider::new(openai_key.clone());
+        let embedder = umi_memory::embedding::OpenAIEmbeddingProvider::new(openai_key);
+
+        // Create tokio runtime for async operations
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
+
+        // Connect to LanceDB
+        let vector = runtime
+            .block_on(umi_memory::storage::LanceVectorBackend::connect(&db_path))
+            .map_err(|e| PyValueError::new_err(format!("Failed to connect to Lance vector: {}", e)))?;
+
+        let storage = runtime
+            .block_on(umi_memory::storage::LanceStorageBackend::connect(&db_path))
+            .map_err(|e| PyValueError::new_err(format!("Failed to connect to Lance storage: {}", e)))?;
+
+        // Create Memory with providers
+        let inner = umi_memory::umi::Memory::new(llm, embedder, vector, storage);
+
+        Ok(Self {
+            inner: Arc::new(Mutex::new(inner)),
+        })
+    }
+
+    /// Create a Memory with Anthropic LLM + OpenAI embeddings + Postgres storage.
+    ///
+    /// Args:
+    ///     anthropic_key: Anthropic API key (sk-ant-...)
+    ///     openai_key: OpenAI API key for embeddings (sk-...)
+    ///     postgres_url: PostgreSQL connection URL (postgresql://...)
+    ///
+    /// Example:
+    ///     memory = umi.Memory.with_postgres(
+    ///         anthropic_key="sk-ant-...",
+    ///         openai_key="sk-...",
+    ///         postgres_url="postgresql://localhost/umi"
+    ///     )
+    #[staticmethod]
+    fn with_postgres(
+        anthropic_key: String,
+        openai_key: String,
+        postgres_url: String,
+    ) -> PyResult<Self> {
+        // Create providers
+        let llm = umi_memory::llm::AnthropicProvider::new(anthropic_key);
+        let embedder = umi_memory::embedding::OpenAIEmbeddingProvider::new(openai_key);
+
+        // Create tokio runtime for async operations
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
+
+        // Connect to Postgres
+        let vector = runtime
+            .block_on(umi_memory::storage::PostgresVectorBackend::connect(&postgres_url))
+            .map_err(|e| PyValueError::new_err(format!("Failed to connect to Postgres vector: {}", e)))?;
+
+        let storage = runtime
+            .block_on(umi_memory::storage::PostgresBackend::new(&postgres_url))
+            .map_err(|e| PyValueError::new_err(format!("Failed to connect to Postgres storage: {}", e)))?;
+
+        // Create Memory with providers
+        let inner = umi_memory::umi::Memory::new(llm, embedder, vector, storage);
+
+        Ok(Self {
+            inner: Arc::new(Mutex::new(inner)),
+        })
     }
 
     // =========================================================================
@@ -1585,7 +1710,7 @@ impl PyMemory {
     }
 
     fn __repr__(&self) -> String {
-        "Memory(providers=sim)".to_string()
+        "Memory(providers=configured)".to_string()
     }
 }
 

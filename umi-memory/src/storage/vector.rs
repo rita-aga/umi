@@ -45,7 +45,7 @@ pub struct VectorSearchResult {
 
 /// Trait for vector embedding storage backends.
 #[async_trait]
-pub trait VectorBackend: Send + Sync {
+pub trait VectorBackend: Send + Sync + std::fmt::Debug + 'static {
     /// Store an embedding for an entity.
     ///
     /// # Arguments
@@ -90,7 +90,7 @@ pub trait VectorBackend: Send + Sync {
 /// - Deterministic similarity computation
 /// - Fault injection support
 /// - No external dependencies
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SimVectorBackend {
     /// Stored embeddings
     embeddings: Arc<std::sync::RwLock<HashMap<String, Vec<f32>>>>,

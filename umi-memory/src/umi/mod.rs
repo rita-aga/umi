@@ -34,10 +34,11 @@
 //! }
 //! ```
 
-mod builder;
+// TODO: Re-enable builder module once Arc support is added
+// mod builder;
 mod config;
 
-pub use builder::MemoryBuilder;
+// pub use builder::MemoryBuilder;
 pub use config::MemoryConfig;
 
 use crate::constants::{
@@ -49,7 +50,7 @@ use crate::evolution::{DetectionOptions, EvolutionTracker};
 use crate::extraction::{EntityExtractor, ExtractionOptions};
 use crate::llm::LLMProvider;
 use crate::retrieval::{DualRetriever, SearchOptions};
-use crate::storage::{Entity, EntityType, EvolutionRelation, StorageBackend};
+use crate::storage::{Entity, EntityType, EvolutionRelation, StorageBackend, VectorBackend};
 use thiserror::Error;
 
 // =============================================================================
@@ -380,28 +381,17 @@ impl RememberResult {
 /// memory.remember("Alice works at Acme", RememberOptions::default()).await?;
 /// let results = memory.recall("Alice", RecallOptions::default()).await?;
 /// ```
-pub struct Memory<
-    L: LLMProvider,
-    E: EmbeddingProvider,
-    S: StorageBackend,
-    V: crate::storage::VectorBackend,
-> {
-    storage: S,
-    extractor: EntityExtractor<L>,
-    retriever: DualRetriever<L, E, V, S>,
-    evolution: EvolutionTracker<L, S>,
-    embedder: E,
-    vector: V,
+pub struct Memory {
+    storage: Box<dyn StorageBackend>,
+    extractor: EntityExtractor,
+    retriever: DualRetriever,
+    evolution: EvolutionTracker,
+    embedder: Box<dyn EmbeddingProvider>,
+    vector: Box<dyn VectorBackend>,
     config: MemoryConfig,
 }
 
-impl<
-        L: LLMProvider + Clone,
-        E: EmbeddingProvider + Clone,
-        S: StorageBackend + Clone,
-        V: crate::storage::VectorBackend + Clone,
-    > Memory<L, E, S, V>
-{
+impl Memory {
     /// Create a new Memory with all components.
     ///
     /// # Arguments
@@ -410,23 +400,29 @@ impl<
     /// - `vector` - Vector backend for similarity search
     /// - `storage` - Storage backend (cloned for retriever)
     #[must_use]
-    pub fn new(llm: L, embedder: E, vector: V, storage: S) -> Self {
-        let extractor = EntityExtractor::new(llm.clone());
+    pub fn new<L, E, V, S>(llm: L, embedder: E, vector: V, storage: S) -> Self
+    where
+        L: LLMProvider + Clone + 'static,
+        E: EmbeddingProvider + Clone + 'static,
+        V: VectorBackend + Clone + 'static,
+        S: StorageBackend + Clone + 'static,
+    {
+        let extractor = EntityExtractor::new(Box::new(llm.clone()));
         let retriever = DualRetriever::new(
-            llm.clone(),
-            embedder.clone(),
-            vector.clone(),
-            storage.clone(),
+            Box::new(llm.clone()),
+            Box::new(embedder.clone()),
+            Box::new(vector.clone()),
+            Box::new(storage.clone()),
         );
-        let evolution = EvolutionTracker::new(llm);
+        let evolution = EvolutionTracker::new(Box::new(llm));
 
         Self {
-            storage,
+            storage: Box::new(storage),
             extractor,
             retriever,
             evolution,
-            embedder,
-            vector,
+            embedder: Box::new(embedder),
+            vector: Box::new(vector),
             config: MemoryConfig::default(),
         }
     }
@@ -440,42 +436,82 @@ impl<
     /// - `storage` - Storage backend (cloned for retriever)
     /// - `config` - Memory configuration
     #[must_use]
-    pub fn with_config(llm: L, embedder: E, vector: V, storage: S, config: MemoryConfig) -> Self {
-        let extractor = EntityExtractor::new(llm.clone());
+    pub fn with_config<L, E, V, S>(
+        llm: L,
+        embedder: E,
+        vector: V,
+        storage: S,
+        config: MemoryConfig,
+    ) -> Self
+    where
+        L: LLMProvider + Clone + 'static,
+        E: EmbeddingProvider + Clone + 'static,
+        V: VectorBackend + Clone + 'static,
+        S: StorageBackend + Clone + 'static,
+    {
+        let extractor = EntityExtractor::new(Box::new(llm.clone()));
         let retriever = DualRetriever::new(
-            llm.clone(),
-            embedder.clone(),
-            vector.clone(),
-            storage.clone(),
+            Box::new(llm.clone()),
+            Box::new(embedder.clone()),
+            Box::new(vector.clone()),
+            Box::new(storage.clone()),
         );
-        let evolution = EvolutionTracker::new(llm);
+        let evolution = EvolutionTracker::new(Box::new(llm));
 
         Self {
-            storage,
+            storage: Box::new(storage),
             extractor,
             retriever,
             evolution,
-            embedder,
-            vector,
+            embedder: Box::new(embedder),
+            vector: Box::new(vector),
             config,
         }
     }
 
-    /// Create a `MemoryBuilder` for constructing Memory with builder pattern.
+    /// Create a Memory with Sim providers for testing.
+    ///
+    /// Convenient constructor for testing with deterministic simulation providers.
+    ///
+    /// # Arguments
+    /// - `seed` - Random seed for deterministic behavior
     ///
     /// # Example
     /// ```rust,ignore
-    /// let memory = Memory::builder()
-    ///     .with_llm(llm)
-    ///     .with_embedder(embedder)
-    ///     .with_vector(vector)
-    ///     .with_storage(storage)
-    ///     .build();
+    /// use umi_memory::umi::Memory;
+    ///
+    /// let memory = Memory::sim(42);
     /// ```
     #[must_use]
-    pub fn builder() -> MemoryBuilder<L, E, V, S> {
-        MemoryBuilder::new()
+    pub fn sim(seed: u64) -> Self {
+        use crate::dst::SimConfig;
+        use crate::embedding::SimEmbeddingProvider;
+        use crate::llm::SimLLMProvider;
+        use crate::storage::{SimStorageBackend, SimVectorBackend};
+
+        let llm = SimLLMProvider::with_seed(seed);
+        let embedder = SimEmbeddingProvider::with_seed(seed);
+        let vector = SimVectorBackend::new(seed);
+        let storage = SimStorageBackend::new(SimConfig::with_seed(seed));
+
+        Self::new(llm, embedder, vector, storage)
     }
+
+    // TODO: Re-enable builder pattern with Arc support
+    //
+    // The builder pattern doesn't work well with trait objects because Memory needs to
+    // clone providers to pass them to multiple components (EntityExtractor, DualRetriever,
+    // EvolutionTracker). Trait objects (Box<dyn Trait>) can't be cloned.
+    //
+    // Solutions:
+    // 1. Use Arc<dyn Trait> instead of Box<dyn Trait> for shared ownership
+    // 2. Change builder to accept multiple instances (llm_for_extractor, llm_for_retriever, etc.)
+    //
+    // For now, use Memory::new() with concrete provider types that implement Clone.
+    //
+    // pub fn builder() -> MemoryBuilder {
+    //     MemoryBuilder::new()
+    // }
 
     /// Store information in memory.
     ///
@@ -749,8 +785,8 @@ impl<
 
     /// Get reference to storage backend.
     #[must_use]
-    pub fn storage(&self) -> &S {
-        &self.storage
+    pub fn storage(&self) -> &dyn StorageBackend {
+        self.storage.as_ref()
     }
 }
 
@@ -789,7 +825,7 @@ mod tests {
     /// Helper to create a Memory with deterministic seed.
     fn create_memory(
         seed: u64,
-    ) -> Memory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend> {
+    ) -> Memory {
         let llm = SimLLMProvider::with_seed(seed);
         let embedder = SimEmbeddingProvider::with_seed(seed);
         let vector = SimVectorBackend::new(seed);
@@ -1159,78 +1195,7 @@ mod tests {
 // Sim Constructor
 // =============================================================================
 
-impl
-    Memory<
-        crate::llm::SimLLMProvider,
-        crate::embedding::SimEmbeddingProvider,
-        crate::storage::SimStorageBackend,
-        crate::storage::SimVectorBackend,
-    >
-{
-    /// Create a deterministic simulation Memory for testing.
-    ///
-    /// All components (LLM, embedder, vector, storage) use the same seed
-    /// for reproducible behavior.
-    ///
-    /// `TigerStyle`: Convenient constructor for tests.
-    ///
-    /// # Arguments
-    /// - `seed` - Random seed for deterministic behavior
-    ///
-    /// # Example
-    /// ```rust
-    /// use umi_memory::umi::Memory;
-    ///
-    /// let memory = Memory::sim(42);
-    /// // All operations will be deterministic with same seed
-    /// ```
-    #[must_use]
-    pub fn sim(seed: u64) -> Self {
-        use crate::dst::SimConfig;
-        use crate::embedding::SimEmbeddingProvider;
-        use crate::llm::SimLLMProvider;
-        use crate::storage::{SimStorageBackend, SimVectorBackend};
-
-        let llm = SimLLMProvider::with_seed(seed);
-        let embedder = SimEmbeddingProvider::with_seed(seed);
-        let vector = SimVectorBackend::new(seed);
-        let storage = SimStorageBackend::new(SimConfig::with_seed(seed));
-
-        Self::new(llm, embedder, vector, storage)
-    }
-
-    /// Create a deterministic simulation Memory with custom configuration.
-    ///
-    /// Combines the convenience of `sim()` with custom config.
-    ///
-    /// `TigerStyle`: Convenient constructor for configured tests.
-    ///
-    /// # Arguments
-    /// - `seed` - Random seed for deterministic behavior
-    /// - `config` - Custom configuration
-    ///
-    /// # Example
-    /// ```rust
-    /// use umi_memory::umi::{Memory, MemoryConfig};
-    ///
-    /// let config = MemoryConfig::default().with_recall_limit(5);
-    /// let memory = Memory::sim_with_config(42, config);
-    /// ```
-    #[must_use]
-    pub fn sim_with_config(seed: u64, config: MemoryConfig) -> Self {
-        use crate::dst::SimConfig;
-        use crate::embedding::SimEmbeddingProvider;
-        use crate::llm::SimLLMProvider;
-        use crate::storage::{SimStorageBackend, SimVectorBackend};
-
-        let llm = SimLLMProvider::with_seed(seed);
-        let embedder = SimEmbeddingProvider::with_seed(seed);
-        let vector = SimVectorBackend::new(seed);
-        let storage = SimStorageBackend::new(SimConfig::with_seed(seed));
-
-        Self::with_config(llm, embedder, vector, storage, config)
-    }
-}
+// sim() and sim_with_config() methods are in main impl block above
 
 // =============================================================================
 // DST Tests - Deterministic Simulation with Fault Injection

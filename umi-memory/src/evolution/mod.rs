@@ -38,8 +38,7 @@ use crate::constants::{
     EVOLUTION_EXISTING_ENTITIES_COUNT_MAX, EVOLUTION_REASON_BYTES_MAX,
 };
 use crate::llm::{CompletionRequest, LLMProvider};
-use crate::storage::{Entity, EvolutionRelation, EvolutionType, StorageBackend};
-use std::marker::PhantomData;
+use crate::storage::{Entity, EvolutionRelation, EvolutionType};
 use thiserror::Error;
 
 // =============================================================================
@@ -183,22 +182,18 @@ impl DetectionResult {
 ///     println!("Evolution: {:?}", detection.evolution_type());
 /// }
 /// ```
-pub struct EvolutionTracker<L: LLMProvider, S: StorageBackend> {
-    llm: L,
-    _storage: PhantomData<S>,
+pub struct EvolutionTracker {
+    llm: Box<dyn LLMProvider>,
 }
 
-impl<L: LLMProvider, S: StorageBackend> EvolutionTracker<L, S> {
+impl EvolutionTracker {
     /// Create a new evolution tracker.
     ///
     /// # Arguments
     /// - `llm` - LLM provider for evolution detection
     #[must_use]
-    pub fn new(llm: L) -> Self {
-        Self {
-            llm,
-            _storage: PhantomData,
-        }
+    pub fn new(llm: Box<dyn LLMProvider>) -> Self {
+        Self { llm }
     }
 
     /// Detect evolution relationship between new and existing entities.
@@ -348,9 +343,9 @@ mod tests {
     use crate::storage::{EntityType, SimStorageBackend};
 
     /// Helper to create a tracker with deterministic seed.
-    fn create_tracker(seed: u64) -> EvolutionTracker<SimLLMProvider, SimStorageBackend> {
+    fn create_tracker(seed: u64) -> EvolutionTracker {
         let llm = SimLLMProvider::with_seed(seed);
-        EvolutionTracker::new(llm)
+        EvolutionTracker::new(Box::new(llm))
     }
 
     /// Helper to create an entity.
@@ -840,8 +835,8 @@ mod dst_tests {
 
         sim.run(|env| async move {
             let llm = SimLLMProvider::with_faults(42, env.faults.clone());
-            let tracker: EvolutionTracker<SimLLMProvider, SimStorageBackend> =
-                EvolutionTracker::new(llm);
+            let tracker: EvolutionTracker =
+                EvolutionTracker::new(Box::new(llm));
 
             let old_entity = create_entity("old-1", "Alice", "Works at Acme Corp");
             let new_entity = create_entity("new-1", "Alice", "Left Acme, now at StartupX");
@@ -885,8 +880,8 @@ mod dst_tests {
 
         sim.run(|env| async move {
             let llm = SimLLMProvider::with_faults(42, env.faults.clone());
-            let tracker: EvolutionTracker<SimLLMProvider, SimStorageBackend> =
-                EvolutionTracker::new(llm);
+            let tracker: EvolutionTracker =
+                EvolutionTracker::new(Box::new(llm));
 
             let old_entity = create_entity("old-1", "Bob", "Knows JavaScript");
             let new_entity = create_entity("new-1", "Bob", "Also learned TypeScript");
@@ -929,8 +924,8 @@ mod dst_tests {
 
         sim.run(|env| async move {
             let llm = SimLLMProvider::with_faults(42, env.faults.clone());
-            let tracker: EvolutionTracker<SimLLMProvider, SimStorageBackend> =
-                EvolutionTracker::new(llm);
+            let tracker: EvolutionTracker =
+                EvolutionTracker::new(Box::new(llm));
 
             let old_entity = create_entity("old-1", "User", "Loves hiking");
             let new_entity = create_entity("new-1", "User", "Hates hiking");
@@ -973,8 +968,8 @@ mod dst_tests {
 
         sim.run(|env| async move {
             let llm = SimLLMProvider::with_faults(42, env.faults.clone());
-            let tracker: EvolutionTracker<SimLLMProvider, SimStorageBackend> =
-                EvolutionTracker::new(llm);
+            let tracker: EvolutionTracker =
+                EvolutionTracker::new(Box::new(llm));
 
             let old_entity = create_entity("old-1", "Test", "Original content");
 
@@ -1038,8 +1033,8 @@ mod dst_tests {
 
         sim.run(|env| async move {
             let llm = SimLLMProvider::with_faults(42, env.faults.clone());
-            let tracker: EvolutionTracker<SimLLMProvider, SimStorageBackend> =
-                EvolutionTracker::new(llm);
+            let tracker: EvolutionTracker =
+                EvolutionTracker::new(Box::new(llm));
 
             let old_entity = create_entity("old-1", "User", "Works from home");
             let new_entity = create_entity("new-1", "User", "Prefers remote work");
@@ -1082,8 +1077,8 @@ mod dst_tests {
 
         sim.run(|env| async move {
             let llm = SimLLMProvider::with_faults(42, env.faults.clone());
-            let tracker: EvolutionTracker<SimLLMProvider, SimStorageBackend> =
-                EvolutionTracker::new(llm);
+            let tracker: EvolutionTracker =
+                EvolutionTracker::new(Box::new(llm));
 
             // Multiple existing entities
             let existing: Vec<Entity> = (0..5)

@@ -29,26 +29,20 @@ use crate::storage::{StorageBackend, VectorBackend};
 /// use umi_memory::storage::{SimVectorBackend, SimStorageBackend, SimConfig};
 ///
 /// let memory = Memory::builder()
-///     .with_llm(SimLLMProvider::with_seed(42))
-///     .with_embedder(SimEmbeddingProvider::with_seed(42))
-///     .with_vector(SimVectorBackend::new(42))
-///     .with_storage(SimStorageBackend::new(SimConfig::with_seed(42)))
+///     .with_llm(Box::new(SimLLMProvider::with_seed(42)))
+///     .with_embedder(Box::new(SimEmbeddingProvider::with_seed(42)))
+///     .with_vector(Box::new(SimVectorBackend::new(42)))
+///     .with_storage(Box::new(SimStorageBackend::new(SimConfig::with_seed(42))))
 ///     .build();
 /// ```
-pub struct MemoryBuilder<L, E, V, S> {
-    llm: Option<L>,
-    embedder: Option<E>,
-    vector: Option<V>,
-    storage: Option<S>,
+pub struct MemoryBuilder {
+    llm: Option<Box<dyn LLMProvider>>,
+    embedder: Option<Box<dyn EmbeddingProvider>>,
+    vector: Option<Box<dyn VectorBackend>>,
+    storage: Option<Box<dyn StorageBackend>>,
 }
 
-impl<L, E, V, S> MemoryBuilder<L, E, V, S>
-where
-    L: LLMProvider + Clone,
-    E: EmbeddingProvider + Clone,
-    V: VectorBackend + Clone,
-    S: StorageBackend + Clone,
-{
+impl MemoryBuilder {
     /// Create a new builder with no components set.
     #[must_use]
     pub fn new() -> Self {
@@ -65,7 +59,7 @@ where
     /// # Arguments
     /// - `llm` - LLM provider for extraction, retrieval, evolution
     #[must_use]
-    pub fn with_llm(mut self, llm: L) -> Self {
+    pub fn with_llm(mut self, llm: Box<dyn LLMProvider>) -> Self {
         self.llm = Some(llm);
         self
     }
@@ -75,7 +69,7 @@ where
     /// # Arguments
     /// - `embedder` - Embedding provider for generating vector embeddings
     #[must_use]
-    pub fn with_embedder(mut self, embedder: E) -> Self {
+    pub fn with_embedder(mut self, embedder: Box<dyn EmbeddingProvider>) -> Self {
         self.embedder = Some(embedder);
         self
     }
@@ -85,7 +79,7 @@ where
     /// # Arguments
     /// - `vector` - Vector backend for similarity search
     #[must_use]
-    pub fn with_vector(mut self, vector: V) -> Self {
+    pub fn with_vector(mut self, vector: Box<dyn VectorBackend>) -> Self {
         self.vector = Some(vector);
         self
     }
@@ -95,7 +89,7 @@ where
     /// # Arguments
     /// - `storage` - Storage backend for entity persistence
     #[must_use]
-    pub fn with_storage(mut self, storage: S) -> Self {
+    pub fn with_storage(mut self, storage: Box<dyn StorageBackend>) -> Self {
         self.storage = Some(storage);
         self
     }
@@ -108,23 +102,17 @@ where
     /// # Returns
     /// Constructed Memory instance
     #[must_use]
-    pub fn build(self) -> Memory<L, E, S, V> {
+    pub fn build(self) -> Memory {
         let llm = self.llm.expect("LLM provider is required");
         let embedder = self.embedder.expect("Embedder is required");
         let vector = self.vector.expect("Vector backend is required");
         let storage = self.storage.expect("Storage backend is required");
 
-        Memory::new(llm, embedder, vector, storage)
+        Memory::from_boxed(llm, embedder, vector, storage)
     }
 }
 
-impl<L, E, V, S> Default for MemoryBuilder<L, E, V, S>
-where
-    L: LLMProvider + Clone,
-    E: EmbeddingProvider + Clone,
-    V: VectorBackend + Clone,
-    S: StorageBackend + Clone,
-{
+impl Default for MemoryBuilder {
     fn default() -> Self {
         Self::new()
     }

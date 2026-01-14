@@ -95,12 +95,7 @@ impl SimEnvironment {
     /// }
     /// ```
     #[must_use]
-    pub fn create_memory(&self) -> crate::umi::Memory<
-        crate::llm::SimLLMProvider,
-        crate::embedding::SimEmbeddingProvider,
-        crate::storage::SimStorageBackend,
-        crate::storage::SimVectorBackend,
-    > {
+    pub fn create_memory(&self) -> crate::umi::Memory {
         use crate::embedding::SimEmbeddingProvider;
         use crate::llm::SimLLMProvider;
         use crate::storage::{SimStorageBackend, SimVectorBackend};

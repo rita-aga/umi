@@ -51,6 +51,7 @@ const TABLE_NAME: &str = "embeddings";
 /// backend.store("entity1", &embedding).await?;
 /// let results = backend.search(&query_embedding, 10).await?;
 /// ```
+#[derive(Clone)]
 pub struct LanceVectorBackend {
     db: Arc<dyn Connection>,
     table_name: String,

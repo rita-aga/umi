@@ -215,7 +215,7 @@ impl EmbeddingError {
 /// }
 /// ```
 #[async_trait]
-pub trait EmbeddingProvider: Send + Sync {
+pub trait EmbeddingProvider: Send + Sync + std::fmt::Debug + 'static {
     /// Generate embedding for a single text.
     ///
     /// # Arguments
