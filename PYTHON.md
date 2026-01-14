@@ -4,8 +4,8 @@ Python bindings for Umi Memory using PyO3.
 
 ## Status: Feature Complete (v0.2.0)
 
-✅ **Phase 1-5, 7-10 Complete** - Core functionality implemented
-⚠️  **Phase 6 Pending** - Async support (not yet implemented)
+✅ **All Phases 1-10 Complete** - Full Python bindings with async support!
+⚠️  **Phase 12 Pending** - Real provider injection (requires type erasure)
 
 ### What Works
 
@@ -23,13 +23,10 @@ Python bindings for Umi Memory using PyO3.
 - ✅ **Result Types** (Phase 4)
   - `RememberResult` - Contains stored entities and evolution relationships
 
-- ✅ **Memory Class with Sync API** (Phase 5)
+- ✅ **Memory Class with Full API** (Phase 5-6)
   - `Memory.sim(seed)` - Create with Sim providers (deterministic testing)
-  - `remember_sync()` - Store information
-  - `recall_sync()` - Retrieve memories
-  - `forget_sync()` - Delete entity
-  - `get_sync()` - Get entity by ID
-  - `count_sync()` - Count total entities
+  - **Async API**: `remember()`, `recall()`, `forget()`, `get()`, `count()`
+  - **Sync API**: `remember_sync()`, `recall_sync()`, `forget_sync()`, `get_sync()`, `count_sync()`
 
 - ✅ **Error Handling** (Phase 7)
   - Python exception types: `UmiError`, `EmptyTextError`, `StorageError`, etc.
@@ -47,7 +44,6 @@ Python bindings for Umi Memory using PyO3.
 
 ### What's Not Yet Implemented
 
-- ⚠️ **Async API** (Phase 6) - No native Python async/await support yet
 - ⚠️ **Real Provider Integration in Memory** - Memory class currently only works with Sim providers
   - All real provider classes ARE exposed and functional
   - Just not wired into Memory constructor yet (needs enum-based type erasure)
@@ -67,25 +63,42 @@ pip install target/wheels/umi-*.whl
 
 ## Quick Start
 
+### Async API (Recommended)
+
+```python
+import asyncio
+import umi
+
+async def main():
+    # Create memory with deterministic seed
+    memory = umi.Memory.sim(seed=42)
+
+    # Store information
+    options = umi.RememberOptions()
+    result = await memory.remember("Alice works at Acme Corp", options)
+    print(f"Stored {result.entity_count()} entities")
+
+    # Retrieve information
+    entities = await memory.recall("Who works at Acme?", umi.RecallOptions())
+    for entity in entities:
+        print(f"- {entity.name}: {entity.content}")
+
+    # Count total entities
+    total = await memory.count()
+    print(f"Total: {total} entities")
+
+asyncio.run(main())
+```
+
+### Sync API (For REPL/Simple Scripts)
+
 ```python
 import umi
 
-# Create memory with deterministic seed
 memory = umi.Memory.sim(seed=42)
-
-# Store information
-options = umi.RememberOptions()
-result = memory.remember_sync("Alice works at Acme Corp", options)
-print(f"Stored {result.entity_count()} entities")
-
-# Retrieve information
-entities = memory.recall_sync("Who works at Acme?", umi.RecallOptions())
-for entity in entities:
-    print(f"- {entity.name}: {entity.content}")
-
-# Count total entities
-total = memory.count_sync()
-print(f"Total: {total} entities")
+result = memory.remember_sync("Alice works at Acme", umi.RememberOptions())
+entities = memory.recall_sync("Alice", umi.RecallOptions())
+print(f"Found {len(entities)} entities")
 ```
 
 ## Provider Classes
@@ -189,21 +202,25 @@ mypy your_script.py
 
 See `umi-py/examples/` for complete examples:
 
-- `01_basic_sync_sim.py` - Basic usage
+- `01_basic_sync_sim.py` - Basic sync usage
 - `02_options_demo.py` - Options API
 - `03_deterministic_demo.py` - DST demonstration
+- `04_async_demo.py` - Native async/await support
 
 ## Testing
 
 ```bash
-# Install pytest
-pip install pytest
+# Install pytest and pytest-asyncio
+pip install pytest pytest-asyncio
 
-# Run tests (unit tests only, no API keys needed)
+# Run all tests (unit tests, no API keys needed)
 pytest umi-py/tests/
 
 # Run with verbose output
 pytest umi-py/tests/ -v
+
+# Run only async tests
+pytest umi-py/tests/test_memory_async.py -v
 
 # Skip integration tests (default)
 pytest umi-py/tests/ -m "not integration"
@@ -214,10 +231,6 @@ pytest umi-py/tests/ -m "not integration"
 ### Current Limitations
 
 1. **Memory only supports Sim providers** - Real providers (Anthropic, OpenAI, Lance, Postgres) are exposed as classes but not yet integrated into Memory constructor. Requires enum-based type erasure to support all provider combinations.
-
-2. **No async API** - Currently only `*_sync` methods available. Native Python async/await support planned for v0.3.0.
-
-3. **Blocking operations** - All methods use `tokio::runtime::Runtime::block_on()` internally. Not ideal for async Python applications.
 
 ### Why Sim Providers Only in Memory?
 
@@ -231,8 +244,6 @@ Supporting all combinations in Python requires type erasure (enum or trait objec
 ### Future Work (v0.3.0)
 
 - [ ] Add enum-based type erasure for Memory to support all provider combinations
-- [ ] Add true Python async/await support using pyo3-asyncio
-- [ ] Async constructors for storage backends
 - [ ] Integration tests for real providers (Anthropic, OpenAI, LanceDB, Postgres)
 - [ ] Builder pattern for Memory construction
 - [ ] Comprehensive documentation with all provider examples

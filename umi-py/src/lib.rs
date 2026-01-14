@@ -27,6 +27,8 @@ use pyo3::prelude::*;
 use pyo3::{create_exception, PyErr};
 use pyo3::types::PyBytes;
 use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use umi_memory::memory::{
     CoreMemory as RustCoreMemory, CoreMemoryConfig, CoreMemoryError, MemoryBlockType,
@@ -1320,16 +1322,19 @@ impl PyRememberResult {
 ///
 /// Example (Sim providers):
 ///     memory = umi.Memory.sim(seed=42)
-///     result = memory.remember_sync("text", options)
+///     result = await memory.remember("text", options)
 #[pyclass(name = "Memory")]
 pub struct PyMemory {
-    // For now, only support Sim providers (simplest path)
-    // TODO: Add support for real providers with enum-based type erasure
-    inner: umi_memory::umi::Memory<
-        umi_memory::llm::SimLLMProvider,
-        umi_memory::embedding::SimEmbeddingProvider,
-        umi_memory::storage::SimStorageBackend,
-        umi_memory::storage::SimVectorBackend,
+    // Wrapped in Arc<Mutex<>> for sharing across async boundaries
+    inner: Arc<
+        Mutex<
+            umi_memory::umi::Memory<
+                umi_memory::llm::SimLLMProvider,
+                umi_memory::embedding::SimEmbeddingProvider,
+                umi_memory::storage::SimStorageBackend,
+                umi_memory::storage::SimVectorBackend,
+            >,
+        >,
     >,
 }
 
@@ -1345,7 +1350,131 @@ impl PyMemory {
     #[staticmethod]
     fn sim(seed: u64) -> Self {
         let inner = umi_memory::umi::Memory::sim(seed);
-        Self { inner }
+        Self {
+            inner: Arc::new(Mutex::new(inner)),
+        }
+    }
+
+    // =========================================================================
+    // Async API (native Python async/await)
+    // =========================================================================
+
+    /// Store information in memory (async).
+    ///
+    /// Args:
+    ///     text: Text to remember
+    ///     options: Remember options
+    ///
+    /// Returns:
+    ///     RememberResult with stored entities and evolutions
+    fn remember<'p>(
+        &'p mut self,
+        py: Python<'p>,
+        text: String,
+        options: PyRememberOptions,
+    ) -> PyResult<&'p PyAny> {
+        let inner = Arc::clone(&self.inner);
+        let opts = options.inner.clone();
+
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let mut guard = inner.lock().await;
+            let result = guard
+                .remember(&text, opts)
+                .await
+                .map_err(|e| PyValueError::new_err(format!("Remember failed: {}", e)))?;
+
+            Ok(Python::with_gil(|_py| PyRememberResult::from_rust(result)))
+        })
+    }
+
+    /// Retrieve memories matching query (async).
+    ///
+    /// Args:
+    ///     query: Search query
+    ///     options: Recall options
+    ///
+    /// Returns:
+    ///     List of matching entities
+    fn recall<'p>(
+        &'p self,
+        py: Python<'p>,
+        query: String,
+        options: PyRecallOptions,
+    ) -> PyResult<&'p PyAny> {
+        let inner = Arc::clone(&self.inner);
+        let opts = options.inner.clone();
+
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let entities = guard
+                .recall(&query, opts)
+                .await
+                .map_err(|e| PyValueError::new_err(format!("Recall failed: {}", e)))?;
+
+            Ok(Python::with_gil(|_py| {
+                entities.into_iter().map(PyEntity::from_rust).collect::<Vec<_>>()
+            }))
+        })
+    }
+
+    /// Delete entity by ID (async).
+    ///
+    /// Args:
+    ///     entity_id: ID of entity to delete
+    ///
+    /// Returns:
+    ///     True if deleted, False if not found
+    fn forget<'p>(&'p mut self, py: Python<'p>, entity_id: String) -> PyResult<&'p PyAny> {
+        let inner = Arc::clone(&self.inner);
+
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let mut guard = inner.lock().await;
+            let deleted = guard
+                .forget(&entity_id)
+                .await
+                .map_err(|e| PyValueError::new_err(format!("Forget failed: {}", e)))?;
+
+            Ok(deleted)
+        })
+    }
+
+    /// Get entity by ID (async).
+    ///
+    /// Args:
+    ///     entity_id: Entity ID
+    ///
+    /// Returns:
+    ///     Entity if found, None otherwise
+    fn get<'p>(&'p self, py: Python<'p>, entity_id: String) -> PyResult<&'p PyAny> {
+        let inner = Arc::clone(&self.inner);
+
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let entity = guard
+                .get(&entity_id)
+                .await
+                .map_err(|e| PyValueError::new_err(format!("Get failed: {}", e)))?;
+
+            Ok(Python::with_gil(|_py| entity.map(PyEntity::from_rust)))
+        })
+    }
+
+    /// Count total entities in storage (async).
+    ///
+    /// Returns:
+    ///     Total number of entities
+    fn count<'p>(&'p self, py: Python<'p>) -> PyResult<&'p PyAny> {
+        let inner = Arc::clone(&self.inner);
+
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let count = guard
+                .count()
+                .await
+                .map_err(|e| PyValueError::new_err(format!("Count failed: {}", e)))?;
+
+            Ok(count)
+        })
     }
 
     // =========================================================================
@@ -1369,8 +1498,9 @@ impl PyMemory {
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
 
+        let mut guard = self.inner.blocking_lock();
         let result = runtime
-            .block_on(self.inner.remember(&text, options.inner.clone()))
+            .block_on(guard.remember(&text, options.inner.clone()))
             .map_err(|e| PyValueError::new_err(format!("Remember failed: {}", e)))?;
 
         Ok(PyRememberResult::from_rust(result))
@@ -1392,8 +1522,9 @@ impl PyMemory {
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
 
+        let guard = self.inner.blocking_lock();
         let entities = runtime
-            .block_on(self.inner.recall(&query, options.inner.clone()))
+            .block_on(guard.recall(&query, options.inner.clone()))
             .map_err(|e| PyValueError::new_err(format!("Recall failed: {}", e)))?;
 
         Ok(entities.into_iter().map(PyEntity::from_rust).collect())
@@ -1410,8 +1541,9 @@ impl PyMemory {
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
 
+        let mut guard = self.inner.blocking_lock();
         let deleted = runtime
-            .block_on(self.inner.forget(&entity_id))
+            .block_on(guard.forget(&entity_id))
             .map_err(|e| PyValueError::new_err(format!("Forget failed: {}", e)))?;
 
         Ok(deleted)
@@ -1428,8 +1560,9 @@ impl PyMemory {
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
 
+        let guard = self.inner.blocking_lock();
         let entity = runtime
-            .block_on(self.inner.get(&entity_id))
+            .block_on(guard.get(&entity_id))
             .map_err(|e| PyValueError::new_err(format!("Get failed: {}", e)))?;
 
         Ok(entity.map(PyEntity::from_rust))
@@ -1443,8 +1576,9 @@ impl PyMemory {
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
 
+        let guard = self.inner.blocking_lock();
         let count = runtime
-            .block_on(self.inner.count())
+            .block_on(guard.count())
             .map_err(|e| PyValueError::new_err(format!("Count failed: {}", e)))?;
 
         Ok(count)

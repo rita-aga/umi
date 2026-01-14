@@ -17,9 +17,10 @@ pip install umi-memory
 
 ### Basic Usage
 
-- **01_basic_sync_sim.py** - Basic remember/recall with Sim providers
+- **01_basic_sync_sim.py** - Basic remember/recall with Sim providers (sync API)
 - **02_options_demo.py** - Using RememberOptions and RecallOptions
 - **03_deterministic_demo.py** - Demonstrating DST (same seed = same results)
+- **04_async_demo.py** - Native Python async/await support
 
 ### Running Examples
 
