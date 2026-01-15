@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use umi_memory::embedding::OpenAIEmbeddingProvider;
     use umi_memory::llm::AnthropicProvider;
     use umi_memory::storage::{LanceStorageBackend, LanceVectorBackend};
-    use umi_memory::umi::{Memory, RememberOptions, RecallOptions};
+    use umi_memory::umi::{Memory, RecallOptions, RememberOptions};
 
     let llm = AnthropicProvider::new(env::var("ANTHROPIC_API_KEY").unwrap());
     let embedder = OpenAIEmbeddingProvider::new(env::var("OPENAI_API_KEY").unwrap());
@@ -72,7 +72,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Let's see what we remember
-    println!("\n   📊 Memory Status: {} entities stored\n", memory.count().await?);
+    println!(
+        "\n   📊 Memory Status: {} entities stored\n",
+        memory.count().await?
+    );
 
     // =========================================================================
     // Session 2: Ask questions about the user
@@ -87,7 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Where does Sarah work?",
         "What project is Sarah working on?",
         "What programming languages does Sarah know?",
-        "Who is Sarah?",  // Broad query
+        "Who is Sarah?", // Broad query
     ];
 
     for query in &queries {
@@ -98,9 +101,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             println!("   → Found {} results:", results.len());
             for (i, entity) in results.iter().take(3).enumerate() {
-                println!("      {}. {} ({}): {}", 
-                    i + 1, 
-                    entity.name, 
+                println!(
+                    "      {}. {} ({}): {}",
+                    i + 1,
+                    entity.name,
                     entity.entity_type.as_str(),
                     truncate(&entity.content, 60)
                 );
@@ -127,19 +131,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("   User: \"{}\"", update);
         let result = memory.remember(update, RememberOptions::default()).await?;
         println!("   → Stored {} entities", result.entities.len());
-        
+
         // Check for evolution
         if !result.evolutions.is_empty() {
             println!("   🔄 Evolution detected:");
             for rel in &result.evolutions {
-                println!("      - Type: {:?}, Confidence: {:.2}", rel.evolution_type, rel.confidence);
+                println!(
+                    "      - Type: {:?}, Confidence: {:.2}",
+                    rel.evolution_type, rel.confidence
+                );
                 println!("        Reason: {}", truncate(&rel.reason, 70));
             }
         }
         println!();
     }
 
-    println!("   📊 Memory Status: {} entities stored\n", memory.count().await?);
+    println!(
+        "   📊 Memory Status: {} entities stored\n",
+        memory.count().await?
+    );
 
     // =========================================================================
     // Session 4: Complex Queries
@@ -158,7 +168,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for query in &complex_queries {
         println!("   Query: \"{}\"", query);
-        let results = memory.recall(query, RecallOptions::default().with_limit(5)?).await?;
+        let results = memory
+            .recall(query, RecallOptions::default().with_limit(5)?)
+            .await?;
         println!("   → Found {} relevant memories:", results.len());
         for entity in results.iter().take(3) {
             println!("      • {}: {}", entity.name, truncate(&entity.content, 50));
@@ -177,30 +189,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Empty query
     println!("   Test: Empty string query");
     match memory.recall("", RecallOptions::default()).await {
-        Ok(results) => println!("   → Returned {} results (handled gracefully)\n", results.len()),
+        Ok(results) => println!(
+            "   → Returned {} results (handled gracefully)\n",
+            results.len()
+        ),
         Err(e) => println!("   → Error: {} (should this be handled better?)\n", e),
     }
 
     // Very long input
     println!("   Test: Very long input text");
-    let long_text = "Sarah mentioned that ".to_string() + &"she really enjoys working on machine learning projects. ".repeat(50);
-    match memory.remember(&long_text, RememberOptions::default()).await {
-        Ok(result) => println!("   → Handled long text, extracted {} entities\n", result.entities.len()),
+    let long_text = "Sarah mentioned that ".to_string()
+        + &"she really enjoys working on machine learning projects. ".repeat(50);
+    match memory
+        .remember(&long_text, RememberOptions::default())
+        .await
+    {
+        Ok(result) => println!(
+            "   → Handled long text, extracted {} entities\n",
+            result.entities.len()
+        ),
         Err(e) => println!("   → Error with long text: {}\n", e),
     }
 
     // Query for non-existent entity
     println!("   Test: Query for entity that doesn't exist");
-    let results = memory.recall("Who is John Smith?", RecallOptions::default()).await?;
-    println!("   → Found {} results (expected 0 or low relevance)\n", results.len());
+    let results = memory
+        .recall("Who is John Smith?", RecallOptions::default())
+        .await?;
+    println!(
+        "   → Found {} results (expected 0 or low relevance)\n",
+        results.len()
+    );
 
     // Unicode handling
     println!("   Test: Unicode in names and text");
-    let unicode_result = memory.remember(
-        "Sarah's colleague 田中太郎 (Tanaka Taro) from Tokyo joined the project.",
-        RememberOptions::default()
-    ).await?;
-    println!("   → Extracted {} entities with unicode\n", unicode_result.entities.len());
+    let unicode_result = memory
+        .remember(
+            "Sarah's colleague 田中太郎 (Tanaka Taro) from Tokyo joined the project.",
+            RememberOptions::default(),
+        )
+        .await?;
+    println!(
+        "   → Extracted {} entities with unicode\n",
+        unicode_result.entities.len()
+    );
 
     // =========================================================================
     // Final Summary
@@ -215,13 +247,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Get all entities and summarize
     println!("   All remembered entities:");
-    let all_results = memory.recall("*", RecallOptions::default().with_limit(50)?).await?;
-    
-    let mut by_type: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    let all_results = memory
+        .recall("*", RecallOptions::default().with_limit(50)?)
+        .await?;
+
+    let mut by_type: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
     for entity in &all_results {
-        by_type.entry(entity.entity_type.as_str().to_string()).or_default().push(entity.name.clone());
+        by_type
+            .entry(entity.entity_type.as_str().to_string())
+            .or_default()
+            .push(entity.name.clone());
     }
-    
+
     for (entity_type, names) in &by_type {
         println!("      {}: {}", entity_type, names.join(", "));
     }

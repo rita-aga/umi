@@ -15,18 +15,18 @@
 #![cfg(all(feature = "embedding-openai", feature = "anthropic"))]
 
 use std::env;
+use umi_memory::dst::SimConfig;
 use umi_memory::embedding::OpenAIEmbeddingProvider;
 use umi_memory::llm::AnthropicProvider;
 use umi_memory::storage::{SimStorageBackend, SimVectorBackend};
-use umi_memory::umi::{Memory, MemoryConfig, RememberOptions, RecallOptions};
-use umi_memory::dst::SimConfig;
+use umi_memory::umi::{Memory, MemoryConfig, RecallOptions, RememberOptions};
 
 /// Helper to create Memory with real Anthropic LLM + OpenAI embeddings
 fn create_memory_with_real_embeddings() -> Memory {
-    let openai_key = env::var("OPENAI_API_KEY")
-        .expect("OPENAI_API_KEY must be set for integration tests");
-    let anthropic_key = env::var("ANTHROPIC_API_KEY")
-        .expect("ANTHROPIC_API_KEY must be set for integration tests");
+    let openai_key =
+        env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set for integration tests");
+    let anthropic_key =
+        env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY must be set for integration tests");
 
     let config = MemoryConfig::default();
     let llm = AnthropicProvider::new(anthropic_key);
@@ -59,7 +59,10 @@ async fn test_recall_returns_relevant_results_real_embeddings() {
         .await
         .unwrap();
 
-    println!("  Stored {} entities from first remember()", result1.entities.len());
+    println!(
+        "  Stored {} entities from first remember()",
+        result1.entities.len()
+    );
     for e in &result1.entities {
         println!("    - {} ({})", e.name, e.entity_type);
     }
@@ -160,7 +163,10 @@ async fn test_stress_recall_relevance_real_embeddings() {
     for i in 0..10 {
         memory
             .remember(
-                &format!("Unrelated fact {}: Python and Rust programming languages", i),
+                &format!(
+                    "Unrelated fact {}: Python and Rust programming languages",
+                    i
+                ),
                 RememberOptions::default(),
             )
             .await
@@ -240,10 +246,7 @@ async fn test_nonexistent_entity_real_embeddings() {
         .unwrap();
 
     memory
-        .remember(
-            "Sarah loves Python programming",
-            RememberOptions::default(),
-        )
+        .remember("Sarah loves Python programming", RememberOptions::default())
         .await
         .unwrap();
 

@@ -18,11 +18,7 @@ use umi_memory::orchestration::{UnifiedMemory, UnifiedMemoryConfig};
 use umi_memory::storage::{EntityType, SimStorageBackend, SimVectorBackend};
 
 /// Create a UnifiedMemory instance for deterministic testing.
-fn create_unified(
-    seed: u64,
-    clock: SimClock,
-    config: UnifiedMemoryConfig,
-) -> UnifiedMemory {
+fn create_unified(seed: u64, clock: SimClock, config: UnifiedMemoryConfig) -> UnifiedMemory {
     let llm = SimLLMProvider::with_seed(seed);
     let embedder = SimEmbeddingProvider::with_seed(seed);
     let vector = SimVectorBackend::new(seed);
@@ -93,8 +89,7 @@ async fn example_access_tracking() -> anyhow::Result<()> {
     let sim = Simulation::new(SimConfig::with_seed(42));
 
     sim.run(|env| async move {
-        let config = UnifiedMemoryConfig::new()
-            .with_core_entity_limit(5); // Small limit to demonstrate promotion
+        let config = UnifiedMemoryConfig::new().with_core_entity_limit(5); // Small limit to demonstrate promotion
 
         let mut memory = create_unified(42, env.clock.clone(), config);
 
@@ -164,7 +159,11 @@ async fn example_category_evolution() -> anyhow::Result<()> {
 
         for suggestion in &suggestions {
             match suggestion {
-                umi_memory::orchestration::EvolutionSuggestion::CreateBlock { name, reason, .. } => {
+                umi_memory::orchestration::EvolutionSuggestion::CreateBlock {
+                    name,
+                    reason,
+                    ..
+                } => {
                     println!("  - Create block '{}': {}", name, reason);
                 }
                 umi_memory::orchestration::EvolutionSuggestion::MergeBlocks { reason, .. } => {

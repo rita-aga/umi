@@ -880,8 +880,7 @@ mod dst_tests {
 
         sim.run(|env| async move {
             let llm = SimLLMProvider::with_faults(42, env.faults.clone());
-            let tracker: EvolutionTracker =
-                EvolutionTracker::new(Box::new(llm));
+            let tracker: EvolutionTracker = EvolutionTracker::new(Box::new(llm));
 
             let old_entity = create_entity("old-1", "Bob", "Knows JavaScript");
             let new_entity = create_entity("new-1", "Bob", "Also learned TypeScript");
@@ -1077,8 +1076,7 @@ mod dst_tests {
 
         sim.run(|env| async move {
             let llm = SimLLMProvider::with_faults(42, env.faults.clone());
-            let tracker: EvolutionTracker =
-                EvolutionTracker::new(Box::new(llm));
+            let tracker: EvolutionTracker = EvolutionTracker::new(Box::new(llm));
 
             // Multiple existing entities
             let existing: Vec<Entity> = (0..5)

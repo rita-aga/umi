@@ -121,9 +121,8 @@ impl EvictionPolicy for LRUEvictionPolicy {
         if let Some(threshold) = self.threshold_ms {
             // Get current time from the clock
             let current_time = access_tracker.clock().now_ms();
-            candidates.retain(|(_, last_access)| {
-                current_time.saturating_sub(*last_access) >= threshold
-            });
+            candidates
+                .retain(|(_, last_access)| current_time.saturating_sub(*last_access) >= threshold);
         }
 
         // Sort by last access time (oldest first)
@@ -137,10 +136,7 @@ impl EvictionPolicy for LRUEvictionPolicy {
             .collect();
 
         // Postconditions
-        assert!(
-            result.len() <= count,
-            "returned more than requested count"
-        );
+        assert!(result.len() <= count, "returned more than requested count");
         assert!(
             result.iter().all(|id| {
                 core_entities
@@ -244,9 +240,7 @@ impl EvictionPolicy for ImportanceEvictionPolicy {
         }
 
         // Sort by importance (lowest first)
-        candidates.sort_by(|(_, a), (_, b)| {
-            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        candidates.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         // Take up to count entities
         let result: Vec<String> = candidates
@@ -256,10 +250,7 @@ impl EvictionPolicy for ImportanceEvictionPolicy {
             .collect();
 
         // Postconditions
-        assert!(
-            result.len() <= count,
-            "returned more than requested count"
-        );
+        assert!(result.len() <= count, "returned more than requested count");
         assert!(
             result.iter().all(|id| {
                 core_entities
@@ -319,10 +310,7 @@ impl HybridEvictionPolicy {
     #[must_use]
     pub fn with_weights(weight_importance: f64, weight_recency: f64) -> Self {
         // Preconditions
-        assert!(
-            weight_importance >= 0.0,
-            "weight_importance must be >= 0.0"
-        );
+        assert!(weight_importance >= 0.0, "weight_importance must be >= 0.0");
         assert!(weight_recency >= 0.0, "weight_recency must be >= 0.0");
 
         let weight_sum = weight_importance + weight_recency;
@@ -437,9 +425,7 @@ impl EvictionPolicy for HybridEvictionPolicy {
         }
 
         // Sort by eviction score (lowest first = highest priority to evict)
-        candidates.sort_by(|(_, a), (_, b)| {
-            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        candidates.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         // Take up to count entities
         let result: Vec<String> = candidates
@@ -449,10 +435,7 @@ impl EvictionPolicy for HybridEvictionPolicy {
             .collect();
 
         // Postconditions
-        assert!(
-            result.len() <= count,
-            "returned more than requested count"
-        );
+        assert!(result.len() <= count, "returned more than requested count");
         assert!(
             result.iter().all(|id| {
                 core_entities
@@ -482,9 +465,12 @@ mod tests {
 
     /// Helper: Create test entity
     fn create_test_entity(entity_type: EntityType, id: &str) -> Entity {
-        let mut entity =
-            EntityBuilder::new(entity_type, "Test Entity".to_string(), "Test content".to_string())
-                .build();
+        let mut entity = EntityBuilder::new(
+            entity_type,
+            "Test Entity".to_string(),
+            "Test content".to_string(),
+        )
+        .build();
         entity.id = id.to_string(); // Override ID for testing
         entity
     }

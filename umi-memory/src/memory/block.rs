@@ -414,7 +414,10 @@ impl MemoryBlock {
                 "## {} - {} (importance: {:.2})",
                 capitalized_type, label, self.importance
             ),
-            None => format!("## {} (importance: {:.2})", capitalized_type, self.importance),
+            None => format!(
+                "## {} (importance: {:.2})",
+                capitalized_type, self.importance
+            ),
         };
 
         format!("{}\n{}", header, self.content)

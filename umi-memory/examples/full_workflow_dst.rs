@@ -122,7 +122,10 @@ async fn run_scenario_1_extended_lifecycle() {
             println!("  1000 operations completed:");
             println!("    Remembers: {} successful", total_remembers);
             println!("    Recalls: {} successful", total_recalls);
-            println!("    Promotions: {}, Evictions: {}", total_promotions, total_evictions);
+            println!(
+                "    Promotions: {}, Evictions: {}",
+                total_promotions, total_evictions
+            );
             println!(
                 "    Max core: {}/20, Final core: {}",
                 max_core_count, final_core
@@ -180,7 +183,10 @@ async fn run_scenario_2_cascading_faults() {
             let mut note_fallbacks = 0;
 
             for i in 0..200 {
-                match memory.remember(&format!("Carol manages team {} at Acme", i)).await {
+                match memory
+                    .remember(&format!("Carol manages team {} at Acme", i))
+                    .await
+                {
                     Ok(result) => {
                         successes += 1;
                         // Check for LLM fallback (Note entities)
@@ -363,8 +369,18 @@ async fn run_scenario_4_memory_pressure_extended() {
             let mut total_promotions = 0u64;
 
             // Names that SimLLM actually extracts
-            let common_names = ["Alice", "Bob", "Charlie", "David", "Eve",
-                               "Acme", "Google", "Microsoft", "Apple", "Amazon"];
+            let common_names = [
+                "Alice",
+                "Bob",
+                "Charlie",
+                "David",
+                "Eve",
+                "Acme",
+                "Google",
+                "Microsoft",
+                "Apple",
+                "Amazon",
+            ];
 
             for i in 0..500 {
                 // Use text that will extract real entity names
@@ -378,10 +394,7 @@ async fn run_scenario_4_memory_pressure_extended() {
                 let core = memory.core_entity_count();
                 max_core_ever = max_core_ever.max(core);
                 if core > 5 {
-                    println!(
-                        "  BUG: Core {} exceeded limit 5 at iteration {}",
-                        core, i
-                    );
+                    println!("  BUG: Core {} exceeded limit 5 at iteration {}", core, i);
                     core_exceeded_limit = true;
                 }
 
@@ -405,8 +418,14 @@ async fn run_scenario_4_memory_pressure_extended() {
             let final_accesses = memory.category_evolver().total_accesses();
 
             println!("  500 operations with limit=5:");
-            println!("    Max core ever: {}, Final core: {}", max_core_ever, final_core);
-            println!("    Total promotions: {}, Total evictions: {}", total_promotions, total_evictions);
+            println!(
+                "    Max core ever: {}, Final core: {}",
+                max_core_ever, final_core
+            );
+            println!(
+                "    Total promotions: {}, Total evictions: {}",
+                total_promotions, total_evictions
+            );
             println!("    Final accesses: {}", final_accesses);
 
             if core_exceeded_limit {
@@ -588,10 +607,7 @@ async fn run_scenario_6_edge_cases_under_faults() {
                 }
             }
 
-            println!(
-                "  Remember: {} ok, {} errors",
-                successes, failures
-            );
+            println!("  Remember: {} ok, {} errors", successes, failures);
             println!("  Recall edge cases: {} ok", recall_successes);
 
             // Final state check

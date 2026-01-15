@@ -24,8 +24,8 @@
 
 use pyo3::exceptions::{PyException, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::{create_exception, PyErr};
 use pyo3::types::PyBytes;
+use pyo3::{create_exception, PyErr};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -1244,7 +1244,10 @@ impl PyMemoryConfig {
     }
 
     fn __repr__(&self) -> String {
-        format!("MemoryConfig(recall_limit={})", self.inner.default_recall_limit)
+        format!(
+            "MemoryConfig(recall_limit={})",
+            self.inner.default_recall_limit
+        )
     }
 }
 
@@ -1384,11 +1387,15 @@ impl PyMemory {
         // Connect to LanceDB
         let vector = runtime
             .block_on(umi_memory::storage::LanceVectorBackend::connect(&db_path))
-            .map_err(|e| PyValueError::new_err(format!("Failed to connect to Lance vector: {}", e)))?;
+            .map_err(|e| {
+                PyValueError::new_err(format!("Failed to connect to Lance vector: {}", e))
+            })?;
 
         let storage = runtime
             .block_on(umi_memory::storage::LanceStorageBackend::connect(&db_path))
-            .map_err(|e| PyValueError::new_err(format!("Failed to connect to Lance storage: {}", e)))?;
+            .map_err(|e| {
+                PyValueError::new_err(format!("Failed to connect to Lance storage: {}", e))
+            })?;
 
         // Create Memory with providers
         let inner = umi_memory::umi::Memory::new(llm, embedder, vector, storage);
@@ -1422,11 +1429,15 @@ impl PyMemory {
         // Connect to LanceDB
         let vector = runtime
             .block_on(umi_memory::storage::LanceVectorBackend::connect(&db_path))
-            .map_err(|e| PyValueError::new_err(format!("Failed to connect to Lance vector: {}", e)))?;
+            .map_err(|e| {
+                PyValueError::new_err(format!("Failed to connect to Lance vector: {}", e))
+            })?;
 
         let storage = runtime
             .block_on(umi_memory::storage::LanceStorageBackend::connect(&db_path))
-            .map_err(|e| PyValueError::new_err(format!("Failed to connect to Lance storage: {}", e)))?;
+            .map_err(|e| {
+                PyValueError::new_err(format!("Failed to connect to Lance storage: {}", e))
+            })?;
 
         // Create Memory with providers
         let inner = umi_memory::umi::Memory::new(llm, embedder, vector, storage);
@@ -1465,12 +1476,18 @@ impl PyMemory {
 
         // Connect to Postgres
         let vector = runtime
-            .block_on(umi_memory::storage::PostgresVectorBackend::connect(&postgres_url))
-            .map_err(|e| PyValueError::new_err(format!("Failed to connect to Postgres vector: {}", e)))?;
+            .block_on(umi_memory::storage::PostgresVectorBackend::connect(
+                &postgres_url,
+            ))
+            .map_err(|e| {
+                PyValueError::new_err(format!("Failed to connect to Postgres vector: {}", e))
+            })?;
 
         let storage = runtime
             .block_on(umi_memory::storage::PostgresBackend::new(&postgres_url))
-            .map_err(|e| PyValueError::new_err(format!("Failed to connect to Postgres storage: {}", e)))?;
+            .map_err(|e| {
+                PyValueError::new_err(format!("Failed to connect to Postgres storage: {}", e))
+            })?;
 
         // Create Memory with providers
         let inner = umi_memory::umi::Memory::new(llm, embedder, vector, storage);
@@ -1537,7 +1554,10 @@ impl PyMemory {
                 .map_err(|e| PyValueError::new_err(format!("Recall failed: {}", e)))?;
 
             Ok(Python::with_gil(|_py| {
-                entities.into_iter().map(PyEntity::from_rust).collect::<Vec<_>>()
+                entities
+                    .into_iter()
+                    .map(PyEntity::from_rust)
+                    .collect::<Vec<_>>()
             }))
         })
     }
@@ -1639,11 +1659,7 @@ impl PyMemory {
     ///
     /// Returns:
     ///     List of matching entities
-    fn recall_sync(
-        &self,
-        query: String,
-        options: PyRecallOptions,
-    ) -> PyResult<Vec<PyEntity>> {
+    fn recall_sync(&self, query: String, options: PyRecallOptions) -> PyResult<Vec<PyEntity>> {
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|e| PyValueError::new_err(format!("Failed to create runtime: {}", e)))?;
 

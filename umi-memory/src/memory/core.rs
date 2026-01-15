@@ -1244,7 +1244,8 @@ mod edge_case_tests {
         let mut core = CoreMemory::new();
         core.set_block(MemoryBlockType::System, "Be helpful.")
             .unwrap();
-        core.set_block(MemoryBlockType::Human, "User: Alice").unwrap();
+        core.set_block(MemoryBlockType::Human, "User: Alice")
+            .unwrap();
 
         let md = core.render_markdown();
         assert!(md.contains("# Core Memory"));

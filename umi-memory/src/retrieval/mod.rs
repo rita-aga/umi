@@ -187,8 +187,9 @@ impl DualRetriever {
         options: SearchOptions,
     ) -> Result<SearchResult, RetrievalError> {
         // TigerStyle: Preconditions
+        // Empty query is valid - return empty results gracefully
         if query.is_empty() {
-            return Err(RetrievalError::EmptyQuery);
+            return Ok(SearchResult::fast_only(vec![], vec![], query));
         }
         if query.len() > RETRIEVAL_QUERY_BYTES_MAX {
             return Err(RetrievalError::QueryTooLong {
@@ -718,12 +719,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_empty_query_error() {
+    async fn test_empty_query_returns_empty() {
         let retriever = create_test_retriever(42).await;
 
         let result = retriever.search("", SearchOptions::default()).await;
 
-        assert!(matches!(result, Err(RetrievalError::EmptyQuery)));
+        // Empty query should return empty results, not error
+        assert!(result.is_ok());
+        let search_result = result.unwrap();
+        assert_eq!(search_result.len(), 0);
+        assert!(search_result.is_empty());
     }
 
     #[tokio::test]

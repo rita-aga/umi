@@ -40,8 +40,7 @@ impl KelpieAgent {
     /// Load user profile into core memory
     fn load_user_profile(&mut self, name: &str, preferences: &str) -> Result<(), Box<dyn Error>> {
         let profile = format!("User: {}\nPreferences: {}", name, preferences);
-        self.core
-            .set_block(MemoryBlockType::Human, profile)?;
+        self.core.set_block(MemoryBlockType::Human, profile)?;
         self.core
             .set_block_importance(MemoryBlockType::Human, 0.9)?;
         Ok(())
@@ -50,8 +49,7 @@ impl KelpieAgent {
     /// Update persona based on conversation style
     fn update_persona(&mut self, style: &str) -> Result<(), Box<dyn Error>> {
         let persona = format!("Conversation style: {}", style);
-        self.core
-            .set_block(MemoryBlockType::Persona, persona)?;
+        self.core.set_block(MemoryBlockType::Persona, persona)?;
         self.core
             .set_block_importance(MemoryBlockType::Persona, 0.85)?;
         Ok(())
@@ -60,10 +58,7 @@ impl KelpieAgent {
     /// Add a fact to core memory
     fn remember_fact(&mut self, fact: &str) -> Result<(), Box<dyn Error>> {
         // Get existing facts or start fresh
-        let existing = self
-            .core
-            .get_content(MemoryBlockType::Facts)
-            .unwrap_or("");
+        let existing = self.core.get_content(MemoryBlockType::Facts).unwrap_or("");
         let facts = if existing.is_empty() {
             fact.to_string()
         } else {
@@ -78,10 +73,7 @@ impl KelpieAgent {
 
     /// Add a goal/task
     fn add_goal(&mut self, goal: &str) -> Result<(), Box<dyn Error>> {
-        let existing = self
-            .core
-            .get_content(MemoryBlockType::Goals)
-            .unwrap_or("");
+        let existing = self.core.get_content(MemoryBlockType::Goals).unwrap_or("");
         let goals = if existing.is_empty() {
             format!("• {}", goal)
         } else {
@@ -116,9 +108,11 @@ impl KelpieAgent {
         self.session.incr("total_tokens", tokens)?;
 
         // Update scratch space with current context
-        let scratch = format!("Processing turn {}: User asked about memory systems", turn_num);
-        self.core
-            .set_block(MemoryBlockType::Scratch, scratch)?;
+        let scratch = format!(
+            "Processing turn {}: User asked about memory systems",
+            turn_num
+        );
+        self.core.set_block(MemoryBlockType::Scratch, scratch)?;
         self.core
             .set_block_importance(MemoryBlockType::Scratch, 0.5)?;
 
@@ -255,12 +249,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let context = agent.get_context();
     println!("Generated Kelpie-compatible XML context:");
     println!();
-    
+
     // Show context with line numbers for clarity
     for (i, line) in context.lines().take(25).enumerate() {
         println!("{:3}: {}", i + 1, line);
     }
-    
+
     if context.lines().count() > 25 {
         println!("... ({} more lines)", context.lines().count() - 25);
     }

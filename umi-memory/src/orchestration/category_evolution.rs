@@ -376,10 +376,7 @@ impl CategoryEvolver {
                 // Suggest splitting this block
                 suggestions.push(EvolutionSuggestion::SplitBlock {
                     block: *block,
-                    into_names: vec![
-                        format!("{:?}_Part1", block),
-                        format!("{:?}_Part2", block),
-                    ],
+                    into_names: vec![format!("{:?}_Part1", block), format!("{:?}_Part2", block)],
                     reason: format!(
                         "{:?} has {:.0}% of all accesses (threshold: {:.0}%)",
                         block,
@@ -436,7 +433,11 @@ impl CategoryEvolver {
             return 0.0;
         }
 
-        let count = self.block_usage_counts.get(&block_type).copied().unwrap_or(0);
+        let count = self
+            .block_usage_counts
+            .get(&block_type)
+            .copied()
+            .unwrap_or(0);
         count as f64 / self.total_accesses as f64
     }
 
@@ -491,10 +492,10 @@ mod tests {
         let clock = SimClock::at_ms(1_000_000_000);
         // Low min_samples so we can test without 100 events
         CategoryEvolver::with_thresholds(
-            clock, 10,   // min_samples
-            0.5,  // co_occurrence_threshold (50%)
-            0.1,  // block_usage_min
-            0.5,  // block_usage_max
+            clock, 10,  // min_samples
+            0.5, // co_occurrence_threshold (50%)
+            0.1, // block_usage_min
+            0.5, // block_usage_max
         )
     }
 
@@ -538,7 +539,10 @@ mod tests {
         }
 
         let result = evolver.analyze();
-        assert!(result.is_none(), "should return None without enough samples");
+        assert!(
+            result.is_none(),
+            "should return None without enough samples"
+        );
     }
 
     // =========================================================================
@@ -687,7 +691,11 @@ mod tests {
         let facts_score = evolver.block_usage_score(MemoryBlockType::Facts);
         let goals_score = evolver.block_usage_score(MemoryBlockType::Goals);
 
-        assert!(human_score > 0.5, "Human should be > 50%, got {}", human_score);
+        assert!(
+            human_score > 0.5,
+            "Human should be > 50%, got {}",
+            human_score
+        );
         assert!(
             facts_score < 0.1,
             "Facts should be < 10%, got {}",

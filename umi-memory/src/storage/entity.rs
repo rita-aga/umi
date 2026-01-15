@@ -224,7 +224,33 @@ pub struct Entity {
 }
 
 impl Entity {
+    /// Generate a deterministic ID for an entity based on its name and type.
+    ///
+    /// This ensures the same entity (name + type) always gets the same ID,
+    /// enabling storage layer deduplication.
+    ///
+    /// Uses UUID v5 (SHA-1 hash) with a fixed namespace for determinism.
+    #[must_use]
+    fn generate_deterministic_id(entity_type: EntityType, name: &str) -> String {
+        // Use a fixed namespace UUID for Umi entities
+        // This UUID was randomly generated once and is now fixed
+        const UMI_NAMESPACE: uuid::Uuid = uuid::Uuid::from_bytes([
+            0x6b, 0xa4, 0x28, 0x1c, 0x4d, 0x9f, 0x4f, 0x3a, 0x8c, 0x7e, 0x9d, 0x2b, 0x5f, 0x1e,
+            0x6a, 0x3c,
+        ]);
+
+        // Combine entity type and name for uniqueness
+        let unique_key = format!("{}:{}", entity_type.as_str(), name);
+
+        // Generate deterministic UUID v5
+        uuid::Uuid::new_v5(&UMI_NAMESPACE, unique_key.as_bytes()).to_string()
+    }
+
     /// Create a new entity with required fields.
+    ///
+    /// **Deduplication**: Entity IDs are deterministic based on name + type.
+    /// This means storing the same entity twice will use the same ID,
+    /// allowing storage backends to deduplicate properly.
     ///
     /// # Panics
     /// Panics if name or content exceed limits.
@@ -246,7 +272,7 @@ impl Entity {
 
         let now = Utc::now();
         Self {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: Self::generate_deterministic_id(entity_type, &name),
             entity_type,
             name,
             content,

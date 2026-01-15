@@ -192,7 +192,10 @@ async fn test_stress_recall_relevance_distribution() {
             "  Sarah in top 3: {}/50 ({:.0}%)",
             sarah_in_top3_count, relevance_percentage
         );
-        println!("  Average results per query: {:.1}", total_results as f32 / 50.0);
+        println!(
+            "  Average results per query: {:.1}",
+            total_results as f32 / 50.0
+        );
 
         // DISCOVERY: Before fix, Sarah appears rarely (~20% instead of ~100%)
         // This quantifies the relevance problem from the UX report

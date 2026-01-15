@@ -745,7 +745,10 @@ mod tests {
         let successes = success_count.load(Ordering::Relaxed);
         let failures = failure_count.load(Ordering::Relaxed);
 
-        println!("Stress test: {} successes, {} failures", successes, failures);
+        println!(
+            "Stress test: {} successes, {} failures",
+            successes, failures
+        );
 
         // DISCOVERY: With 30% fault rate, we get ~50% failures!
         // This is because remember() extracts multiple entities (typically 2 for "Alice works at Acme")
@@ -777,9 +780,7 @@ mod tests {
 
             sim.run(|env| async move {
                 let mut memory = env.create_memory();
-                memory
-                    .remember("Test", RememberOptions::default())
-                    .await?;
+                memory.remember("Test", RememberOptions::default()).await?;
                 Ok(())
             })
             .await
@@ -901,9 +902,7 @@ mod tests {
                     let mut memory = env.create_memory();
 
                     // Store first (might fail)
-                    let _ = memory
-                        .remember("Test", RememberOptions::default())
-                        .await;
+                    let _ = memory.remember("Test", RememberOptions::default()).await;
 
                     // Try to recall (might fail due to vector search timeout)
                     memory.recall("Alice", RecallOptions::default()).await?;
@@ -945,9 +944,7 @@ mod tests {
                 let result = sim
                     .run(|env| async move {
                         let mut memory = env.create_memory();
-                        memory
-                            .remember("Test", RememberOptions::default())
-                            .await?;
+                        memory.remember("Test", RememberOptions::default()).await?;
                         Ok::<(), crate::umi::MemoryError>(())
                     })
                     .await;
@@ -977,4 +974,3 @@ mod tests {
         assert_eq!(results3.len(), 10);
     }
 }
-

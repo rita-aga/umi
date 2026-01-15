@@ -59,14 +59,14 @@ use umi_memory::embedding::OpenAIEmbeddingProvider;
 use umi_memory::embedding::SimEmbeddingProvider;
 
 // Storage backends
+use umi_memory::dst::SimConfig;
 #[cfg(feature = "lance")]
 use umi_memory::storage::{LanceStorageBackend, LanceVectorBackend};
-use umi_memory::dst::SimConfig;
 use umi_memory::storage::{SimStorageBackend, SimVectorBackend};
 
 // Extraction/Evolution/Retrieval
-use umi_memory::extraction::{EntityExtractor, ExtractionOptions};
 use umi_memory::evolution::{DetectionOptions, EvolutionTracker};
+use umi_memory::extraction::{EntityExtractor, ExtractionOptions};
 use umi_memory::retrieval::DualRetriever;
 use umi_memory::storage::{Entity, EntityType};
 
@@ -100,7 +100,8 @@ impl TestResults {
 
     fn skip(&mut self, name: &str, reason: &str) {
         self.skipped += 1;
-        self.details.push(format!("○ {} - SKIPPED: {}", name, reason));
+        self.details
+            .push(format!("○ {} - SKIPPED: {}", name, reason));
     }
 
     fn summary(&self) -> String {
@@ -116,7 +117,7 @@ impl TestResults {
             println!("  {}", detail);
         }
         println!("\n{}", self.summary());
-        
+
         if self.failed > 0 {
             println!("\n❌ Some tests failed!");
         } else if self.passed > 0 {
@@ -140,8 +141,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let skip_openai = env::var("SKIP_OPENAI").is_ok();
 
     println!("Environment:");
-    println!("  ANTHROPIC_API_KEY: {}", if anthropic_key.is_some() { "✓ Set" } else { "✗ Not set" });
-    println!("  OPENAI_API_KEY: {}", if openai_key.is_some() { "✓ Set" } else { "✗ Not set" });
+    println!(
+        "  ANTHROPIC_API_KEY: {}",
+        if anthropic_key.is_some() {
+            "✓ Set"
+        } else {
+            "✗ Not set"
+        }
+    );
+    println!(
+        "  OPENAI_API_KEY: {}",
+        if openai_key.is_some() {
+            "✓ Set"
+        } else {
+            "✗ Not set"
+        }
+    );
     println!("  SKIP_ANTHROPIC: {}", skip_anthropic);
     println!("  SKIP_OPENAI: {}", skip_openai);
     println!();
@@ -217,7 +232,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     #[cfg(not(feature = "embedding-openai"))]
     {
-        results.skip("OpenAI Embedding Suite", "embedding-openai feature not enabled");
+        results.skip(
+            "OpenAI Embedding Suite",
+            "embedding-openai feature not enabled",
+        );
     }
 
     // =========================================================================
@@ -252,7 +270,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 openai_key.as_ref().unwrap(),
                 &temp_dir.path().join("full_integration_lance"),
                 &mut results,
-            ).await;
+            )
+            .await;
         } else {
             results.skip("Full Integration Suite", "Missing API keys or skipped");
         }
@@ -260,7 +279,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     #[cfg(not(all(feature = "anthropic", feature = "embedding-openai", feature = "lance")))]
     {
-        results.skip("Full Integration Suite", "Requires anthropic + embedding-openai + lance features");
+        results.skip(
+            "Full Integration Suite",
+            "Requires anthropic + embedding-openai + lance features",
+        );
     }
 
     // =========================================================================
@@ -282,7 +304,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 openai_key.as_ref().unwrap(),
                 &temp_dir.path().join("memory_workflow_lance"),
                 &mut results,
-            ).await;
+            )
+            .await;
         }
     }
 
@@ -311,7 +334,10 @@ async fn test_anthropic_suite(api_key: &str, results: &mut TestResults) {
     let llm = AnthropicProvider::new(api_key);
 
     // Test basic completion
-    match llm.complete(&CompletionRequest::new("Say 'Hello' in exactly one word.")).await {
+    match llm
+        .complete(&CompletionRequest::new("Say 'Hello' in exactly one word."))
+        .await
+    {
         Ok(response) => {
             println!("     Response: {}", response.trim());
             if !response.is_empty() {
@@ -329,13 +355,16 @@ async fn test_anthropic_suite(api_key: &str, results: &mut TestResults) {
     println!("\n1.2 Testing Anthropic Entity Extraction...");
     let extractor = EntityExtractor::new(Box::new(llm.clone()));
     let text = "Alice is a software engineer at Acme Corp who specializes in Rust programming.";
-    
+
     match extractor.extract(text, ExtractionOptions::default()).await {
         Ok(result) => {
             println!("     Input: \"{}\"", text);
             println!("     Extracted {} entities:", result.entities.len());
             for entity in &result.entities {
-                println!("       - {} ({:?}): {}", entity.name, entity.entity_type, entity.content);
+                println!(
+                    "       - {} ({:?}): {}",
+                    entity.name, entity.entity_type, entity.content
+                );
             }
             if !result.entities.is_empty() {
                 results.pass("Anthropic Entity Extraction");
@@ -364,7 +393,10 @@ async fn test_anthropic_suite(api_key: &str, results: &mut TestResults) {
         "Now works at TechCo as a senior engineer after promotion".to_string(),
     );
 
-    match tracker.detect(&new_entity, &[old_entity], DetectionOptions::default()).await {
+    match tracker
+        .detect(&new_entity, &[old_entity], DetectionOptions::default())
+        .await
+    {
         Ok(Some(detection)) => {
             println!("     Evolution detected:");
             println!("       Type: {:?}", detection.evolution_type());
@@ -373,7 +405,10 @@ async fn test_anthropic_suite(api_key: &str, results: &mut TestResults) {
             if detection.llm_used {
                 results.pass("Anthropic Evolution Detection");
             } else {
-                results.fail("Anthropic Evolution Detection", "LLM not used (fallback triggered)");
+                results.fail(
+                    "Anthropic Evolution Detection",
+                    "LLM not used (fallback triggered)",
+                );
             }
         }
         Ok(None) => {
@@ -400,13 +435,13 @@ async fn test_anthropic_suite(api_key: &str, results: &mut TestResults) {
 
     let query = "Who works as a programmer?";
     let variations = retriever.rewrite_query(query).await;
-    
+
     println!("     Query: \"{}\"", query);
     println!("     Generated {} variations:", variations.len());
     for (i, var) in variations.iter().enumerate() {
         println!("       {}. {}", i + 1, var);
     }
-    
+
     if variations.len() > 1 {
         results.pass("Anthropic Query Rewriting");
     } else {
@@ -426,7 +461,10 @@ async fn test_openai_llm_suite(api_key: &str, results: &mut TestResults) {
     let llm = OpenAIProvider::new(api_key);
 
     // Test basic completion
-    match llm.complete(&CompletionRequest::new("Say 'Hello' in exactly one word.")).await {
+    match llm
+        .complete(&CompletionRequest::new("Say 'Hello' in exactly one word."))
+        .await
+    {
         Ok(response) => {
             println!("     Response: {}", response.trim());
             if !response.is_empty() {
@@ -444,13 +482,16 @@ async fn test_openai_llm_suite(api_key: &str, results: &mut TestResults) {
     println!("\n2.2 Testing OpenAI Entity Extraction...");
     let extractor = EntityExtractor::new(Box::new(llm.clone()));
     let text = "Bob manages the engineering team at TechCo and is working on Project Phoenix.";
-    
+
     match extractor.extract(text, ExtractionOptions::default()).await {
         Ok(result) => {
             println!("     Input: \"{}\"", text);
             println!("     Extracted {} entities:", result.entities.len());
             for entity in &result.entities {
-                println!("       - {} ({:?}): {}", entity.name, entity.entity_type, entity.content);
+                println!(
+                    "       - {} ({:?}): {}",
+                    entity.name, entity.entity_type, entity.content
+                );
             }
             if !result.entities.is_empty() {
                 results.pass("OpenAI Entity Extraction");
@@ -479,7 +520,10 @@ async fn test_openai_llm_suite(api_key: &str, results: &mut TestResults) {
         "Launch delayed to Q4 due to supply chain issues".to_string(),
     );
 
-    match tracker.detect(&new_entity, &[old_entity], DetectionOptions::default()).await {
+    match tracker
+        .detect(&new_entity, &[old_entity], DetectionOptions::default())
+        .await
+    {
         Ok(Some(detection)) => {
             println!("     Evolution detected:");
             println!("       Type: {:?}", detection.evolution_type());
@@ -508,7 +552,10 @@ async fn test_openai_embedding_suite(api_key: &str, results: &mut TestResults) {
     let embedder = OpenAIEmbeddingProvider::new(api_key);
 
     // Test single embedding
-    match embedder.embed("Alice works at Acme Corp as a software engineer").await {
+    match embedder
+        .embed("Alice works at Acme Corp as a software engineer")
+        .await
+    {
         Ok(embedding) => {
             println!("     Dimensions: {}", embedding.len());
             // Verify normalized
@@ -517,7 +564,14 @@ async fn test_openai_embedding_suite(api_key: &str, results: &mut TestResults) {
             if embedding.len() == 1536 && (norm - 1.0).abs() < 0.01 {
                 results.pass("OpenAI Single Embedding");
             } else {
-                results.fail("OpenAI Single Embedding", &format!("Wrong dims or norm: {} dims, {:.4} norm", embedding.len(), norm));
+                results.fail(
+                    "OpenAI Single Embedding",
+                    &format!(
+                        "Wrong dims or norm: {} dims, {:.4} norm",
+                        embedding.len(),
+                        norm
+                    ),
+                );
             }
         }
         Err(e) => {
@@ -538,7 +592,12 @@ async fn test_openai_embedding_suite(api_key: &str, results: &mut TestResults) {
             println!("     Batch size: {}", embeddings.len());
             for (i, emb) in embeddings.iter().enumerate() {
                 let norm: f32 = emb.iter().map(|x| x * x).sum::<f32>().sqrt();
-                println!("       Text {}: {} dims, norm={:.4}", i + 1, emb.len(), norm);
+                println!(
+                    "       Text {}: {} dims, norm={:.4}",
+                    i + 1,
+                    emb.len(),
+                    norm
+                );
             }
             if embeddings.len() == 3 && embeddings.iter().all(|e| e.len() == 1536) {
                 results.pass("OpenAI Batch Embedding");
@@ -557,27 +616,38 @@ async fn test_openai_embedding_suite(api_key: &str, results: &mut TestResults) {
     let text2 = "A fast auburn fox leaps above a sleepy canine";
     let text3 = "Python is a popular programming language";
 
-    match (embedder.embed(text1).await, embedder.embed(text2).await, embedder.embed(text3).await) {
+    match (
+        embedder.embed(text1).await,
+        embedder.embed(text2).await,
+        embedder.embed(text3).await,
+    ) {
         (Ok(emb1), Ok(emb2), Ok(emb3)) => {
             let sim_12 = cosine_similarity(&emb1, &emb2);
             let sim_13 = cosine_similarity(&emb1, &emb3);
             let sim_23 = cosine_similarity(&emb2, &emb3);
-            
+
             println!("     Similar texts (fox sentences): {:.4}", sim_12);
             println!("     Dissimilar texts (fox vs python): {:.4}", sim_13);
             println!("     Dissimilar texts (fox vs python): {:.4}", sim_23);
-            
+
             // Similar texts should have higher similarity than dissimilar texts
             if sim_12 > sim_13 && sim_12 > sim_23 {
                 results.pass("Embedding Semantic Similarity");
             } else {
-                results.fail("Embedding Semantic Similarity", 
-                    &format!("Similar texts ({:.4}) should score higher than dissimilar ({:.4}, {:.4})", 
-                             sim_12, sim_13, sim_23));
+                results.fail(
+                    "Embedding Semantic Similarity",
+                    &format!(
+                        "Similar texts ({:.4}) should score higher than dissimilar ({:.4}, {:.4})",
+                        sim_12, sim_13, sim_23
+                    ),
+                );
             }
         }
         _ => {
-            results.fail("Embedding Semantic Similarity", "Failed to generate embeddings");
+            results.fail(
+                "Embedding Semantic Similarity",
+                "Failed to generate embeddings",
+            );
         }
     }
 }
@@ -618,10 +688,15 @@ async fn test_lance_storage_suite(lance_path: &PathBuf, results: &mut TestResult
                                 println!("     Stored and retrieved entity: {}", retrieved.name);
                                 results.pass("LanceDB Entity Storage");
                             } else {
-                                results.fail("LanceDB Entity Storage", "Retrieved entity doesn't match");
+                                results.fail(
+                                    "LanceDB Entity Storage",
+                                    "Retrieved entity doesn't match",
+                                );
                             }
                         }
-                        Ok(None) => results.fail("LanceDB Entity Storage", "Entity not found after storage"),
+                        Ok(None) => {
+                            results.fail("LanceDB Entity Storage", "Entity not found after storage")
+                        }
                         Err(e) => results.fail("LanceDB Entity Storage", &e.to_string()),
                     }
                 }
@@ -646,17 +721,15 @@ async fn test_lance_storage_suite(lance_path: &PathBuf, results: &mut TestResult
             println!("\n4.4 Testing LanceDB Persistence...");
             // Close and reconnect
             drop(storage);
-            
+
             match LanceStorageBackend::connect(storage_path.to_str().unwrap()).await {
-                Ok(storage2) => {
-                    match storage2.get_entity(&id).await {
-                        Ok(Some(_)) => {
-                            println!("     Entity persisted across reconnection");
-                            results.pass("LanceDB Persistence");
-                        }
-                        _ => results.fail("LanceDB Persistence", "Entity not found after reconnection"),
+                Ok(storage2) => match storage2.get_entity(&id).await {
+                    Ok(Some(_)) => {
+                        println!("     Entity persisted across reconnection");
+                        results.pass("LanceDB Persistence");
                     }
-                }
+                    _ => results.fail("LanceDB Persistence", "Entity not found after reconnection"),
+                },
                 Err(e) => results.fail("LanceDB Persistence", &e.to_string()),
             }
         }
@@ -670,16 +743,20 @@ async fn test_lance_storage_suite(lance_path: &PathBuf, results: &mut TestResult
 
     // Test vector backend
     println!("\n4.5 Testing LanceDB Vector Backend...");
-    use umi_memory::storage::VectorBackend;
     use umi_memory::constants::EMBEDDING_DIMENSIONS_COUNT;
+    use umi_memory::storage::VectorBackend;
 
     match LanceVectorBackend::connect(vector_path.to_str().unwrap()).await {
         Ok(vector) => {
             println!("     Connected to: {:?}", vector_path);
-            
+
             // Store some vectors
-            let emb1: Vec<f32> = (0..EMBEDDING_DIMENSIONS_COUNT).map(|i| (i as f32 / EMBEDDING_DIMENSIONS_COUNT as f32)).collect();
-            let emb2: Vec<f32> = (0..EMBEDDING_DIMENSIONS_COUNT).map(|i| (1.0 - i as f32 / EMBEDDING_DIMENSIONS_COUNT as f32)).collect();
+            let emb1: Vec<f32> = (0..EMBEDDING_DIMENSIONS_COUNT)
+                .map(|i| (i as f32 / EMBEDDING_DIMENSIONS_COUNT as f32))
+                .collect();
+            let emb2: Vec<f32> = (0..EMBEDDING_DIMENSIONS_COUNT)
+                .map(|i| (1.0 - i as f32 / EMBEDDING_DIMENSIONS_COUNT as f32))
+                .collect();
 
             match vector.store("entity1", &emb1).await {
                 Ok(_) => {
@@ -689,9 +766,13 @@ async fn test_lance_storage_suite(lance_path: &PathBuf, results: &mut TestResult
                             match vector.search(&emb1, 10).await {
                                 Ok(search_results) => {
                                     println!("     Found {} similar vectors", search_results.len());
-                                    if !search_results.is_empty() && search_results[0].id == "entity1" {
-                                        println!("     Top result: {} (score: {:.4})", 
-                                                search_results[0].id, search_results[0].score);
+                                    if !search_results.is_empty()
+                                        && search_results[0].id == "entity1"
+                                    {
+                                        println!(
+                                            "     Top result: {} (score: {:.4})",
+                                            search_results[0].id, search_results[0].score
+                                        );
                                         results.pass("LanceDB Vector Backend");
                                     } else {
                                         results.fail("LanceDB Vector Backend", "Wrong top result");
@@ -734,7 +815,10 @@ async fn test_full_integration_suite(
     let storage = match LanceStorageBackend::connect(storage_path.to_str().unwrap()).await {
         Ok(s) => s,
         Err(e) => {
-            results.fail("Full Integration", &format!("Storage connection failed: {}", e));
+            results.fail(
+                "Full Integration",
+                &format!("Storage connection failed: {}", e),
+            );
             return;
         }
     };
@@ -742,7 +826,10 @@ async fn test_full_integration_suite(
     let vector = match LanceVectorBackend::connect(vector_path.to_str().unwrap()).await {
         Ok(v) => v,
         Err(e) => {
-            results.fail("Full Integration", &format!("Vector connection failed: {}", e));
+            results.fail(
+                "Full Integration",
+                &format!("Vector connection failed: {}", e),
+            );
             return;
         }
     };
@@ -761,18 +848,24 @@ async fn test_full_integration_suite(
         Ok(result) => {
             println!("     ✓ Stored {} entities", result.entity_count());
             for entity in result.iter_entities() {
-                println!("       - {} ({}): {}", entity.name, entity.entity_type, entity.content);
+                println!(
+                    "       - {} ({}): {}",
+                    entity.name, entity.entity_type, entity.content
+                );
             }
 
             // Test recall
             println!("\n     Recalling: 'Who works at Acme?'");
-            match memory.recall("Who works at Acme?", RecallOptions::default()).await {
+            match memory
+                .recall("Who works at Acme?", RecallOptions::default())
+                .await
+            {
                 Ok(recall_results) => {
                     println!("     ✓ Found {} results", recall_results.len());
                     for entity in &recall_results {
                         println!("       - {}: {}", entity.name, entity.content);
                     }
-                    
+
                     if !recall_results.is_empty() {
                         results.pass("Full Integration (Anthropic + OpenAI + LanceDB)");
                     } else {
@@ -804,7 +897,11 @@ async fn test_memory_workflow_simulation(results: &mut TestResults) {
 
     for fact in &facts {
         match memory.remember(*fact, RememberOptions::default()).await {
-            Ok(result) => println!("     Stored: {} entities from '{}'", result.entity_count(), &fact[..30.min(fact.len())]),
+            Ok(result) => println!(
+                "     Stored: {} entities from '{}'",
+                result.entity_count(),
+                &fact[..30.min(fact.len())]
+            ),
             Err(e) => {
                 results.fail("Memory Workflow (Sim)", &format!("Remember failed: {}", e));
                 return;
@@ -851,7 +948,10 @@ async fn test_memory_workflow_production(
     let storage = match LanceStorageBackend::connect(storage_path.to_str().unwrap()).await {
         Ok(s) => s,
         Err(e) => {
-            results.fail("Memory Workflow (Production)", &format!("Storage failed: {}", e));
+            results.fail(
+                "Memory Workflow (Production)",
+                &format!("Storage failed: {}", e),
+            );
             return;
         }
     };
@@ -859,7 +959,10 @@ async fn test_memory_workflow_production(
     let vector = match LanceVectorBackend::connect(vector_path.to_str().unwrap()).await {
         Ok(v) => v,
         Err(e) => {
-            results.fail("Memory Workflow (Production)", &format!("Vector failed: {}", e));
+            results.fail(
+                "Memory Workflow (Production)",
+                &format!("Vector failed: {}", e),
+            );
             return;
         }
     };
@@ -868,15 +971,20 @@ async fn test_memory_workflow_production(
 
     // Remember
     println!("     Remembering facts...");
-    let result1 = memory.remember(
-        "Charlie is the CTO at DataInc and oversees the AI division",
-        RememberOptions::default(),
-    ).await;
+    let result1 = memory
+        .remember(
+            "Charlie is the CTO at DataInc and oversees the AI division",
+            RememberOptions::default(),
+        )
+        .await;
 
     match result1 {
         Ok(r) => println!("       ✓ Stored {} entities", r.entity_count()),
         Err(e) => {
-            results.fail("Memory Workflow (Production)", &format!("Remember 1 failed: {}", e));
+            results.fail(
+                "Memory Workflow (Production)",
+                &format!("Remember 1 failed: {}", e),
+            );
             return;
         }
     }
@@ -894,27 +1002,40 @@ async fn test_memory_workflow_production(
             }
         }
         Err(e) => {
-            results.fail("Memory Workflow (Production)", &format!("Remember 2 failed: {}", e));
+            results.fail(
+                "Memory Workflow (Production)",
+                &format!("Remember 2 failed: {}", e),
+            );
             return;
         }
     }
 
     // Recall
     println!("     Recalling 'Who is Charlie?'...");
-    match memory.recall("Who is Charlie?", RecallOptions::default()).await {
+    match memory
+        .recall("Who is Charlie?", RecallOptions::default())
+        .await
+    {
         Ok(recall_results) => {
             println!("       ✓ Found {} results", recall_results.len());
             for entity in &recall_results {
-                println!("         - {}: {}", entity.name, &entity.content[..50.min(entity.content.len())]);
+                println!(
+                    "         - {}: {}",
+                    entity.name,
+                    &entity.content[..50.min(entity.content.len())]
+                );
             }
-            
+
             if !recall_results.is_empty() {
                 results.pass("Memory Workflow (Production)");
             } else {
                 results.fail("Memory Workflow (Production)", "No recall results");
             }
         }
-        Err(e) => results.fail("Memory Workflow (Production)", &format!("Recall failed: {}", e)),
+        Err(e) => results.fail(
+            "Memory Workflow (Production)",
+            &format!("Recall failed: {}", e),
+        ),
     }
 
     // Test get/forget

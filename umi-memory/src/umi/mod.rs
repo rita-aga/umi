@@ -725,8 +725,9 @@ impl Memory {
         options: RecallOptions,
     ) -> Result<Vec<Entity>, MemoryError> {
         // Preconditions (TigerStyle)
+        // Empty query is valid - return empty results gracefully
         if query.is_empty() {
-            return Err(MemoryError::EmptyQuery);
+            return Ok(Vec::new());
         }
         if options.limit == 0 || options.limit > MEMORY_RECALL_LIMIT_MAX {
             return Err(MemoryError::InvalidLimit {
@@ -854,9 +855,7 @@ mod tests {
     use crate::storage::{SimStorageBackend, SimVectorBackend};
 
     /// Helper to create a Memory with deterministic seed.
-    fn create_memory(
-        seed: u64,
-    ) -> Memory {
+    fn create_memory(seed: u64) -> Memory {
         let llm = SimLLMProvider::with_seed(seed);
         let embedder = SimEmbeddingProvider::with_seed(seed);
         let vector = SimVectorBackend::new(seed);
@@ -1065,13 +1064,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_recall_empty_query_error() {
+    async fn test_recall_empty_query_returns_empty() {
         let memory = create_memory(42);
 
         let result = memory.recall("", RecallOptions::default()).await;
 
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), MemoryError::EmptyQuery));
+        // Empty query should return empty vec, not error
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 0);
     }
 
     #[tokio::test]

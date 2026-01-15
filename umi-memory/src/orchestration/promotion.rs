@@ -227,10 +227,7 @@ impl HybridPolicy {
             "threshold must be in range [0.0, 1.0], got {}",
             threshold
         );
-        assert!(
-            weight_importance >= 0.0,
-            "weight_importance must be >= 0.0"
-        );
+        assert!(weight_importance >= 0.0, "weight_importance must be >= 0.0");
         assert!(weight_recency >= 0.0, "weight_recency must be >= 0.0");
         assert!(weight_frequency >= 0.0, "weight_frequency must be >= 0.0");
         assert!(
@@ -366,8 +363,12 @@ mod tests {
 
     /// Helper: Create a test entity
     fn create_test_entity(entity_type: EntityType) -> Entity {
-        EntityBuilder::new(entity_type, "Test Entity".to_string(), "Test content".to_string())
-            .build()
+        EntityBuilder::new(
+            entity_type,
+            "Test Entity".to_string(),
+            "Test content".to_string(),
+        )
+        .build()
     }
 
     /// Helper: Create access pattern with specific scores
@@ -500,8 +501,12 @@ mod tests {
         let mut priorities = Vec::new();
         for (entity_type, _expected_type_priority) in &types_and_priorities {
             let entity = create_test_entity(*entity_type);
-            let pattern =
-                create_access_pattern(&clock, &mut tracker, &format!("{:?}", entity_type), importance);
+            let pattern = create_access_pattern(
+                &clock,
+                &mut tracker,
+                &format!("{:?}", entity_type),
+                importance,
+            );
             let priority = policy.calculate_priority(&entity, &pattern);
             priorities.push(priority);
         }

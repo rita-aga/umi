@@ -94,7 +94,7 @@ impl SimStorageBackend {
 
         Self {
             storage: Arc::new(RwLock::new(HashMap::new())),
-            fault_injector,  // Use the provided one instead of creating new
+            fault_injector, // Use the provided one instead of creating new
             clock: SimClock::new(),
             rng: Arc::new(RwLock::new(rng)),
         }

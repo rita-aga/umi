@@ -234,27 +234,47 @@ impl SimLLM {
         let mut entities = Vec::new();
         let mut rng = self.rng.lock().unwrap();
 
-        // Extract the actual text from the prompt (remove "Extract entities from:" prefix)
-        // Handle both single-line and multi-line prompts
-        let text = if let Some(colon_pos) = prompt.find(':') {
-            // If there's a colon, assume the text is after it (e.g., "Extract entities from: TEXT")
-            let after_colon = &prompt[colon_pos + 1..].trim();
-            // If after_colon is empty, use the whole prompt
-            if after_colon.is_empty() {
-                prompt.trim()
+        // Extract the actual text from the prompt
+        // Handle multiple prompt formats:
+        // 1. "Extract entities from: TEXT" (simple one-line)
+        // 2. Multi-line with "Text: USER_TEXT" followed by instructions
+        let text = {
+            let lines: Vec<&str> = prompt.lines().collect();
+
+            // Look for "Text:" marker (case-insensitive)
+            if let Some(text_line_idx) = lines
+                .iter()
+                .position(|line| line.trim().to_lowercase().starts_with("text:"))
+            {
+                // Found "Text:" line - extract everything after "Text:" on that line
+                let text_line = lines[text_line_idx];
+                if let Some(colon_pos) = text_line.find(':') {
+                    let after_colon = text_line[colon_pos + 1..].trim();
+
+                    // If text is on the same line as "Text:", use it
+                    if !after_colon.is_empty() {
+                        after_colon
+                    } else if text_line_idx + 1 < lines.len() {
+                        // Text might be on the next line
+                        lines[text_line_idx + 1].trim()
+                    } else {
+                        prompt.trim()
+                    }
+                } else {
+                    prompt.trim()
+                }
+            } else if let Some(colon_pos) = prompt.find(':') {
+                // Fallback: simple "Extract entities from: TEXT" format
+                let after_colon = &prompt[colon_pos + 1..].trim();
+                if after_colon.is_empty() {
+                    prompt.trim()
+                } else {
+                    after_colon
+                }
             } else {
-                after_colon
+                // No markers found, use the whole prompt
+                prompt.trim()
             }
-        } else {
-            // No colon, check for multi-line format
-            prompt
-                .lines()
-                .find(|line| {
-                    let trimmed = line.trim().to_lowercase();
-                    !trimmed.starts_with("extract") && !trimmed.is_empty()
-                })
-                .unwrap_or(prompt)
-                .trim()
         };
 
         // Tokenize: split into words, preserve capitalization

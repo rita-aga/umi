@@ -559,7 +559,10 @@ impl UnifiedMemory {
         };
 
         // Postcondition
-        debug_assert!(!stored_entities.is_empty(), "must store at least one entity");
+        debug_assert!(
+            !stored_entities.is_empty(),
+            "must store at least one entity"
+        );
 
         Ok(UnifiedRememberResult::new(
             stored_entities,
@@ -574,7 +577,11 @@ impl UnifiedMemory {
     pub async fn promote_to_core(&mut self) -> UnifiedMemoryResult<usize> {
         // Get all entities from storage (candidates for promotion)
         // TigerStyle: list_entities(entity_type, limit, offset)
-        let candidates = match self.storage.list_entities(None, UNIFIED_MEMORY_PROMOTION_CANDIDATES_MAX, 0).await {
+        let candidates = match self
+            .storage
+            .list_entities(None, UNIFIED_MEMORY_PROMOTION_CANDIDATES_MAX, 0)
+            .await
+        {
             Ok(entities) => entities,
             Err(_) => return Ok(0), // Graceful degradation
         };
@@ -604,7 +611,10 @@ impl UnifiedMemory {
             let access_pattern = self.access_tracker.get_access_pattern(&entity.id).unwrap();
 
             // Check promotion policy
-            if self.promotion_policy.should_promote(&entity, &access_pattern) {
+            if self
+                .promotion_policy
+                .should_promote(&entity, &access_pattern)
+            {
                 // Map entity type to memory block type
                 let block_type = entity_type_to_block_type(&entity.entity_type);
 
@@ -634,16 +644,13 @@ impl UnifiedMemory {
     /// # Returns
     /// `Ok(Vec<Entity>)` with matching entities from both tiers.
     #[tracing::instrument(skip(self, query), fields(query_len = query.len()))]
-    pub async fn recall(
-        &mut self,
-        query: &str,
-        limit: usize,
-    ) -> UnifiedMemoryResult<Vec<Entity>> {
+    pub async fn recall(&mut self, query: &str, limit: usize) -> UnifiedMemoryResult<Vec<Entity>> {
         use crate::constants::RETRIEVAL_QUERY_BYTES_MAX;
 
         // Preconditions (TigerStyle)
+        // Empty query is valid - return empty results gracefully
         if query.is_empty() {
-            return Err(UnifiedMemoryError::EmptyQuery);
+            return Ok(Vec::new());
         }
         if query.len() > RETRIEVAL_QUERY_BYTES_MAX {
             return Err(UnifiedMemoryError::TextTooLong {
@@ -873,10 +880,7 @@ mod tests {
     // =========================================================================
 
     /// Create UnifiedMemory with deterministic seed.
-    fn create_unified_memory(
-        seed: u64,
-    ) -> UnifiedMemory
-    {
+    fn create_unified_memory(seed: u64) -> UnifiedMemory {
         let llm = SimLLMProvider::with_seed(seed);
         let embedder = SimEmbeddingProvider::with_seed(seed);
         let vector = SimVectorBackend::new(seed);
@@ -888,11 +892,7 @@ mod tests {
     }
 
     /// Create UnifiedMemory with custom config.
-    fn create_unified_memory_with_config(
-        seed: u64,
-        config: UnifiedMemoryConfig,
-    ) -> UnifiedMemory
-    {
+    fn create_unified_memory_with_config(seed: u64, config: UnifiedMemoryConfig) -> UnifiedMemory {
         let llm = SimLLMProvider::with_seed(seed);
         let embedder = SimEmbeddingProvider::with_seed(seed);
         let vector = SimVectorBackend::new(seed);
@@ -912,9 +912,18 @@ mod tests {
 
         assert!(config.auto_promote);
         assert!(config.auto_evict);
-        assert_eq!(config.promotion_interval_ms, UNIFIED_MEMORY_PROMOTION_INTERVAL_MS);
-        assert_eq!(config.eviction_interval_ms, UNIFIED_MEMORY_EVICTION_INTERVAL_MS);
-        assert_eq!(config.core_size_limit_bytes, EVICTION_CORE_MEMORY_SIZE_BYTES_MAX);
+        assert_eq!(
+            config.promotion_interval_ms,
+            UNIFIED_MEMORY_PROMOTION_INTERVAL_MS
+        );
+        assert_eq!(
+            config.eviction_interval_ms,
+            UNIFIED_MEMORY_EVICTION_INTERVAL_MS
+        );
+        assert_eq!(
+            config.core_size_limit_bytes,
+            EVICTION_CORE_MEMORY_SIZE_BYTES_MAX
+        );
     }
 
     #[test]
@@ -1057,7 +1066,10 @@ mod tests {
         let mut memory = create_unified_memory(42);
 
         // Remember text
-        let result = memory.remember("Alice is working on project X").await.unwrap();
+        let result = memory
+            .remember("Alice is working on project X")
+            .await
+            .unwrap();
 
         // Should be able to retrieve from storage
         let entity_id = &result.entities[0].id;
@@ -1081,7 +1093,10 @@ mod tests {
         let long_text = "x".repeat(MEMORY_TEXT_BYTES_MAX + 1);
 
         let result = memory.remember(&long_text).await;
-        assert!(matches!(result, Err(UnifiedMemoryError::TextTooLong { .. })));
+        assert!(matches!(
+            result,
+            Err(UnifiedMemoryError::TextTooLong { .. })
+        ));
     }
 
     #[tokio::test]
@@ -1128,7 +1143,10 @@ mod tests {
         let mut memory = create_unified_memory_with_config(42, config);
 
         // Store an entity first
-        let result = memory.remember("Important: Alice leads project X").await.unwrap();
+        let result = memory
+            .remember("Important: Alice leads project X")
+            .await
+            .unwrap();
         assert!(!result.entities.is_empty());
 
         // Now manually promote
@@ -1195,7 +1213,10 @@ mod tests {
         let mut memory = create_unified_memory(42);
 
         // Remember something first
-        memory.remember("Alice is the project lead for UMI").await.unwrap();
+        memory
+            .remember("Alice is the project lead for UMI")
+            .await
+            .unwrap();
 
         // Recall it
         let results = memory.recall("Alice", 10).await.unwrap();
@@ -1205,11 +1226,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_recall_empty_query_error() {
+    async fn test_recall_empty_query_returns_empty() {
         let mut memory = create_unified_memory(42);
 
         let result = memory.recall("", 10).await;
-        assert!(matches!(result, Err(UnifiedMemoryError::EmptyQuery)));
+        // Empty query should return empty vec, not error
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 0);
     }
 
     #[tokio::test]
@@ -1246,9 +1269,7 @@ mod tests {
         // If the entity was found and accessed, pattern should exist
         if pattern_before.is_some() && pattern_after.is_some() {
             // Access count should have increased or stayed same
-            assert!(
-                pattern_after.unwrap().access_count >= pattern_before.unwrap().access_count
-            );
+            assert!(pattern_after.unwrap().access_count >= pattern_before.unwrap().access_count);
         }
     }
 
@@ -1274,7 +1295,10 @@ mod tests {
 
         // Remember something multiple times (different text, might create same-ish entities)
         memory.remember("Alice works on UMI project").await.unwrap();
-        memory.remember("Alice is the lead developer").await.unwrap();
+        memory
+            .remember("Alice is the lead developer")
+            .await
+            .unwrap();
 
         // Recall
         let results = memory.recall("Alice", 20).await.unwrap();
@@ -1299,11 +1323,7 @@ mod dst_tests {
     use crate::storage::{SimStorageBackend, SimVectorBackend};
 
     /// Create UnifiedMemory inside simulation environment.
-    fn create_unified_in_sim(
-        seed: u64,
-        clock: SimClock,
-    ) -> UnifiedMemory
-    {
+    fn create_unified_in_sim(seed: u64, clock: SimClock) -> UnifiedMemory {
         let llm = SimLLMProvider::with_seed(seed);
         let embedder = SimEmbeddingProvider::with_seed(seed);
         let vector = SimVectorBackend::new(seed);
@@ -1318,8 +1338,7 @@ mod dst_tests {
         seed: u64,
         clock: SimClock,
         fault_config: FaultConfig,
-    ) -> UnifiedMemory
-    {
+    ) -> UnifiedMemory {
         let llm = SimLLMProvider::with_seed(seed);
         let embedder = SimEmbeddingProvider::with_seed(seed);
         let vector = SimVectorBackend::new(seed);
@@ -1642,7 +1661,10 @@ mod dst_tests {
             let entity_id = result.entities[0].id.clone();
 
             // Get initial frequency
-            let pattern1 = memory.access_tracker().get_access_pattern(&entity_id).unwrap();
+            let pattern1 = memory
+                .access_tracker()
+                .get_access_pattern(&entity_id)
+                .unwrap();
             let initial_frequency = pattern1.frequency_score;
             let initial_count = pattern1.access_count;
 
@@ -1653,7 +1675,10 @@ mod dst_tests {
             }
 
             // Get updated frequency
-            let pattern2 = memory.access_tracker().get_access_pattern(&entity_id).unwrap();
+            let pattern2 = memory
+                .access_tracker()
+                .get_access_pattern(&entity_id)
+                .unwrap();
             let final_count = pattern2.access_count;
 
             // Access count should have increased (if entity was found in recalls)
@@ -1729,7 +1754,11 @@ mod dst_tests {
 
             // Get evolution suggestions (may be empty if no strong patterns)
             let suggestions = memory.get_evolution_suggestions();
-            println!("Evolution suggestions after {} accesses: {:?}", total, suggestions.len());
+            println!(
+                "Evolution suggestions after {} accesses: {:?}",
+                total,
+                suggestions.len()
+            );
 
             // At minimum, the analysis should run without error
             // Whether we get suggestions depends on the access patterns

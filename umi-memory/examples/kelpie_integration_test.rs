@@ -64,12 +64,30 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Verify importance values
     println!("✓ Created core memory with 6 blocks");
-    println!("  System:  {:.2}", core.get_block_importance(MemoryBlockType::System)?);
-    println!("  Persona: {:.2}", core.get_block_importance(MemoryBlockType::Persona)?);
-    println!("  Human:   {:.2}", core.get_block_importance(MemoryBlockType::Human)?);
-    println!("  Facts:   {:.2}", core.get_block_importance(MemoryBlockType::Facts)?);
-    println!("  Goals:   {:.2}", core.get_block_importance(MemoryBlockType::Goals)?);
-    println!("  Scratch: {:.2}", core.get_block_importance(MemoryBlockType::Scratch)?);
+    println!(
+        "  System:  {:.2}",
+        core.get_block_importance(MemoryBlockType::System)?
+    );
+    println!(
+        "  Persona: {:.2}",
+        core.get_block_importance(MemoryBlockType::Persona)?
+    );
+    println!(
+        "  Human:   {:.2}",
+        core.get_block_importance(MemoryBlockType::Human)?
+    );
+    println!(
+        "  Facts:   {:.2}",
+        core.get_block_importance(MemoryBlockType::Facts)?
+    );
+    println!(
+        "  Goals:   {:.2}",
+        core.get_block_importance(MemoryBlockType::Goals)?
+    );
+    println!(
+        "  Scratch: {:.2}",
+        core.get_block_importance(MemoryBlockType::Scratch)?
+    );
 
     // Render to XML (Kelpie-compatible format)
     println!("\n📄 Rendered XML (first 500 chars):");
@@ -95,8 +113,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     working.incr("message_count", 1)?;
     working.incr("message_count", 1)?;
     working.incr("message_count", 1)?;
-    
-    let count_bytes = working.get("message_count").expect("message_count should exist");
+
+    let count_bytes = working
+        .get("message_count")
+        .expect("message_count should exist");
     let count = std::str::from_utf8(count_bytes)?.parse::<i64>()?;
     assert_eq!(count, 3);
     println!("  ✓ message_count after 3 increments: {}", count);
@@ -104,15 +124,17 @@ fn main() -> Result<(), Box<dyn Error>> {
     working.incr("tokens_used", 150)?;
     working.incr("tokens_used", 200)?;
     working.incr("tokens_used", 75)?;
-    
-    let tokens_bytes = working.get("tokens_used").expect("tokens_used should exist");
+
+    let tokens_bytes = working
+        .get("tokens_used")
+        .expect("tokens_used should exist");
     let tokens = std::str::from_utf8(tokens_bytes)?.parse::<i64>()?;
     assert_eq!(tokens, 425);
     println!("  ✓ tokens_used after 3 calls: {}", tokens);
 
     // Test negative increment
     working.incr("errors", -5)?; // Initialize to -5
-    working.incr("errors", 3)?;  // Add 3
+    working.incr("errors", 3)?; // Add 3
     let errors_bytes = working.get("errors").expect("errors should exist");
     let errors = std::str::from_utf8(errors_bytes)?.parse::<i64>()?;
     assert_eq!(errors, -2);
@@ -121,10 +143,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Test append() - build conversation log
     println!("\nTesting append() - atomic string appends:");
     working.append("conversation", b"[User]: What is UMI?\n")?;
-    working.append("conversation", b"[AI]: UMI is a memory system for agents.\n")?;
+    working.append(
+        "conversation",
+        b"[AI]: UMI is a memory system for agents.\n",
+    )?;
     working.append("conversation", b"[User]: How does it work?\n")?;
-    
-    let log_bytes = working.get("conversation").expect("conversation should exist");
+
+    let log_bytes = working
+        .get("conversation")
+        .expect("conversation should exist");
     let log = std::str::from_utf8(log_bytes)?;
     assert!(log.contains("[User]: What is UMI?"));
     assert!(log.contains("[AI]: UMI is a memory system"));
@@ -142,10 +169,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("\nTesting expired key handling:");
     working.set_clock_ms(0);
     working.set("temp_key", b"100", Some(1000))?; // 1 second TTL
-    
+
     // Advance clock past expiration
     working.set_clock_ms(1500);
-    
+
     // incr() should treat expired key as 0
     let result = working.incr("temp_key", 5)?;
     assert_eq!(result, 5);
@@ -155,9 +182,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     working.set_clock_ms(0);
     working.set("expired_log", b"old data", Some(1000))?;
     working.set_clock_ms(1500);
-    
+
     working.append("expired_log", b"new data")?;
-    let new_log = std::str::from_utf8(working.get("expired_log").expect("expired_log should exist"))?;
+    let new_log = std::str::from_utf8(
+        working
+            .get("expired_log")
+            .expect("expired_log should exist"),
+    )?;
     assert_eq!(new_log, "new data");
     println!("  ✓ append() on expired key started fresh: {}", new_log);
 
@@ -199,7 +230,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("\nTesting KelpieBlockType → EntityType (reverse, lossy):");
     let reverse_mappings = vec![
         (KelpieBlockType::Persona, EntityType::Self_),
-        (KelpieBlockType::Facts, EntityType::Topic),   // Default for facts
+        (KelpieBlockType::Facts, EntityType::Topic), // Default for facts
         (KelpieBlockType::Goals, EntityType::Project), // Default for goals
         (KelpieBlockType::Scratch, EntityType::Note),
     ];
@@ -207,11 +238,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     for (kelpie_type, expected_entity) in &reverse_mappings {
         let entity = EntityType::from(*kelpie_type);
         assert_eq!(entity, *expected_entity);
-        println!(
-            "  ✓ {} → {:?} (default)",
-            kelpie_type.as_str(),
-            entity
-        );
+        println!("  ✓ {} → {:?} (default)", kelpie_type.as_str(), entity);
     }
 
     // Test round-trip for 1:1 mappings
@@ -233,10 +260,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let person = EntityType::Person;
     let kelpie = KelpieBlockType::from(person);
     let back = EntityType::from(kelpie);
-    println!(
-        "  ⚠ Person → Facts → {:?} (lossy, defaults to Topic)",
-        back
-    );
+    println!("  ⚠ Person → Facts → {:?} (lossy, defaults to Topic)", back);
     assert_eq!(back, EntityType::Topic); // Lossy conversion
 
     println!("\n✅ Feature 3: Block type mapping - VERIFIED\n");
@@ -327,9 +351,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut edge_core = CoreMemory::new();
     edge_core.set_block(MemoryBlockType::System, "test")?;
     edge_core.set_block_importance(MemoryBlockType::System, 0.0)?; // Min
-    assert_eq!(edge_core.get_block_importance(MemoryBlockType::System)?, 0.0);
+    assert_eq!(
+        edge_core.get_block_importance(MemoryBlockType::System)?,
+        0.0
+    );
     edge_core.set_block_importance(MemoryBlockType::System, 1.0)?; // Max
-    assert_eq!(edge_core.get_block_importance(MemoryBlockType::System)?, 1.0);
+    assert_eq!(
+        edge_core.get_block_importance(MemoryBlockType::System)?,
+        1.0
+    );
     println!("  ✓ Importance boundaries (0.0, 1.0) work correctly");
 
     // Test overflow protection in incr

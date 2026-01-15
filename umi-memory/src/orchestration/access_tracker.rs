@@ -7,8 +7,8 @@
 //! automatic promotion and eviction decisions.
 
 use crate::constants::{
-    ACCESS_TRACKER_BATCH_SIZE_MAX, ACCESS_TRACKER_DECAY_HALFLIFE_MS,
-    ACCESS_TRACKER_MAX_IMPORTANCE, ACCESS_TRACKER_MIN_IMPORTANCE,
+    ACCESS_TRACKER_BATCH_SIZE_MAX, ACCESS_TRACKER_DECAY_HALFLIFE_MS, ACCESS_TRACKER_MAX_IMPORTANCE,
+    ACCESS_TRACKER_MIN_IMPORTANCE,
 };
 use crate::dst::SimClock;
 use std::collections::HashMap;
@@ -132,7 +132,8 @@ impl AccessTracker {
 
         // Calculate frequency score (normalized by max possible accesses)
         let time_since_first_access = current_time.saturating_sub(record.first_access_ms);
-        let frequency_score = self.calculate_frequency_score(record.access_count, time_since_first_access);
+        let frequency_score =
+            self.calculate_frequency_score(record.access_count, time_since_first_access);
 
         // Calculate combined importance
         let combined_importance = self.calculate_combined_importance(
@@ -199,7 +200,8 @@ impl AccessTracker {
         let score = 0.5_f64.powf(decay_factor);
 
         // Clamp to [0.0, 1.0]
-        score.max(ACCESS_TRACKER_MIN_IMPORTANCE)
+        score
+            .max(ACCESS_TRACKER_MIN_IMPORTANCE)
             .min(ACCESS_TRACKER_MAX_IMPORTANCE)
     }
 
@@ -405,7 +407,10 @@ mod tests {
         let pattern2 = tracker.get_access_pattern("entity_low_base").unwrap();
 
         // Postconditions
-        assert!(pattern1.combined_importance > 0.7, "high base → high combined");
+        assert!(
+            pattern1.combined_importance > 0.7,
+            "high base → high combined"
+        );
         assert!(
             pattern2.combined_importance < pattern1.combined_importance,
             "low base + old access → lower combined"
@@ -418,11 +423,7 @@ mod tests {
         let clock = SimClock::at_ms(BASE_TIME_MS);
         let mut tracker = AccessTracker::new(clock);
 
-        let batch = vec![
-            ("entity1", 0.8),
-            ("entity2", 0.7),
-            ("entity3", 0.9),
-        ];
+        let batch = vec![("entity1", 0.8), ("entity2", 0.7), ("entity3", 0.9)];
 
         tracker.record_batch_access(&batch);
 
