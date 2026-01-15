@@ -832,7 +832,7 @@ fn convert_entity_type(ext_type: &crate::extraction::EntityType) -> EntityType {
 
     match ext_type {
         ExtType::Person => EntityType::Person,
-        ExtType::Organization => EntityType::Note, // No direct mapping, use Note
+        ExtType::Organization => EntityType::Project, // Map organizations to Project
         ExtType::Project => EntityType::Project,
         ExtType::Topic => EntityType::Topic,
         ExtType::Preference => EntityType::Note, // No direct mapping, use Note
@@ -1215,7 +1215,7 @@ mod tests {
         // Types without direct mapping should become Note
         assert_eq!(
             convert_entity_type(&ExtType::Organization),
-            EntityType::Note
+            EntityType::Project
         );
         assert_eq!(convert_entity_type(&ExtType::Preference), EntityType::Note);
         assert_eq!(convert_entity_type(&ExtType::Event), EntityType::Note);

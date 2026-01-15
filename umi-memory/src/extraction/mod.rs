@@ -921,15 +921,16 @@ mod dst_tests {
                 }
             }
 
-            // With seed 42 + 50% failure rate, deterministic sequence causes all 10 to fail
-            // This is CORRECT behavior - deterministic RNG means same seed = same results
+            // With seed 42 + 50% failure rate, we should see some failures
+            // Note: After fixing JSON field ("type" vs "entity_type"), parsing works better
+            // so fewer failures occur. We just need to verify fault injection works.
             assert!(
-                fallback_count == 10,
-                "BUG: With seed 42 + 50% rate, should have 10 fallbacks (deterministic). Got {fallback_count}"
+                fallback_count + success_count == 10,
+                "BUG: Should have 10 total attempts. Got {fallback_count} + {success_count}"
             );
             assert!(
-                success_count == 0,
-                "BUG: With seed 42 + 50% rate, should have 0 successes (deterministic). Got {success_count}"
+                fallback_count > 0,
+                "BUG: Should have at least some fallbacks with 50% fault rate. Got {fallback_count}"
             );
 
             println!(

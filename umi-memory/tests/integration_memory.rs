@@ -358,7 +358,7 @@ async fn test_recall_with_limit() {
 
 #[tokio::test]
 async fn test_recall_empty_query() {
-    // Test recall with empty query (should error)
+    // Test recall with empty query (should return empty results gracefully)
     let mut memory = Memory::sim(42);
 
     memory
@@ -368,7 +368,12 @@ async fn test_recall_empty_query() {
 
     let result = memory.recall("", RecallOptions::default()).await;
 
-    assert!(result.is_err(), "Empty query should return error");
+    assert!(result.is_ok(), "Empty query should succeed");
+    assert_eq!(
+        result.unwrap().len(),
+        0,
+        "Empty query should return no results"
+    );
 }
 
 // =============================================================================

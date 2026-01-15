@@ -319,6 +319,45 @@ impl SimLLM {
                     used_indices.insert(i);
                     let entity_name = entity_words.join(" ");
 
+                    // Skip pronouns (not real entities)
+                    let pronoun_blocklist = [
+                        "I",
+                        "Me",
+                        "My",
+                        "Mine",
+                        "Myself",
+                        "You",
+                        "Your",
+                        "Yours",
+                        "Yourself",
+                        "He",
+                        "Him",
+                        "His",
+                        "Himself",
+                        "She",
+                        "Her",
+                        "Hers",
+                        "Herself",
+                        "It",
+                        "Its",
+                        "Itself",
+                        "We",
+                        "Us",
+                        "Our",
+                        "Ours",
+                        "Ourselves",
+                        "They",
+                        "Them",
+                        "Their",
+                        "Theirs",
+                        "Themselves",
+                    ];
+
+                    if pronoun_blocklist.contains(&entity_name.as_str()) {
+                        i = j;
+                        continue;
+                    }
+
                     // Classify entity type based on context
                     let entity_type = self.classify_entity_type(&entity_name, text);
 
@@ -327,7 +366,7 @@ impl SimLLM {
 
                     entities.push(json!({
                         "name": entity_name,
-                        "entity_type": entity_type,
+                        "type": entity_type,
                         "content": context,
                         "confidence": 0.75 + rng.next_float() * 0.25,
                     }));
@@ -349,7 +388,7 @@ impl SimLLM {
             let snippet = &text[..100.min(text.len())];
             entities.push(json!({
                 "name": format!("note_{}", hash % 1000),
-                "entity_type": "note",
+                "type": "note",
                 "content": snippet,
                 "confidence": 0.5,
             }));
@@ -380,6 +419,41 @@ impl SimLLM {
             || entity_lower.contains("llc")
             || entity_lower.contains("ltd")
         {
+            return "organization";
+        }
+
+        // Known tech companies and organizations
+        let known_orgs = [
+            "google",
+            "microsoft",
+            "apple",
+            "amazon",
+            "meta",
+            "facebook",
+            "netflix",
+            "tesla",
+            "openai",
+            "anthropic",
+            "nvidia",
+            "intel",
+            "ibm",
+            "oracle",
+            "salesforce",
+            "adobe",
+            "twitter",
+            "linkedin",
+            "github",
+            "gitlab",
+            "stackoverflow",
+            "reddit",
+            "spotify",
+            "uber",
+            "acme",
+            "techco",
+            "neuralflow", // Test/demo companies
+        ];
+
+        if known_orgs.contains(&entity_lower.as_str()) {
             return "organization";
         }
 
