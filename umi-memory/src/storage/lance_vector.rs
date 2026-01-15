@@ -198,8 +198,14 @@ impl LanceVectorBackend {
                     StorageError::DeserializationError("_distance column".to_string())
                 })?;
 
-            // Convert distance to similarity score (1 - distance for cosine)
-            1.0 - distances.value(row)
+            // Convert L2 distance to similarity score
+            // LanceDB uses L2 distance by default (not cosine)
+            // Formula: similarity = 1 / (1 + distance)
+            // - distance = 0 → score = 1.0 (perfect match)
+            // - distance = 1 → score = 0.5
+            // - distance → ∞ → score → 0
+            let distance = distances.value(row);
+            1.0 / (1.0 + distance)
         } else {
             // If no distance column, default to 1.0 (exact match)
             1.0
@@ -509,5 +515,56 @@ mod tests {
         let (backend, _temp) = create_test_backend().await;
         let emb = vec![1.0; 100]; // Wrong dimensions
         backend.store("entity1", &emb).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_lance_vector_score_conversion() {
+        let (backend, _temp) = create_test_backend().await;
+
+        // Store identical embedding (should get perfect match score ~1.0)
+        let emb1 = vec![1.0; EMBEDDING_DIMENSIONS_COUNT];
+        backend.store("entity1", &emb1).await.unwrap();
+
+        // Search with identical query
+        let results = backend.search(&emb1, 1).await.unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert!(
+            results[0].score > 0.9,
+            "Perfect match should have score > 0.9, got {}",
+            results[0].score
+        );
+
+        // Store slightly different embedding
+        let mut emb2 = vec![1.0; EMBEDDING_DIMENSIONS_COUNT];
+        emb2[0] = 0.9; // Slight difference
+        backend.store("entity2", &emb2).await.unwrap();
+
+        // Search should return both, with entity1 scoring higher
+        let results = backend.search(&emb1, 2).await.unwrap();
+        assert_eq!(results.len(), 2);
+
+        // Find entity1 and entity2 in results
+        let entity1_result = results.iter().find(|r| r.id == "entity1").unwrap();
+        let entity2_result = results.iter().find(|r| r.id == "entity2").unwrap();
+
+        assert!(
+            entity1_result.score > entity2_result.score,
+            "Exact match should score higher: {} vs {}",
+            entity1_result.score,
+            entity2_result.score
+        );
+
+        // Both should be above min_score threshold (0.3)
+        assert!(
+            entity1_result.score > 0.3,
+            "entity1 score should be > 0.3, got {}",
+            entity1_result.score
+        );
+        assert!(
+            entity2_result.score > 0.3,
+            "entity2 score should be > 0.3, got {}",
+            entity2_result.score
+        );
     }
 }
