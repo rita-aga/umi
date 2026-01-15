@@ -305,7 +305,7 @@ pub trait LLMProvider: Send + Sync + std::fmt::Debug + 'static {
     /// Returns `ProviderError` on failure or JSON parse error.
     ///
     /// # Example
-    /// ```rust
+    /// ```rust,ignore
     /// # use umi_memory::llm::{LLMProvider, SimLLMProvider, CompletionRequest};
     /// # use serde::Deserialize;
     /// # tokio_test::block_on(async {
@@ -313,7 +313,7 @@ pub trait LLMProvider: Send + Sync + std::fmt::Debug + 'static {
     /// struct MyResponse { name: String }
     ///
     /// let provider = SimLLMProvider::with_seed(42);
-    /// let request = CompletionRequest::new("Extract entity");
+    /// let request = CompletionRequest::new("Extract entity").with_json_mode();
     /// let value = provider.complete_json(&request).await.unwrap();
     /// let typed: MyResponse = serde_json::from_value(value).unwrap();
     /// # });

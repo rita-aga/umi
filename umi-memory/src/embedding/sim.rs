@@ -123,24 +123,63 @@ impl SimEmbeddingProvider {
         hasher.finish()
     }
 
-    /// Generate a deterministic embedding for text.
+    /// Generate a deterministic embedding for text using token overlap.
     ///
-    /// Algorithm:
-    /// 1. Hash text + seed
-    /// 2. Generate N random floats in [-1, 1]
-    /// 3. Normalize to unit vector
+    /// **NEW Algorithm (Token-Based Semantic Similarity):**
+    /// 1. Tokenize text into words (lowercase, alphanumeric)
+    /// 2. For each token, hash it to get a deterministic position in embedding space
+    /// 3. Accumulate contributions from all tokens (with seed variation)
+    /// 4. Normalize to unit vector
+    ///
+    /// **Result:** Texts with overlapping tokens have higher cosine similarity!
+    /// - "Sarah works" vs "Sarah" → high similarity (shared "Sarah" token)
+    /// - "Sarah" vs "Python" → low similarity (no shared tokens)
+    ///
+    /// This provides meaningful semantic similarity for DST tests without requiring real LLM embeddings.
     fn generate_embedding(&self, text: &str) -> Vec<f32> {
-        // Hash text to get deterministic seed
-        let text_seed = self.hash_text(text);
-        let mut rng = DeterministicRng::new(text_seed);
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
 
-        // Generate random values in [-1, 1]
-        let mut embedding: Vec<f32> = (0..self.dimensions)
-            .map(|_| {
-                let val = rng.next_float();
-                (val * 2.0 - 1.0) as f32 // Map [0, 1] to [-1, 1]
-            })
+        // Initialize embedding vector to zero
+        let mut embedding = vec![0.0f32; self.dimensions];
+
+        // Tokenize: split on whitespace and non-alphanumeric, lowercase
+        let tokens: Vec<String> = text
+            .to_lowercase()
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
             .collect();
+
+        // If no tokens, generate a minimal random embedding
+        if tokens.is_empty() {
+            let text_seed = self.hash_text(text);
+            let mut rng = DeterministicRng::new(text_seed);
+            for val in &mut embedding {
+                *val = (rng.next_float() * 2.0 - 1.0) as f32;
+            }
+        } else {
+            // For each token, add its contribution to the embedding
+            for token in &tokens {
+                // Hash token with seed to get deterministic position
+                let mut hasher = DefaultHasher::new();
+                self.seed.hash(&mut hasher);
+                token.hash(&mut hasher);
+                let token_seed = hasher.finish();
+
+                // Use token seed to generate a sparse contribution
+                let mut rng = DeterministicRng::new(token_seed);
+
+                // Add contribution to embedding (sparse: only ~10% of dimensions)
+                let sparsity = 0.1; // 10% of dimensions get non-zero values
+                for i in 0..self.dimensions {
+                    if rng.next_float() < sparsity {
+                        let contribution = (rng.next_float() * 2.0 - 1.0) as f32;
+                        embedding[i] += contribution;
+                    }
+                }
+            }
+        }
 
         // Normalize to unit vector
         let norm: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();

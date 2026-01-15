@@ -497,6 +497,37 @@ impl Memory {
         Self::new(llm, embedder, vector, storage)
     }
 
+    /// Create a Memory with Sim providers and custom configuration.
+    ///
+    /// Convenient constructor for testing with deterministic simulation providers
+    /// and custom memory configuration.
+    ///
+    /// # Arguments
+    /// - `seed` - Random seed for deterministic behavior
+    /// - `config` - Custom memory configuration
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// use umi_memory::umi::{Memory, MemoryConfig};
+    ///
+    /// let config = MemoryConfig::default().without_embeddings();
+    /// let memory = Memory::sim_with_config(42, config);
+    /// ```
+    #[must_use]
+    pub fn sim_with_config(seed: u64, config: MemoryConfig) -> Self {
+        use crate::dst::SimConfig;
+        use crate::embedding::SimEmbeddingProvider;
+        use crate::llm::SimLLMProvider;
+        use crate::storage::{SimStorageBackend, SimVectorBackend};
+
+        let llm = SimLLMProvider::with_seed(seed);
+        let embedder = SimEmbeddingProvider::with_seed(seed);
+        let vector = SimVectorBackend::new(seed);
+        let storage = SimStorageBackend::new(SimConfig::with_seed(seed));
+
+        Self::with_config(llm, embedder, vector, storage, config)
+    }
+
     // TODO: Re-enable builder pattern with Arc support
     //
     // The builder pattern doesn't work well with trait objects because Memory needs to

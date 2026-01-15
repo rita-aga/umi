@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Test entity extraction with real Anthropic API
 async fn test_entity_extraction(llm: &AnthropicProvider) -> Result<(), Box<dyn std::error::Error>> {
-    let extractor = EntityExtractor::new(llm.clone());
+    let extractor = EntityExtractor::new(Box::new(llm.clone()));
 
     let text = "Alice is a software engineer at Acme Corp. She specializes in Rust and distributed systems.";
     println!("  Input: \"{}\"", text);
@@ -114,7 +114,12 @@ async fn test_query_rewriting(llm: &AnthropicProvider) -> Result<(), Box<dyn std
     let embedder = SimEmbeddingProvider::with_seed(42);
     let vector = SimVectorBackend::new(42);
     let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-    let retriever = DualRetriever::new(llm.clone(), embedder, vector, storage);
+    let retriever = DualRetriever::new(
+        Box::new(llm.clone()),
+        Box::new(embedder),
+        Box::new(vector),
+        Box::new(storage),
+    );
 
     let query = "Who are the software engineers?";
     println!("  Input query: \"{}\"", query);
@@ -148,8 +153,7 @@ async fn test_query_rewriting(llm: &AnthropicProvider) -> Result<(), Box<dyn std
 async fn test_evolution_detection(
     llm: &AnthropicProvider,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let tracker: EvolutionTracker<AnthropicProvider, SimStorageBackend> =
-        EvolutionTracker::new(llm.clone());
+    let tracker = EvolutionTracker::new(Box::new(llm.clone()));
 
     // Create test entities
     let old_entity = Entity::new(

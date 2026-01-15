@@ -110,10 +110,22 @@ impl Default for SearchOptions {
 /// Result from a search operation.
 ///
 /// Contains the matched entities along with metadata about the search.
+///
+/// **DST-First Discovery**: Added `scores` field to fix recall relevance issue.
+/// Previously, similarity scores were computed but not tracked, causing results
+/// to be sorted by recency instead of relevance.
 #[derive(Debug, Clone)]
 pub struct SearchResult {
     /// The matched entities, sorted by relevance.
     pub entities: Vec<Entity>,
+
+    /// Similarity scores for each entity (0.0-1.0, same order as entities).
+    ///
+    /// Higher scores indicate better matches. Scores are computed from:
+    /// - Vector similarity (cosine similarity of embeddings)
+    /// - Text match scores (fuzzy matching)
+    /// - RRF merge scores (reciprocal rank fusion)
+    pub scores: Vec<f64>,
 
     /// The original query.
     pub query: String,
@@ -130,12 +142,19 @@ impl SearchResult {
     #[must_use]
     pub fn new(
         entities: Vec<Entity>,
+        scores: Vec<f64>,
         query: impl Into<String>,
         deep_search_used: bool,
         query_variations: Vec<String>,
     ) -> Self {
+        debug_assert_eq!(
+            entities.len(),
+            scores.len(),
+            "entities and scores must have same length"
+        );
         Self {
             entities,
+            scores,
             query: query.into(),
             deep_search_used,
             query_variations,
@@ -144,10 +163,16 @@ impl SearchResult {
 
     /// Create a fast-only search result.
     #[must_use]
-    pub fn fast_only(entities: Vec<Entity>, query: impl Into<String>) -> Self {
+    pub fn fast_only(entities: Vec<Entity>, scores: Vec<f64>, query: impl Into<String>) -> Self {
+        debug_assert_eq!(
+            entities.len(),
+            scores.len(),
+            "entities and scores must have same length"
+        );
         let query = query.into();
         Self {
             entities,
+            scores,
             query: query.clone(),
             deep_search_used: false,
             query_variations: vec![query],

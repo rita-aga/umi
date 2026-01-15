@@ -22,7 +22,7 @@ fn create_unified(
     seed: u64,
     clock: SimClock,
     config: UnifiedMemoryConfig,
-) -> UnifiedMemory<SimLLMProvider, SimEmbeddingProvider, SimStorageBackend, SimVectorBackend> {
+) -> UnifiedMemory {
     let llm = SimLLMProvider::with_seed(seed);
     let embedder = SimEmbeddingProvider::with_seed(seed);
     let vector = SimVectorBackend::new(seed);

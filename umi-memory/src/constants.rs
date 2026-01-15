@@ -240,6 +240,15 @@ pub const RETRIEVAL_QUERY_REWRITE_COUNT_MAX: usize = 3;
 /// RRF constant (standard value from literature)
 pub const RETRIEVAL_RRF_K: usize = 60;
 
+/// Minimum similarity score threshold for recall results (0.0-1.0).
+///
+/// Results below this threshold are filtered out as irrelevant.
+/// Default 0.3 provides good balance between recall and precision.
+///
+/// **DST-First Discovery**: Added to fix recall relevance issue where
+/// queries for non-existent entities returned full result sets.
+pub const RETRIEVAL_MIN_SCORE_DEFAULT: f64 = 0.3;
+
 // =============================================================================
 // Memory Class Limits (ADR-017)
 // =============================================================================

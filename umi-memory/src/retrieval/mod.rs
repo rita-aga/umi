@@ -54,8 +54,8 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use crate::constants::{
-    RETRIEVAL_QUERY_BYTES_MAX, RETRIEVAL_QUERY_REWRITE_COUNT_MAX, RETRIEVAL_RESULTS_COUNT_MAX,
-    RETRIEVAL_RRF_K,
+    RETRIEVAL_MIN_SCORE_DEFAULT, RETRIEVAL_QUERY_BYTES_MAX,
+    RETRIEVAL_QUERY_REWRITE_COUNT_MAX, RETRIEVAL_RESULTS_COUNT_MAX, RETRIEVAL_RRF_K,
 };
 use crate::embedding::EmbeddingProvider;
 use crate::llm::{CompletionRequest, LLMProvider};
@@ -234,7 +234,7 @@ impl DualRetriever {
         let results = if let Some((start_ms, end_ms)) = options.time_range {
             results
                 .into_iter()
-                .filter(|e| {
+                .filter(|(e, _score)| {
                     if let Some(event_time) = e.event_time {
                         // Convert DateTime<Utc> to milliseconds for comparison
                         let event_ms = event_time.timestamp_millis() as u64;
@@ -248,12 +248,23 @@ impl DualRetriever {
             results
         };
 
-        // 6. Sort by updated_at descending and limit
-        let mut results = results;
-        results.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        // 6. **DST-FIRST FIX**: Sort by SCORE descending, not updated_at!
+        // Filter by min_score threshold, then sort, then limit
+        let mut results: Vec<(Entity, f64)> = results
+            .into_iter()
+            .filter(|(_e, score)| *score >= RETRIEVAL_MIN_SCORE_DEFAULT)
+            .collect();
+
+        // Sort by score descending (highest relevance first)
+        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+
+        // Limit results
         results.truncate(options.limit);
 
-        let result = SearchResult::new(results, query, deep_search_used, query_variations);
+        // Separate entities and scores for SearchResult
+        let (entities, scores): (Vec<Entity>, Vec<f64>) = results.into_iter().unzip();
+
+        let result = SearchResult::new(entities, scores, query, deep_search_used, query_variations);
 
         // TigerStyle: Postconditions
         debug_assert!(
@@ -352,101 +363,142 @@ impl DualRetriever {
     /// RRF score: sum(1 / (k + rank)) for each list the document appears in.
     /// Documents appearing in multiple lists get higher scores.
     ///
+    /// **DST-First Fix**: Now preserves original similarity scores.
+    /// Final score = 0.7 * original_score + 0.3 * rrf_score (weighted combination)
+    ///
     /// # Arguments
-    /// - `result_lists` - Slice of entity vectors to merge
+    /// - `result_lists` - Slice of (entity, score) tuples to merge
     ///
     /// # Returns
-    /// Merged and deduplicated entities, sorted by RRF score.
+    /// Merged and deduplicated (entity, score) tuples, sorted by combined score.
     #[must_use]
-    pub fn merge_rrf(&self, result_lists: &[&Vec<Entity>]) -> Vec<Entity> {
-        let mut scores: HashMap<String, f64> = HashMap::new();
+    pub fn merge_rrf(&self, result_lists: &[&Vec<(Entity, f64)>]) -> Vec<(Entity, f64)> {
+        let mut rrf_scores: HashMap<String, f64> = HashMap::new();
+        let mut original_scores: HashMap<String, f64> = HashMap::new();
         let mut entities: HashMap<String, Entity> = HashMap::new();
 
         for list in result_lists {
-            for (rank, entity) in list.iter().enumerate() {
+            for (rank, (entity, score)) in list.iter().enumerate() {
                 // RRF formula: 1 / (k + rank)
                 // rank is 0-indexed, so rank=0 gives highest score
-                *scores.entry(entity.id.clone()).or_default() +=
+                *rrf_scores.entry(entity.id.clone()).or_default() +=
                     1.0 / (RETRIEVAL_RRF_K as f64 + rank as f64);
+
+                // Track best original similarity score for this entity
+                original_scores
+                    .entry(entity.id.clone())
+                    .and_modify(|existing| *existing = existing.max(*score))
+                    .or_insert(*score);
+
                 entities
                     .entry(entity.id.clone())
                     .or_insert_with(|| entity.clone());
             }
         }
 
-        // Sort by score descending
-        let mut sorted: Vec<_> = scores.into_iter().collect();
-        sorted.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+        // Normalize RRF scores to 0-1 range
+        let max_rrf = rrf_scores.values().cloned().fold(0.0f64, f64::max);
+        if max_rrf > 0.0 {
+            for score in rrf_scores.values_mut() {
+                *score /= max_rrf;
+            }
+        }
 
-        // Build result list
-        sorted
+        // Combine scores: 70% original similarity + 30% RRF
+        let mut combined_scores: Vec<_> = entities
+            .keys()
+            .map(|id| {
+                let orig = original_scores.get(id).copied().unwrap_or(0.5);
+                let rrf = rrf_scores.get(id).copied().unwrap_or(0.0);
+                let combined = 0.7 * orig + 0.3 * rrf;
+                (id.clone(), combined)
+            })
+            .collect();
+
+        // Sort by combined score descending
+        combined_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+
+        // Build result list with scores
+        combined_scores
             .into_iter()
-            .filter_map(|(id, _)| entities.remove(&id))
+            .filter_map(|(id, score)| entities.remove(&id).map(|e| (e, score)))
             .collect()
     }
 
     /// Execute fast search with vector similarity.
     ///
+    /// Returns entities with their similarity scores (0.0-1.0).
     /// Tries vector search first, falls back to text search on failure.
-    async fn fast_search(&self, query: &str, limit: usize) -> Result<Vec<Entity>, RetrievalError> {
+    ///
+    /// **DST-First Fix**: Now preserves similarity scores from vector backend.
+    async fn fast_search(&self, query: &str, limit: usize) -> Result<Vec<(Entity, f64)>, RetrievalError> {
         // Try vector search first
         match self.embedder.embed(query).await {
             Ok(query_embedding) => {
                 // Vector similarity search
                 match self.vector.search(&query_embedding, limit).await {
                     Ok(vector_results) => {
-                        // Fetch full entities by ID
-                        let mut entities = Vec::new();
+                        // Fetch full entities by ID, preserving scores
+                        let mut results = Vec::new();
                         for result in vector_results {
                             if let Ok(Some(entity)) = self.storage.get_entity(&result.id).await {
-                                entities.push(entity);
+                                results.push((entity, result.score as f64));  // ← PRESERVE SCORE (cast f32→f64)
                             }
                         }
 
                         // If we got results, return them
-                        if !entities.is_empty() {
-                            return Ok(entities);
+                        if !results.is_empty() {
+                            return Ok(results);
                         }
 
                         // No results from vector, try text fallback
                         tracing::warn!(
                             "Vector search returned no results, falling back to text search"
                         );
-                        self.storage
+                        let entities = self.storage
                             .search(query, limit)
                             .await
-                            .map_err(RetrievalError::from)
+                            .map_err(RetrievalError::from)?;
+                        // Text search has no scores, use default 0.5
+                        Ok(entities.into_iter().map(|e| (e, 0.5)).collect())
                     }
                     Err(e) => {
                         // Vector backend failed, fallback to text
                         tracing::warn!("Vector search failed: {}, falling back to text search", e);
-                        self.storage
+                        let entities = self.storage
                             .search(query, limit)
                             .await
-                            .map_err(RetrievalError::from)
+                            .map_err(RetrievalError::from)?;
+                        // Text search has no scores, use default 0.5
+                        Ok(entities.into_iter().map(|e| (e, 0.5)).collect())
                     }
                 }
             }
             Err(e) => {
                 // Embedding failed, fallback to text
                 tracing::warn!("Query embedding failed: {}, falling back to text search", e);
-                self.storage
+                let entities = self.storage
                     .search(query, limit)
                     .await
-                    .map_err(RetrievalError::from)
+                    .map_err(RetrievalError::from)?;
+                // Text search has no scores, use default 0.5
+                Ok(entities.into_iter().map(|e| (e, 0.5)).collect())
             }
         }
     }
 
     /// Execute deep search with query variations using vector search.
     ///
+    /// Returns entities with their similarity scores (0.0-1.0).
     /// Embeds each query variant and performs vector search, with text fallback.
+    ///
+    /// **DST-First Fix**: Now preserves similarity scores from vector backend.
     async fn deep_search(
         &self,
         variations: &[String],
         original_query: &str,
         limit: usize,
-    ) -> Vec<Entity> {
+    ) -> Vec<(Entity, f64)> {
         let mut all_results = Vec::new();
         let mut seen_ids = std::collections::HashSet::new();
 
@@ -457,52 +509,58 @@ impl DualRetriever {
             }
 
             // Try vector search for this variation
-            let entities = match self.embedder.embed(variation).await {
+            let results = match self.embedder.embed(variation).await {
                 Ok(embedding) => {
                     // Vector search
                     match self.vector.search(&embedding, limit).await {
                         Ok(vector_results) => {
-                            // Fetch entities by ID
+                            // Fetch entities by ID, preserving scores
                             let mut found = Vec::new();
                             for result in vector_results {
                                 if let Ok(Some(entity)) = self.storage.get_entity(&result.id).await
                                 {
-                                    found.push(entity);
+                                    found.push((entity, result.score as f64));  // ← PRESERVE SCORE (cast f32→f64)
                                 }
                             }
 
                             if found.is_empty() {
                                 // Vector search got no results, try text fallback
-                                self.storage
+                                let entities = self.storage
                                     .search(variation, limit)
                                     .await
-                                    .unwrap_or_default()
+                                    .unwrap_or_default();
+                                // Text search has no scores, use default 0.5
+                                entities.into_iter().map(|e| (e, 0.5)).collect()
                             } else {
                                 found
                             }
                         }
                         Err(_) => {
                             // Vector search failed, use text fallback
-                            self.storage
+                            let entities = self.storage
                                 .search(variation, limit)
                                 .await
-                                .unwrap_or_default()
+                                .unwrap_or_default();
+                            // Text search has no scores, use default 0.5
+                            entities.into_iter().map(|e| (e, 0.5)).collect()
                         }
                     }
                 }
                 Err(_) => {
                     // Embedding failed, use text fallback
-                    self.storage
+                    let entities = self.storage
                         .search(variation, limit)
                         .await
-                        .unwrap_or_default()
+                        .unwrap_or_default();
+                    // Text search has no scores, use default 0.5
+                    entities.into_iter().map(|e| (e, 0.5)).collect()
                 }
             };
 
             // Deduplicate and add to results
-            for entity in entities {
+            for (entity, score) in results {
                 if seen_ids.insert(entity.id.clone()) {
-                    all_results.push(entity);
+                    all_results.push((entity, score));
                 }
             }
         }

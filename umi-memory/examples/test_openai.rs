@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Test entity extraction with real OpenAI API
 async fn test_entity_extraction(llm: &OpenAIProvider) -> Result<(), Box<dyn std::error::Error>> {
-    let extractor = EntityExtractor::new(llm.clone());
+    let extractor = EntityExtractor::new(Box::new(llm.clone()));
 
     let text =
         "Bob is the CTO at TechCo. He has 15 years of experience in AI and machine learning.";
@@ -122,7 +122,12 @@ async fn test_query_rewriting(llm: &OpenAIProvider) -> Result<(), Box<dyn std::e
     let embedder = SimEmbeddingProvider::with_seed(42);
     let vector = SimVectorBackend::new(42);
     let storage = SimStorageBackend::new(SimConfig::with_seed(42));
-    let retriever = DualRetriever::new(llm.clone(), embedder, vector, storage);
+    let retriever = DualRetriever::new(
+        Box::new(llm.clone()),
+        Box::new(embedder),
+        Box::new(vector),
+        Box::new(storage),
+    );
 
     let query = "What companies are people working at?";
     println!("  Input query: \"{}\"", query);
@@ -223,7 +228,7 @@ async fn test_full_pipeline(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("  Testing complete extraction + embedding pipeline");
 
-    let extractor = EntityExtractor::new(llm.clone());
+    let extractor = EntityExtractor::new(Box::new(llm.clone()));
 
     // Extract entities
     let text = "Carol is a product manager at StartupX";

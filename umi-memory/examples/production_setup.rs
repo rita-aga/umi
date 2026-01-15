@@ -16,14 +16,14 @@ use umi_memory::dst::SimConfig;
 use umi_memory::embedding::SimEmbeddingProvider;
 use umi_memory::llm::SimLLMProvider;
 use umi_memory::storage::{SimStorageBackend, SimVectorBackend};
-use umi_memory::umi::{Memory, MemoryBuilder, MemoryConfig, RecallOptions, RememberOptions};
+use umi_memory::umi::{Memory, MemoryConfig, RecallOptions, RememberOptions};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Umi Memory: Production Setup ===\n");
 
-    // === Builder Pattern with Explicit Components ===
-    println!("--- Builder Pattern (Explicit Configuration) ---");
+    // === Direct Construction with Explicit Components ===
+    println!("--- Direct Construction (Explicit Configuration) ---");
 
     // Create each component explicitly
     let llm = SimLLMProvider::with_seed(42);
@@ -31,20 +31,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let vector_backend = SimVectorBackend::new(42);
     let storage_backend = SimStorageBackend::new(SimConfig::with_seed(42));
 
-    // Assemble with builder
-    let mut memory: Memory<
-        SimLLMProvider,
-        SimEmbeddingProvider,
-        SimStorageBackend,
-        SimVectorBackend,
-    > = MemoryBuilder::new()
-        .with_llm(llm)
-        .with_embedder(embedder)
-        .with_vector(vector_backend)
-        .with_storage(storage_backend)
-        .build();
+    // Assemble with Memory::new()
+    let mut memory = Memory::new(llm, embedder, vector_backend, storage_backend);
 
-    println!("✓ Created Memory with builder pattern");
+    println!("✓ Created Memory with direct construction");
     println!("  - LLM: SimLLMProvider (seed: 42)");
     println!("  - Embedder: SimEmbeddingProvider (seed: 42)");
     println!("  - Vector: SimVectorBackend (in-memory)");
@@ -106,19 +96,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         r#"
     #[cfg(feature = "lance")]
     {{
-        use umi_memory::storage::LanceVectorBackend;
+        use umi_memory::storage::{{LanceVectorBackend, LanceStorageBackend}};
 
         // Connect to persistent LanceDB
-        let lance = LanceVectorBackend::connect("./production_lance_db")
+        let vector = LanceVectorBackend::connect("./production_vectors.lance")
+            .await
+            .expect("Failed to connect to LanceDB");
+        let storage = LanceStorageBackend::connect("./production_storage.lance")
             .await
             .expect("Failed to connect to LanceDB");
 
-        let memory = MemoryBuilder::new()
-            .with_llm(/* your LLM provider */)
-            .with_embedder(/* your embedding provider */)
-            .with_vector(lance)
-            .with_storage(/* your storage backend */)
-            .build();
+        let memory = Memory::new(llm, embedder, vector, storage);
     }}
     "#
     );
@@ -129,21 +117,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("In production with Anthropic:");
     println!(
         r#"
-    #[cfg(feature = "anthropic")]
+    #[cfg(all(feature = "anthropic", feature = "embedding-openai", feature = "lance"))]
     {{
         use umi_memory::llm::AnthropicProvider;
+        use umi_memory::embedding::OpenAIEmbeddingProvider;
+        use umi_memory::storage::{{LanceVectorBackend, LanceStorageBackend}};
 
         let llm = AnthropicProvider::new(
-            std::env::var("ANTHROPIC_API_KEY")
-                .expect("ANTHROPIC_API_KEY not set")
+            std::env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY not set")
         );
+        let embedder = OpenAIEmbeddingProvider::new(
+            std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY not set")
+        );
+        let vector = LanceVectorBackend::connect("./vectors.lance").await?;
+        let storage = LanceStorageBackend::connect("./storage.lance").await?;
 
-        let memory = MemoryBuilder::new()
-            .with_llm(llm)
-            .with_embedder(/* your embedding provider */)
-            .with_vector(/* your vector backend */)
-            .with_storage(/* your storage backend */)
-            .build();
+        let memory = Memory::new(llm, embedder, vector, storage);
     }}
     "#
     );
