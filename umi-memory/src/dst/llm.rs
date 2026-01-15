@@ -222,50 +222,116 @@ impl SimLLM {
         }
     }
 
-    /// Simulate entity extraction response.
+    /// Simulate entity extraction response using semantic token analysis.
+    ///
+    /// **NEW APPROACH**: Instead of hardcoded names, extract ACTUAL entities from text:
+    /// - Capitalized words/phrases → potential entities
+    /// - Context clues (verbs, prepositions) → entity types
+    /// - Multi-word names (e.g., "Sarah Chen", "Acme Corp") → preserved
+    ///
+    /// This provides meaningful entity extraction for DST tests without requiring real LLMs.
     fn sim_entity_extraction(&self, prompt: &str) -> String {
         let mut entities = Vec::new();
         let mut rng = self.rng.lock().unwrap();
 
-        // Detect common names in prompt
-        for name in COMMON_NAMES {
-            if prompt.to_uppercase().contains(&name.to_uppercase()) {
-                if entities.len() >= LLM_ENTITIES_COUNT_MAX {
-                    break;
-                }
-                entities.push(json!({
-                    "name": name,
-                    "entity_type": "person",
-                    "content": format!("Information about {}", name),
-                    "confidence": 0.7 + rng.next_float() * 0.3,
-                }));
+        // Extract the actual text from the prompt (remove "Extract entities from:" prefix)
+        // Handle both single-line and multi-line prompts
+        let text = if let Some(colon_pos) = prompt.find(':') {
+            // If there's a colon, assume the text is after it (e.g., "Extract entities from: TEXT")
+            let after_colon = &prompt[colon_pos + 1..].trim();
+            // If after_colon is empty, use the whole prompt
+            if after_colon.is_empty() {
+                prompt.trim()
+            } else {
+                after_colon
             }
+        } else {
+            // No colon, check for multi-line format
+            prompt
+                .lines()
+                .find(|line| {
+                    let trimmed = line.trim().to_lowercase();
+                    !trimmed.starts_with("extract") && !trimmed.is_empty()
+                })
+                .unwrap_or(prompt)
+                .trim()
+        };
+
+        // Tokenize: split into words, preserve capitalization
+        let words: Vec<&str> = text.split_whitespace().collect();
+
+        // Track used words to avoid duplicates
+        let mut used_indices = std::collections::HashSet::new();
+
+        // Extract multi-word capitalized phrases (e.g., "Sarah Chen", "Acme Corp")
+        let mut i = 0;
+        while i < words.len() {
+            if used_indices.contains(&i) {
+                i += 1;
+                continue;
+            }
+
+            let word = words[i];
+            // Check if word starts with capital letter (potential entity)
+            if let Some(first_char) = word.chars().next() {
+                if first_char.is_uppercase() && word.chars().all(|c| c.is_alphanumeric()) {
+                    // Collect consecutive capitalized words (multi-word entities)
+                    let mut entity_words = vec![word];
+                    let mut j = i + 1;
+
+                    while j < words.len() {
+                        let next_word = words[j];
+                        if let Some(first) = next_word.chars().next() {
+                            if first.is_uppercase()
+                                && next_word.chars().all(|c| c.is_alphanumeric())
+                            {
+                                entity_words.push(next_word);
+                                used_indices.insert(j);
+                                j += 1;
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+
+                    used_indices.insert(i);
+                    let entity_name = entity_words.join(" ");
+
+                    // Classify entity type based on context
+                    let entity_type = self.classify_entity_type(&entity_name, text);
+
+                    // Generate context snippet
+                    let context = self.extract_context(&entity_name, text);
+
+                    entities.push(json!({
+                        "name": entity_name,
+                        "entity_type": entity_type,
+                        "content": context,
+                        "confidence": 0.75 + rng.next_float() * 0.25,
+                    }));
+
+                    if entities.len() >= LLM_ENTITIES_COUNT_MAX {
+                        break;
+                    }
+
+                    i = j;
+                    continue;
+                }
+            }
+            i += 1;
         }
 
-        // Detect common organizations in prompt
-        for org in COMMON_ORGS {
-            if prompt.to_uppercase().contains(&org.to_uppercase()) {
-                if entities.len() >= LLM_ENTITIES_COUNT_MAX {
-                    break;
-                }
-                entities.push(json!({
-                    "name": org,
-                    "entity_type": "organization",
-                    "content": format!("Organization: {}", org),
-                    "confidence": 0.8 + rng.next_float() * 0.2,
-                }));
-            }
-        }
-
-        // Fallback to note entity if nothing found
+        // Fallback: if no entities found, create a note from the text
         if entities.is_empty() {
             let hash = self.prompt_hash(prompt);
-            let snippet = &prompt[..100.min(prompt.len())];
+            let snippet = &text[..100.min(text.len())];
             entities.push(json!({
-                "name": format!("Note_{}", hash),
+                "name": format!("note_{}", hash % 1000),
                 "entity_type": "note",
                 "content": snippet,
-                "confidence": 0.5 + rng.next_float() * 0.3,
+                "confidence": 0.5,
             }));
         }
 
@@ -274,6 +340,97 @@ impl SimLLM {
             "relations": [],
         }))
         .unwrap()
+    }
+
+    /// Classify entity type based on context clues.
+    ///
+    /// Heuristics:
+    /// - Contains "Corp", "Inc", "LLC", "Ltd" → organization
+    /// - Multi-word names (likely person names) checked for person indicators FIRST
+    /// - Near "engineer", "developer", "manager", "learning" → person
+    /// - Near "works at", "company", "organization" → organization (for single words)
+    /// - Near "team", "group", "department" → organization
+    /// - Default → note
+    fn classify_entity_type(&self, entity_name: &str, text: &str) -> &'static str {
+        let entity_lower = entity_name.to_lowercase();
+
+        // Check entity name itself for obvious organization indicators
+        if entity_lower.contains("corp")
+            || entity_lower.contains("inc")
+            || entity_lower.contains("llc")
+            || entity_lower.contains("ltd")
+        {
+            return "organization";
+        }
+
+        // Check context around entity
+        if let Some(pos) = text.find(entity_name) {
+            let context_start = pos.saturating_sub(50);
+            let context_end = (pos + entity_name.len() + 50).min(text.len());
+            let context = &text[context_start..context_end].to_lowercase();
+
+            // For multi-word names (likely person names), check person indicators FIRST
+            if entity_name.contains(' ') {
+                // Person indicators (roles, actions)
+                if context.contains(" as ")
+                    || context.contains("engineer")
+                    || context.contains("developer")
+                    || context.contains("manager")
+                    || context.contains("learning")
+                    || context.contains("studying")
+                    || context.contains("'s main")
+                    || context.contains(" is a ")
+                    || context.contains(" works as ")
+                {
+                    return "person";
+                }
+            }
+
+            // Organization indicators (applies to all entities)
+            // Note: "works at X" means X is the organization, not the subject
+            if context.contains("company")
+                || context.contains("organization")
+                || context.contains("team")
+                || context.contains("department")
+                || context.contains("group")
+            {
+                return "organization";
+            }
+
+            // For single words after "works at", classify as organization
+            if !entity_name.contains(' ') && context.contains("works at") {
+                return "organization";
+            }
+
+            // Person indicators for single words
+            if context.contains("engineer")
+                || context.contains("developer")
+                || context.contains("manager")
+                || context.contains("learning")
+                || context.contains("'s main")
+            {
+                return "person";
+            }
+        }
+
+        // Default: note
+        "note"
+    }
+
+    /// Extract context snippet for an entity.
+    fn extract_context(&self, entity_name: &str, text: &str) -> String {
+        if let Some(pos) = text.find(entity_name) {
+            // Find sentence boundaries
+            let start = text[..pos].rfind('.').map(|p| p + 1).unwrap_or(0);
+            let end = text[pos..]
+                .find('.')
+                .map(|p| pos + p + 1)
+                .unwrap_or(text.len());
+
+            text[start..end].trim().to_string()
+        } else {
+            format!("Information about {}", entity_name)
+        }
     }
 
     /// Simulate query rewrite response.
@@ -710,5 +867,53 @@ mod tests {
         let faults = Arc::new(FaultInjector::new(DeterministicRng::new(42)));
 
         let _ = SimLLM::new(clock, rng, faults).with_latency(999999);
+    }
+
+    #[tokio::test]
+    async fn test_entity_extraction_sarah_chen() {
+        let llm = create_test_llm(42);
+
+        let prompt = "Extract entities from: Sarah Chen works at NeuralFlow as an ML engineer";
+        let response = llm.complete(prompt).await.unwrap();
+
+        println!("=== Entity Extraction Test ===");
+        println!("Prompt: {}", prompt);
+        println!("Response: {}", response);
+
+        // Pretty print JSON
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&response) {
+            println!(
+                "Pretty printed:\n{}",
+                serde_json::to_string_pretty(&json).unwrap()
+            );
+
+            if let Some(entities) = json.get("entities").and_then(|e| e.as_array()) {
+                println!("\nExtracted {} entities:", entities.len());
+                for (i, entity) in entities.iter().enumerate() {
+                    let name = entity.get("name").and_then(|n| n.as_str()).unwrap_or("?");
+                    let entity_type = entity
+                        .get("entity_type")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("?");
+                    let confidence = entity
+                        .get("confidence")
+                        .and_then(|c| c.as_f64())
+                        .unwrap_or(0.0);
+                    println!(
+                        "  {}. {} ({}) - confidence: {:.2}",
+                        i + 1,
+                        name,
+                        entity_type,
+                        confidence
+                    );
+                }
+            }
+        }
+
+        // Verify we extracted something useful
+        assert!(
+            response.contains("Sarah") || response.contains("Chen"),
+            "Should extract Sarah or Chen"
+        );
     }
 }

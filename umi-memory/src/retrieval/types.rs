@@ -359,6 +359,7 @@ mod tests {
         )];
         let result = SearchResult::new(
             entities,
+            vec![1.0], // dummy score for testing
             "query",
             true,
             vec!["query".to_string(), "variation".to_string()],
@@ -377,7 +378,7 @@ mod tests {
             "test".to_string(),
             "content".to_string(),
         )];
-        let result = SearchResult::fast_only(entities, "query");
+        let result = SearchResult::fast_only(entities, vec![1.0], "query");
 
         assert_eq!(result.len(), 1);
         assert!(!result.deep_search_used);
@@ -386,7 +387,7 @@ mod tests {
 
     #[test]
     fn test_search_result_empty() {
-        let result = SearchResult::fast_only(vec![], "query");
+        let result = SearchResult::fast_only(vec![], vec![], "query");
 
         assert!(result.is_empty());
         assert_eq!(result.len(), 0);
@@ -399,7 +400,7 @@ mod tests {
             Entity::new(EntityType::Note, "a".to_string(), "content a".to_string()),
             Entity::new(EntityType::Note, "b".to_string(), "content b".to_string()),
         ];
-        let result = SearchResult::fast_only(entities, "query");
+        let result = SearchResult::fast_only(entities, vec![1.0, 1.0], "query");
 
         let names: Vec<_> = result.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(names, vec!["a", "b"]);

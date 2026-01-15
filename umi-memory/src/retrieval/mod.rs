@@ -54,8 +54,8 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use crate::constants::{
-    RETRIEVAL_MIN_SCORE_DEFAULT, RETRIEVAL_QUERY_BYTES_MAX,
-    RETRIEVAL_QUERY_REWRITE_COUNT_MAX, RETRIEVAL_RESULTS_COUNT_MAX, RETRIEVAL_RRF_K,
+    RETRIEVAL_MIN_SCORE_DEFAULT, RETRIEVAL_QUERY_BYTES_MAX, RETRIEVAL_QUERY_REWRITE_COUNT_MAX,
+    RETRIEVAL_RESULTS_COUNT_MAX, RETRIEVAL_RRF_K,
 };
 use crate::embedding::EmbeddingProvider;
 use crate::llm::{CompletionRequest, LLMProvider};
@@ -431,7 +431,11 @@ impl DualRetriever {
     /// Tries vector search first, falls back to text search on failure.
     ///
     /// **DST-First Fix**: Now preserves similarity scores from vector backend.
-    async fn fast_search(&self, query: &str, limit: usize) -> Result<Vec<(Entity, f64)>, RetrievalError> {
+    async fn fast_search(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<(Entity, f64)>, RetrievalError> {
         // Try vector search first
         match self.embedder.embed(query).await {
             Ok(query_embedding) => {
@@ -442,7 +446,7 @@ impl DualRetriever {
                         let mut results = Vec::new();
                         for result in vector_results {
                             if let Ok(Some(entity)) = self.storage.get_entity(&result.id).await {
-                                results.push((entity, result.score as f64));  // ← PRESERVE SCORE (cast f32→f64)
+                                results.push((entity, result.score as f64)); // ← PRESERVE SCORE (cast f32→f64)
                             }
                         }
 
@@ -455,7 +459,8 @@ impl DualRetriever {
                         tracing::warn!(
                             "Vector search returned no results, falling back to text search"
                         );
-                        let entities = self.storage
+                        let entities = self
+                            .storage
                             .search(query, limit)
                             .await
                             .map_err(RetrievalError::from)?;
@@ -465,7 +470,8 @@ impl DualRetriever {
                     Err(e) => {
                         // Vector backend failed, fallback to text
                         tracing::warn!("Vector search failed: {}, falling back to text search", e);
-                        let entities = self.storage
+                        let entities = self
+                            .storage
                             .search(query, limit)
                             .await
                             .map_err(RetrievalError::from)?;
@@ -477,7 +483,8 @@ impl DualRetriever {
             Err(e) => {
                 // Embedding failed, fallback to text
                 tracing::warn!("Query embedding failed: {}, falling back to text search", e);
-                let entities = self.storage
+                let entities = self
+                    .storage
                     .search(query, limit)
                     .await
                     .map_err(RetrievalError::from)?;
@@ -519,13 +526,14 @@ impl DualRetriever {
                             for result in vector_results {
                                 if let Ok(Some(entity)) = self.storage.get_entity(&result.id).await
                                 {
-                                    found.push((entity, result.score as f64));  // ← PRESERVE SCORE (cast f32→f64)
+                                    found.push((entity, result.score as f64)); // ← PRESERVE SCORE (cast f32→f64)
                                 }
                             }
 
                             if found.is_empty() {
                                 // Vector search got no results, try text fallback
-                                let entities = self.storage
+                                let entities = self
+                                    .storage
                                     .search(variation, limit)
                                     .await
                                     .unwrap_or_default();
@@ -537,7 +545,8 @@ impl DualRetriever {
                         }
                         Err(_) => {
                             // Vector search failed, use text fallback
-                            let entities = self.storage
+                            let entities = self
+                                .storage
                                 .search(variation, limit)
                                 .await
                                 .unwrap_or_default();
@@ -548,7 +557,8 @@ impl DualRetriever {
                 }
                 Err(_) => {
                     // Embedding failed, use text fallback
-                    let entities = self.storage
+                    let entities = self
+                        .storage
                         .search(variation, limit)
                         .await
                         .unwrap_or_default();
@@ -766,14 +776,14 @@ mod tests {
         let e2 = Entity::new(EntityType::Note, "B".to_string(), "content B".to_string());
         let e3 = Entity::new(EntityType::Note, "C".to_string(), "content C".to_string());
 
-        let list1 = vec![e1.clone(), e2.clone()];
-        let list2 = vec![e2.clone(), e3.clone()];
+        let list1 = vec![(e1.clone(), 0.9), (e2.clone(), 0.8)];
+        let list2 = vec![(e2.clone(), 0.85), (e3.clone(), 0.7)];
 
         let merged = retriever.merge_rrf(&[&list1, &list2]);
 
         // B appears in both lists, should be ranked higher
         assert_eq!(merged.len(), 3);
-        assert_eq!(merged[0].name, "B"); // Highest RRF score
+        assert_eq!(merged[0].0.name, "B"); // Highest RRF score
     }
 
     #[test]
@@ -785,7 +795,7 @@ mod tests {
             Box::new(SimStorageBackend::new(SimConfig::with_seed(42))),
         );
 
-        let empty: Vec<Entity> = vec![];
+        let empty: Vec<(Entity, f64)> = vec![];
         let merged = retriever.merge_rrf(&[&empty, &empty]);
 
         assert!(merged.is_empty());
