@@ -58,7 +58,7 @@ async fn test_google_classification() {
             println!("  {}. {} ({})", i + 1, e.name, e.entity_type);
         }
 
-        // ASSERTION: Google should be classified as "project" (organizations map to project)
+        // ASSERTION: Google should be classified as "organization"
         let google = result.entities.iter().find(|e| e.name == "Google");
 
         assert!(google.is_some(), "Google entity should be extracted");
@@ -66,12 +66,12 @@ async fn test_google_classification() {
         let google_type = &google.unwrap().entity_type;
         assert_eq!(
             google_type.as_str(),
-            "project",
-            "Google should be classified as 'project' (organization), got '{}'",
+            "organization",
+            "Google should be classified as 'organization', got '{}'",
             google_type.as_str()
         );
 
-        println!("✓ Google correctly classified as project (organization)");
+        println!("✓ Google correctly classified as organization");
 
         Ok::<(), MemoryError>(())
     })

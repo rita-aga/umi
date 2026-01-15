@@ -22,10 +22,16 @@ pub enum EntityType {
     Self_,
     /// Other people
     Person,
+    /// Organizations or companies
+    Organization,
     /// Projects/initiatives
     Project,
     /// Topics/concepts
     Topic,
+    /// Locations or places
+    Location,
+    /// Events or meetings
+    Event,
     /// General notes
     Note,
     /// Tasks/todos
@@ -39,8 +45,11 @@ impl EntityType {
         match self {
             Self::Self_ => "self",
             Self::Person => "person",
+            Self::Organization => "organization",
             Self::Project => "project",
             Self::Topic => "topic",
+            Self::Location => "location",
+            Self::Event => "event",
             Self::Note => "note",
             Self::Task => "task",
         }
@@ -52,8 +61,11 @@ impl EntityType {
         match s.to_lowercase().as_str() {
             "self" => Some(Self::Self_),
             "person" => Some(Self::Person),
+            "organization" | "org" => Some(Self::Organization),
             "project" => Some(Self::Project),
             "topic" => Some(Self::Topic),
+            "location" | "place" => Some(Self::Location),
+            "event" | "meeting" => Some(Self::Event),
             "note" => Some(Self::Note),
             "task" => Some(Self::Task),
             _ => None,
@@ -66,8 +78,11 @@ impl EntityType {
         &[
             Self::Self_,
             Self::Person,
+            Self::Organization,
             Self::Project,
             Self::Topic,
+            Self::Location,
+            Self::Event,
             Self::Note,
             Self::Task,
         ]

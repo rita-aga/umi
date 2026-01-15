@@ -107,8 +107,11 @@ impl From<EntityType> for KelpieBlockType {
         match entity_type {
             EntityType::Self_ => KelpieBlockType::Persona,
             EntityType::Person => KelpieBlockType::Facts,
+            EntityType::Organization => KelpieBlockType::Facts,
             EntityType::Project => KelpieBlockType::Goals,
             EntityType::Topic => KelpieBlockType::Facts,
+            EntityType::Location => KelpieBlockType::Facts,
+            EntityType::Event => KelpieBlockType::Goals,
             EntityType::Note => KelpieBlockType::Scratch,
             EntityType::Task => KelpieBlockType::Goals,
         }
@@ -302,8 +305,11 @@ mod tests {
         let mappings = vec![
             (EntityType::Self_, KelpieBlockType::Persona),
             (EntityType::Person, KelpieBlockType::Facts),
+            (EntityType::Organization, KelpieBlockType::Facts),
             (EntityType::Project, KelpieBlockType::Goals),
             (EntityType::Topic, KelpieBlockType::Facts),
+            (EntityType::Location, KelpieBlockType::Facts),
+            (EntityType::Event, KelpieBlockType::Goals),
             (EntityType::Note, KelpieBlockType::Scratch),
             (EntityType::Task, KelpieBlockType::Goals),
         ];

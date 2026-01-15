@@ -832,12 +832,13 @@ fn convert_entity_type(ext_type: &crate::extraction::EntityType) -> EntityType {
 
     match ext_type {
         ExtType::Person => EntityType::Person,
-        ExtType::Organization => EntityType::Project, // Map organizations to Project
+        ExtType::Organization => EntityType::Organization,
         ExtType::Project => EntityType::Project,
         ExtType::Topic => EntityType::Topic,
+        ExtType::Location => EntityType::Location,
         ExtType::Preference => EntityType::Note, // No direct mapping, use Note
         ExtType::Task => EntityType::Task,
-        ExtType::Event => EntityType::Note, // No direct mapping, use Note
+        ExtType::Event => EntityType::Event,
         ExtType::Note => EntityType::Note,
     }
 }
@@ -1207,18 +1208,19 @@ mod tests {
         use crate::extraction::EntityType as ExtType;
 
         assert_eq!(convert_entity_type(&ExtType::Person), EntityType::Person);
-        assert_eq!(convert_entity_type(&ExtType::Project), EntityType::Project);
-        assert_eq!(convert_entity_type(&ExtType::Topic), EntityType::Topic);
-        assert_eq!(convert_entity_type(&ExtType::Task), EntityType::Task);
-        assert_eq!(convert_entity_type(&ExtType::Note), EntityType::Note);
-
-        // Types without direct mapping should become Note
         assert_eq!(
             convert_entity_type(&ExtType::Organization),
-            EntityType::Project
+            EntityType::Organization
         );
+        assert_eq!(convert_entity_type(&ExtType::Project), EntityType::Project);
+        assert_eq!(convert_entity_type(&ExtType::Topic), EntityType::Topic);
+        assert_eq!(convert_entity_type(&ExtType::Location), EntityType::Location);
+        assert_eq!(convert_entity_type(&ExtType::Task), EntityType::Task);
+        assert_eq!(convert_entity_type(&ExtType::Event), EntityType::Event);
+        assert_eq!(convert_entity_type(&ExtType::Note), EntityType::Note);
+
+        // Only Preference has no direct mapping
         assert_eq!(convert_entity_type(&ExtType::Preference), EntityType::Note);
-        assert_eq!(convert_entity_type(&ExtType::Event), EntityType::Note);
     }
 }
 

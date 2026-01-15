@@ -60,11 +60,15 @@ pub enum LLMError {
 // =============================================================================
 
 /// Common names for entity extraction simulation.
+/// Reserved for future use in enhanced entity generation.
+#[allow(dead_code)]
 const COMMON_NAMES: &[&str] = &[
     "Alice", "Bob", "Charlie", "David", "Eve", "Frank", "Grace", "Henry", "Ivy", "Jack",
 ];
 
 /// Common organizations for entity extraction simulation.
+/// Reserved for future use in enhanced entity generation.
+#[allow(dead_code)]
 const COMMON_ORGS: &[&str] = &[
     "Acme",
     "Google",
@@ -405,6 +409,8 @@ impl SimLLM {
     ///
     /// Heuristics:
     /// - Contains "Corp", "Inc", "LLC", "Ltd" → organization
+    /// - Known cities/countries → location
+    /// - Near "based in", "located in", "city" → location
     /// - Multi-word names (likely person names) checked for person indicators FIRST
     /// - Near "engineer", "developer", "manager", "learning" → person
     /// - Near "works at", "company", "organization" → organization (for single words)
@@ -420,6 +426,43 @@ impl SimLLM {
             || entity_lower.contains("ltd")
         {
             return "organization";
+        }
+
+        // Known cities and locations
+        let known_locations = [
+            "san francisco",
+            "tokyo",
+            "new york",
+            "london",
+            "paris",
+            "berlin",
+            "seattle",
+            "boston",
+            "austin",
+            "chicago",
+            "los angeles",
+            "beijing",
+            "shanghai",
+            "singapore",
+            "sydney",
+            "toronto",
+            "vancouver",
+            "mumbai",
+            "bangalore",
+            "delhi",
+            "usa",
+            "uk",
+            "japan",
+            "china",
+            "india",
+            "canada",
+            "australia",
+            "germany",
+            "france",
+        ];
+
+        if known_locations.contains(&entity_lower.as_str()) {
+            return "location";
         }
 
         // Known tech companies and organizations
@@ -462,6 +505,17 @@ impl SimLLM {
             let context_start = pos.saturating_sub(50);
             let context_end = (pos + entity_name.len() + 50).min(text.len());
             let context = &text[context_start..context_end].to_lowercase();
+
+            // Location indicators (check first for specificity)
+            if context.contains("based in")
+                || context.contains("located in")
+                || context.contains("city")
+                || context.contains("living in")
+                || context.contains("moved to")
+                || context.contains("visiting")
+            {
+                return "location";
+            }
 
             // For multi-word names (likely person names), check person indicators FIRST
             if entity_name.contains(' ') {

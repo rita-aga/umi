@@ -97,8 +97,11 @@ fn entity_type_to_str(et: RustEntityType) -> &'static str {
     match et {
         RustEntityType::Self_ => "self",
         RustEntityType::Person => "person",
+        RustEntityType::Organization => "organization",
         RustEntityType::Project => "project",
         RustEntityType::Topic => "topic",
+        RustEntityType::Location => "location",
+        RustEntityType::Event => "event",
         RustEntityType::Note => "note",
         RustEntityType::Task => "task",
     }

@@ -264,9 +264,17 @@ pub struct UnifiedMemory {
     // Archival layer components (existing)
     storage: Box<dyn StorageBackend>,
     extractor: crate::extraction::EntityExtractor,
+    /// Dual retriever for semantic + keyword search (future use)
+    #[allow(dead_code)]
     retriever: crate::retrieval::DualRetriever,
+    /// Evolution tracker for entity relationships (future use)
+    #[allow(dead_code)]
     evolution: crate::evolution::EvolutionTracker,
+    /// Embedding provider for vector search (future use)
+    #[allow(dead_code)]
     embedder: Box<dyn EmbeddingProvider>,
+    /// Vector backend for similarity search (future use)
+    #[allow(dead_code)]
     vector: Box<dyn VectorBackend>,
 
     // New tier components
@@ -841,12 +849,13 @@ fn convert_extraction_type(ext_type: &crate::extraction::EntityType) -> EntityTy
 
     match ext_type {
         ExtType::Person => EntityType::Person,
-        ExtType::Organization => EntityType::Note,
+        ExtType::Organization => EntityType::Organization,
         ExtType::Project => EntityType::Project,
         ExtType::Topic => EntityType::Topic,
+        ExtType::Location => EntityType::Location,
         ExtType::Preference => EntityType::Note,
         ExtType::Task => EntityType::Task,
-        ExtType::Event => EntityType::Note,
+        ExtType::Event => EntityType::Event,
         ExtType::Note => EntityType::Note,
     }
 }
@@ -856,8 +865,11 @@ fn entity_type_to_block_type(entity_type: &EntityType) -> MemoryBlockType {
     match entity_type {
         EntityType::Self_ => MemoryBlockType::Persona,
         EntityType::Person => MemoryBlockType::Human,
+        EntityType::Organization => MemoryBlockType::Facts,
         EntityType::Project => MemoryBlockType::Facts,
         EntityType::Task => MemoryBlockType::Goals,
+        EntityType::Event => MemoryBlockType::Goals,
+        EntityType::Location => MemoryBlockType::Facts,
         EntityType::Topic => MemoryBlockType::Facts,
         EntityType::Note => MemoryBlockType::Scratch,
     }

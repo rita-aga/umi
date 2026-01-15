@@ -29,6 +29,8 @@ pub enum EntityType {
     Project,
     /// Topic or concept
     Topic,
+    /// Location or place
+    Location,
     /// User preference
     Preference,
     /// Task or action item
@@ -49,6 +51,7 @@ impl EntityType {
             EntityType::Organization,
             EntityType::Project,
             EntityType::Topic,
+            EntityType::Location,
             EntityType::Preference,
             EntityType::Task,
             EntityType::Event,
@@ -64,6 +67,7 @@ impl EntityType {
             EntityType::Organization => "organization",
             EntityType::Project => "project",
             EntityType::Topic => "topic",
+            EntityType::Location => "location",
             EntityType::Preference => "preference",
             EntityType::Task => "task",
             EntityType::Event => "event",
@@ -79,6 +83,7 @@ impl EntityType {
             "org" | "organization" => EntityType::Organization,
             "project" => EntityType::Project,
             "topic" => EntityType::Topic,
+            "location" | "place" => EntityType::Location,
             "preference" => EntityType::Preference,
             "task" => EntityType::Task,
             "event" => EntityType::Event,

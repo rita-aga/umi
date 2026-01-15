@@ -267,7 +267,10 @@ impl HybridPolicy {
             EntityType::Self_ => ENTITY_TYPE_PRIORITY_SELF,
             EntityType::Project => ENTITY_TYPE_PRIORITY_PROJECT,
             EntityType::Task => ENTITY_TYPE_PRIORITY_TASK,
+            EntityType::Organization => ENTITY_TYPE_PRIORITY_ORGANIZATION,
+            EntityType::Event => ENTITY_TYPE_PRIORITY_EVENT,
             EntityType::Person => ENTITY_TYPE_PRIORITY_PERSON,
+            EntityType::Location => ENTITY_TYPE_PRIORITY_LOCATION,
             EntityType::Topic => ENTITY_TYPE_PRIORITY_TOPIC,
             EntityType::Note => ENTITY_TYPE_PRIORITY_NOTE,
         };
@@ -493,7 +496,10 @@ mod tests {
             (EntityType::Self_, ENTITY_TYPE_PRIORITY_SELF),
             (EntityType::Project, ENTITY_TYPE_PRIORITY_PROJECT),
             (EntityType::Task, ENTITY_TYPE_PRIORITY_TASK),
+            (EntityType::Organization, ENTITY_TYPE_PRIORITY_ORGANIZATION),
+            (EntityType::Event, ENTITY_TYPE_PRIORITY_EVENT),
             (EntityType::Person, ENTITY_TYPE_PRIORITY_PERSON),
+            (EntityType::Location, ENTITY_TYPE_PRIORITY_LOCATION),
             (EntityType::Topic, ENTITY_TYPE_PRIORITY_TOPIC),
             (EntityType::Note, ENTITY_TYPE_PRIORITY_NOTE),
         ];

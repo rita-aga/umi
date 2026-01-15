@@ -368,8 +368,17 @@ pub const ENTITY_TYPE_PRIORITY_PROJECT: f64 = 0.9;
 /// Entity type priority for Task
 pub const ENTITY_TYPE_PRIORITY_TASK: f64 = 0.85;
 
+/// Entity type priority for Organization
+pub const ENTITY_TYPE_PRIORITY_ORGANIZATION: f64 = 0.8;
+
+/// Entity type priority for Event
+pub const ENTITY_TYPE_PRIORITY_EVENT: f64 = 0.75;
+
 /// Entity type priority for Person
 pub const ENTITY_TYPE_PRIORITY_PERSON: f64 = 0.7;
+
+/// Entity type priority for Location
+pub const ENTITY_TYPE_PRIORITY_LOCATION: f64 = 0.65;
 
 /// Entity type priority for Topic
 pub const ENTITY_TYPE_PRIORITY_TOPIC: f64 = 0.6;
