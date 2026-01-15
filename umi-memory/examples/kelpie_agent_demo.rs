@@ -13,6 +13,7 @@ use umi_memory::{
 struct KelpieAgent {
     core: CoreMemory,
     session: WorkingMemory,
+    #[allow(dead_code)]
     conversation_id: String,
 }
 
