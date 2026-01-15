@@ -151,7 +151,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | **umi-memory** | Rust core (memory tiers, DST) | ✅ Complete | ~813 |
 | **umi-py** | PyO3 bindings (full Memory API, async/await) | ✅ Complete | 23 |
 | Memory API | Main orchestrator with remember/recall | ✅ Complete | ✓ |
-| MemoryBuilder | Builder pattern for Memory construction | ✅ Complete | ✓ |
 | MemoryConfig | Global configuration system | ✅ Complete | ✓ |
 | EntityExtractor | LLM-powered entity extraction | ✅ Complete | ✓ |
 | DualRetriever | Fast + LLM semantic search | ✅ Complete | ✓ |
@@ -182,7 +181,8 @@ let llm = umi_memory::llm::OpenAIProvider::new(api_key);
 ### Storage Backends
 
 ```rust
-use umi_memory::umi::{Memory, MemoryBuilder};
+use umi_memory::umi::Memory;
+use umi_memory::dst::SimConfig;
 use umi_memory::embedding::SimEmbeddingProvider;
 use umi_memory::llm::SimLLMProvider;
 use umi_memory::storage::{SimStorageBackend, SimVectorBackend};
@@ -190,49 +190,53 @@ use umi_memory::storage::{SimStorageBackend, SimVectorBackend};
 // Quick start with simulation (all components)
 let mut memory = Memory::sim(42);
 
-// Or use builder for explicit configuration
-let memory = Memory::builder()
-    .with_llm(SimLLMProvider::with_seed(42))
-    .with_embedder(SimEmbeddingProvider::with_seed(42))
-    .with_vector(SimVectorBackend::new(42))
-    .with_storage(SimStorageBackend::new(/* config */))
-    .build();
+// Or construct with explicit components
+let llm = SimLLMProvider::with_seed(42);
+let embedder = SimEmbeddingProvider::with_seed(42);
+let vector = SimVectorBackend::new(42);
+let storage = SimStorageBackend::new(SimConfig::with_seed(42));
+let mut memory = Memory::new(llm, embedder, vector, storage);
 
 // Production with LanceDB (requires 'lance' feature)
 #[cfg(feature = "lance")]
 {
-    use umi_memory::storage::LanceVectorBackend;
+    use umi_memory::llm::AnthropicProvider;
+    use umi_memory::embedding::OpenAIEmbeddingProvider;
+    use umi_memory::storage::{LanceVectorBackend, LanceStorageBackend};
 
-    let lance = LanceVectorBackend::connect("./lance_db").await?;
-    let memory = Memory::builder()
-        .with_llm(/* your LLM provider */)
-        .with_embedder(/* your embedding provider */)
-        .with_vector(lance)
-        .with_storage(/* your storage backend */)
-        .build();
+    let llm = AnthropicProvider::new(api_key);
+    let embedder = OpenAIEmbeddingProvider::new(openai_key);
+    let vector = LanceVectorBackend::connect("./vectors.lance").await?;
+    let storage = LanceStorageBackend::connect("./storage.lance").await?;
+    let mut memory = Memory::new(llm, embedder, vector, storage);
 }
 ```
 
 ## Production Mode (Rust)
 
 ```rust
-use umi_memory::umi::{Memory, MemoryBuilder};
+use umi_memory::umi::Memory;
 use std::env;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Production with real LLM (requires 'anthropic' feature)
-    #[cfg(feature = "anthropic")]
+    // Production with real providers (requires 'anthropic', 'openai', 'lance' features)
+    #[cfg(all(feature = "anthropic", feature = "openai", feature = "lance"))]
     {
         use umi_memory::llm::AnthropicProvider;
+        use umi_memory::embedding::OpenAIEmbeddingProvider;
+        use umi_memory::storage::{LanceVectorBackend, LanceStorageBackend};
 
-        let api_key = env::var("ANTHROPIC_API_KEY")?;
-        let llm = AnthropicProvider::new(&api_key);
+        let llm = AnthropicProvider::new(env::var("ANTHROPIC_API_KEY")?);
+        let embedder = OpenAIEmbeddingProvider::new(env::var("OPENAI_API_KEY")?);
+        let vector = LanceVectorBackend::connect("./vectors.lance").await?;
+        let storage = LanceStorageBackend::connect("./storage.lance").await?;
 
-        // Build memory with real provider
-        // let memory = MemoryBuilder::new()
-        //     .with_llm(llm)
-        //     .build();
+        let mut memory = Memory::new(llm, embedder, vector, storage);
+
+        // Use memory
+        let result = memory.remember("Alice works at Acme Corp", Default::default()).await?;
+        println!("Stored {} entities", result.entity_count());
     }
 
     Ok(())

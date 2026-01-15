@@ -34,10 +34,13 @@ class WorkingMemory:
 # =============================================================================
 
 class Entity:
-    """Memory entity."""
+    """Memory entity.
+    
+    Entity types: self, person, organization, project, topic, location, event, note, task
+    """
 
     id: str
-    entity_type: str
+    entity_type: str  # One of: self, person, organization, project, topic, location, event, note, task
     name: str
     content: str
     metadata: dict[str, str]
@@ -47,7 +50,7 @@ class Entity:
 
     def __init__(
         self,
-        entity_type: str,
+        entity_type: str,  # One of: self, person, organization, project, topic, location, event, note, task
         name: str,
         content: str,
         metadata: Optional[dict[str, str]] = None,

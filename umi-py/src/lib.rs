@@ -81,12 +81,15 @@ fn parse_entity_type(s: &str) -> PyResult<RustEntityType> {
     match s.to_lowercase().as_str() {
         "self" => Ok(RustEntityType::Self_),
         "person" => Ok(RustEntityType::Person),
+        "organization" | "org" => Ok(RustEntityType::Organization),
         "project" => Ok(RustEntityType::Project),
         "topic" => Ok(RustEntityType::Topic),
+        "location" => Ok(RustEntityType::Location),
+        "event" => Ok(RustEntityType::Event),
         "note" => Ok(RustEntityType::Note),
         "task" => Ok(RustEntityType::Task),
         _ => Err(PyValueError::new_err(format!(
-            "Invalid entity type: '{}'. Valid types: self, person, project, topic, note, task",
+            "Invalid entity type: '{}'. Valid types: self, person, organization, project, topic, location, event, note, task",
             s
         ))),
     }
