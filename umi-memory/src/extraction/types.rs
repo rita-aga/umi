@@ -122,6 +122,8 @@ pub enum RelationType {
     Prefers,
     /// Entity is part of another
     PartOf,
+    /// Entity is located in a place
+    LocatedIn,
 }
 
 impl RelationType {
@@ -135,6 +137,7 @@ impl RelationType {
             RelationType::RelatesTo,
             RelationType::Prefers,
             RelationType::PartOf,
+            RelationType::LocatedIn,
         ]
     }
 
@@ -148,6 +151,7 @@ impl RelationType {
             RelationType::RelatesTo => "relates_to",
             RelationType::Prefers => "prefers",
             RelationType::PartOf => "part_of",
+            RelationType::LocatedIn => "located_in",
         }
     }
 
@@ -161,6 +165,7 @@ impl RelationType {
             "relates_to" => RelationType::RelatesTo,
             "prefers" => RelationType::Prefers,
             "part_of" => RelationType::PartOf,
+            "located_in" => RelationType::LocatedIn,
             _ => RelationType::RelatesTo,
         }
     }

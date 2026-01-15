@@ -16,17 +16,30 @@ Text: {text}
 Return JSON with this exact structure:
 {
   "entities": [
-    {"name": "entity name", "type": "person|organization|project|topic|preference|task|event|note", "content": "brief description", "confidence": 0.0-1.0}
+    {"name": "entity name", "type": "person|organization|project|topic|location|preference|task|event|note", "content": "brief description", "confidence": 0.0-1.0}
   ],
   "relations": [
-    {"source": "entity1 name", "target": "entity2 name", "type": "works_at|knows|manages|relates_to|prefers|part_of", "confidence": 0.0-1.0}
+    {"source": "entity1 name", "target": "entity2 name", "type": "works_at|knows|manages|relates_to|prefers|part_of|located_in", "confidence": 0.0-1.0}
   ]
 }
 
+Entity Type Guidelines:
+- person: Named individuals (e.g., "Alice", "John Smith", "Sarah Chen")
+- organization: Companies, institutions, teams (e.g., "Google", "Acme Corp", "engineering team")
+- location: Cities, countries, places, addresses (e.g., "San Francisco", "Tokyo", "New York", "California")
+- project: Named projects or initiatives (e.g., "Project Phoenix", "Athena")
+- topic: Skills, technologies, concepts (e.g., "Python", "machine learning", "Rust")
+- task: Action items, todos
+- event: Meetings, launches, milestones (e.g., "product launch", "promotion")
+- preference: User preferences
+- note: Other information
+
 Rules:
-- Only extract clear, factual entities
+- Only extract clear, factual entities with proper names or specific identifiers
+- NEVER extract pronouns as entities (skip "I", "me", "my", "we", "they", "he", "she", "it")
+- Cities and geographic places must be type "location", not "organization"
 - Use confidence 0.9+ for explicit mentions, 0.5-0.8 for inferred
-- Skip uncertain entities
+- Skip uncertain or generic entities
 - Return empty arrays if no entities found
 
 Only return the JSON, nothing else."#;
