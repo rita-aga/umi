@@ -318,6 +318,12 @@ impl EvolutionTracker {
                 EVOLUTION_CONFIDENCE_MAX as f32,
             );
 
+        // Skip if source and target are the same (entity was updated, not evolved)
+        // This happens when deterministic IDs are used and content changes
+        if related_id == new_entity_id {
+            return None;
+        }
+
         // Build relation using the builder pattern
         Some(
             EvolutionRelation::builder(
